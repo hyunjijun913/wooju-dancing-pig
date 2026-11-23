@@ -203,11 +203,15 @@ export class FarmGame3D {
         <div class="farm-float-top">
           <button class="farm-pill-btn farm-exit-btn" id="farmExitBtn">⬅️ 학습 메뉴</button>
           <div class="farm-ribbon" id="farmRibbon" aria-label="스토리 순서 띠"></div>
-          <button class="farm-pill-btn farm-bag-btn" id="farmBagBtn">🎒 가방 <span id="farmBagCount">0/12</span></button>
           <button class="farm-pill-btn farm-reset-btn" id="farmResetBtn" title="처음부터">🔄</button>
         </div>
 
         <div class="farm-guide-pill" id="farmGuidePill">👆 노란 점선 길을 따라 반짝이는 친구에게 가보세요!</div>
+
+        <!-- Floating Speech Bubble projected right above a nearby 3D villager -->
+        <button class="farm-hover-bubble" id="farmHoverBubble" style="display:none;">
+          <span id="farmHoverText">💬 말 걸기!</span>
+        </button>
 
         <!-- Entry Splash Overlay (tapping once unlocks iPad Safari audio & auto-starts Opening #1~#3!) -->
         <div class="farm-entry-overlay" id="farmEntryOverlay" style="${this.entered ? 'display:none;' : 'display:flex;'}">
@@ -225,18 +229,25 @@ export class FarmGame3D {
           <div class="farm-joy-knob" id="farmJoyKnob"></div>
         </div>
 
-        <!-- Animal Crossing-style Dialogue Overlay -->
-        <div class="farm-dialogue" id="farmDialogue" style="display:none;">
+        <!-- Prominent Bottom-Right 🎒 Inventory Bag Button (Animal Crossing Pocket) -->
+        <button class="farm-pocket-fab" id="farmBagBtn" aria-label="내 가방 열기">
+          <span class="pocket-ico">🎒</span>
+          <span class="pocket-label">내 가방 <b id="farmBagCount">0/12</b></span>
+          <span class="pocket-preview" id="farmBagPreview"></span>
+        </button>
+
+        <!-- Animal Crossing-style Speech Bubble Dialogue Overlay -->
+        <div class="farm-dialogue ac-bubble" id="farmDialogue" style="display:none;">
+          <div class="ac-name-tag" id="farmDlgName">🐔 닭</div>
           <div class="farm-dlg-head">
             <img id="farmDlgPortrait" class="farm-dlg-portrait" alt="" />
             <div class="farm-dlg-meta">
-              <div class="farm-dlg-name" id="farmDlgName"></div>
-              <div class="farm-dlg-sub" id="farmDlgSub"></div>
+              <div class="farm-dlg-en" id="farmDlgEn"></div>
+              <div class="farm-dlg-ko" id="farmDlgKo"></div>
             </div>
             <button class="mini-btn" id="farmDlgReplayBtn">🔊 다시 듣기</button>
           </div>
           <div class="farm-dlg-icons" id="farmDlgIcons"></div>
-          <div class="farm-dlg-en" id="farmDlgEn"></div>
           <button class="big-btn btn-star farm-dlg-next" id="farmDlgActionBtn" disabled>🎧 원어민 이야기를 끝까지 들어요...</button>
         </div>
 
@@ -244,11 +255,11 @@ export class FarmGame3D {
         <div class="farm-bag-modal" id="farmBagModal" style="display:none;">
           <div class="farm-bag-sheet">
             <div class="modal-head">
-              <h2>🎒 우주의 농장 가방</h2>
+              <h2>🎒 우주의 농장 가방 (<span id="farmBagModalCount">0/12</span>)</h2>
               <button class="close-btn" id="farmBagCloseBtn">✕</button>
             </div>
             <p style="margin:0 0 10px;font-size:13px;color:#64748B;font-weight:600;">
-              모은 선물을 톡! 누르면 그 친구의 영어 이야기를 다시 들을 수 있어요!
+              지금까지 모은 선물이에요! 선물을 톡! 누르면 그 친구의 영어 이야기를 다시 들려줘요.
             </p>
             <div class="farm-bag-grid" id="farmBagGrid"></div>
           </div>
@@ -285,7 +296,6 @@ export class FarmGame3D {
       this.entered = true;
       const overlay = this.container.querySelector('#farmEntryOverlay');
       if (overlay) overlay.style.display = 'none';
-      // Start opening dialogue (#1~#3: The Dancing Pig / The farm is quiet / The animals are all in the barn) immediately upon entering!
       if (this.currentSpotIndex === 0) {
         this._openDialogue(0, false);
       }
@@ -293,8 +303,16 @@ export class FarmGame3D {
   }
 
   _updateBagBadge() {
+    const countText = `${this.collectedSpotIds.size}/${FARM_SPOTS.length}`;
     const countEl = this.container?.querySelector('#farmBagCount');
-    if (countEl) countEl.textContent = `${this.collectedSpotIds.size}/${FARM_SPOTS.length}`;
+    const modalCountEl = this.container?.querySelector('#farmBagModalCount');
+    const previewEl = this.container?.querySelector('#farmBagPreview');
+    if (countEl) countEl.textContent = countText;
+    if (modalCountEl) modalCountEl.textContent = countText;
+    if (previewEl) {
+      const emojis = FARM_SPOTS.filter(s => this.collectedSpotIds.has(s.id)).map(s => s.itemEmoji);
+      previewEl.textContent = emojis.length > 0 ? emojis.slice(-4).join('') : '비어있어요';
+    }
   }
 
   _animateItemToBag(emoji) {
@@ -492,13 +510,12 @@ export class FarmGame3D {
     this.wooju.group.position.set(this.avatarPos.x, 0, this.avatarPos.z);
     this.scene.add(this.wooju.group);
 
-    // 3. 12 Sequential 100% 3D Animal Characters + Props
+    // 3. 12 Sequential 100% 3D Living Villagers (stroll around home spot & turn to face Wooju!)
     this.spotEntries = [];
     FARM_SPOTS.forEach((spot, idx) => {
       const built = buildSpotCharacter3D(THREE, spot.id);
       const baseY = spot.prop === 'stage' ? 0.40 : 0.0;
       built.group.position.set(spot.pos.x, baseY, spot.pos.z);
-      // Face gently toward the center / front path
       built.group.rotation.y = Math.atan2(-spot.pos.x, -spot.pos.z + 3.0);
 
       // Generous invisible touch cylinder for easy 6yo tapping
@@ -520,7 +537,21 @@ export class FarmGame3D {
       built.group.add(checkSprite);
 
       this.scene.add(built.group);
-      this.spotEntries.push({ ...built, hitMesh, checkSprite, baseY, spot });
+      this.spotEntries.push({
+        ...built,
+        hitMesh,
+        checkSprite,
+        baseY,
+        spot,
+        curX: spot.pos.x,
+        curZ: spot.pos.z,
+        homeX: spot.pos.x,
+        homeZ: spot.pos.z,
+        wanderRadius: spot.prop === 'stage' ? 1.5 : 1.75,
+        wanderTarget: null,
+        wanderTimer: 0.8 + (idx % 4) * 0.7,
+        isMoving: false,
+      });
     });
 
     // 4. Active Golden Ring, Floating '!' & Animated 3D Dashed Guiding Path (따라가기 점선 길)
@@ -537,10 +568,9 @@ export class FarmGame3D {
     this.exclaimSprite.scale.set(0.95, 0.95, 1);
     this.scene.add(this.exclaimSprite);
 
-    // 16 glowing 3D capsule dashes forming a clear dotted/dashed path to the next animal!
     this.dashedTrail = [];
     const dashGeo = new THREE.CapsuleGeometry(0.11, 0.42, 4, 8);
-    dashGeo.rotateX(Math.PI / 2); // lay flat along Z
+    dashGeo.rotateX(Math.PI / 2);
     for (let i = 0; i < 16; i++) {
       const dashMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? '#FACC15' : '#FFFFFF', transparent: true, opacity: 0.92 });
       const dash = new THREE.Mesh(dashGeo, dashMat);
@@ -548,7 +578,6 @@ export class FarmGame3D {
       this.dashedTrail.push(dash);
     }
 
-    // Tap ripple ring
     this.tapRing = new THREE.Mesh(
       new THREE.RingGeometry(0.35, 0.58, 24),
       new THREE.MeshBasicMaterial({ color: '#6366F1', side: THREE.DoubleSide, transparent: true, opacity: 0 })
@@ -611,19 +640,17 @@ export class FarmGame3D {
     this.spotEntries.forEach((m, idx) => {
       const done = idx < this.currentSpotIndex;
       m.checkSprite.visible = done;
-      // Hide the 3D item prop once Wooju has collected it into the bag!
       if (m.itemMesh) {
         m.itemMesh.visible = !this.collectedSpotIds.has(m.spot.id);
       }
     });
 
     if (this.currentSpotIndex < FARM_SPOTS.length) {
-      const target = FARM_SPOTS[this.currentSpotIndex];
-      const baseY = this.spotEntries[this.currentSpotIndex].baseY;
+      const entry = this.spotEntries[this.currentSpotIndex];
       this.activeRing.visible = true;
-      this.activeRing.position.set(target.pos.x, baseY + 0.08, target.pos.z);
+      this.activeRing.position.set(entry.curX, entry.baseY + 0.08, entry.curZ);
       this.exclaimSprite.visible = true;
-      this.exclaimSprite.position.set(target.pos.x, baseY + 3.15, target.pos.z);
+      this.exclaimSprite.position.set(entry.curX, entry.baseY + 3.15, entry.curZ);
       this.dashedTrail.forEach(d => { d.visible = true; });
     } else {
       this.activeRing.visible = false;
@@ -641,16 +668,32 @@ export class FarmGame3D {
       return;
     }
 
-    const spot = FARM_SPOTS[spotIdx];
-    const dist = Math.hypot(this.avatarPos.x - spot.pos.x, this.avatarPos.z - spot.pos.z);
-    if (immediate || dist < 3.0) {
+    const entry = this.spotEntries[spotIdx];
+    const tx = entry ? entry.curX : FARM_SPOTS[spotIdx].pos.x;
+    const tz = entry ? entry.curZ : FARM_SPOTS[spotIdx].pos.z;
+    const dist = Math.hypot(this.avatarPos.x - tx, this.avatarPos.z - tz);
+    if (immediate || dist < 3.2) {
       this.walkTarget = null;
       this._openDialogue(spotIdx, decision.action === 'revisit');
     } else {
-      this.walkTarget = { x: spot.pos.x, z: spot.pos.z };
+      this.walkTarget = { x: tx, z: tz };
       this.pendingSpotTrigger = { spotIdx, isRevisit: decision.action === 'revisit' };
-      this._spawnTapRing(spot.pos.x, spot.pos.z);
+      this._spawnTapRing(tx, tz);
     }
+  }
+
+  _typewriterCaption(el, text) {
+    clearInterval(this._typeTimer);
+    el.textContent = '';
+    let i = 0;
+    this._typeTimer = setInterval(() => {
+      i += 2;
+      el.textContent = text.slice(0, i);
+      if (i >= text.length) {
+        clearInterval(this._typeTimer);
+        this._typeTimer = null;
+      }
+    }, 28);
   }
 
   _openDialogue(spotIdx, isRevisit = false) {
@@ -660,18 +703,20 @@ export class FarmGame3D {
     this.isListening = true;
     this.dialogueFinished = false;
 
+    const hoverEl = this.container?.querySelector('#farmHoverBubble');
+    if (hoverEl) hoverEl.style.display = 'none';
+
     const dlg = this.container.querySelector('#farmDialogue');
     const portrait = this.container.querySelector('#farmDlgPortrait');
     const nameEl = this.container.querySelector('#farmDlgName');
-    const subEl = this.container.querySelector('#farmDlgSub');
     const iconsEl = this.container.querySelector('#farmDlgIcons');
     const enEl = this.container.querySelector('#farmDlgEn');
+    const koEl = this.container.querySelector('#farmDlgKo');
     const actionBtn = this.container.querySelector('#farmDlgActionBtn');
     const replayBtn = this.container.querySelector('#farmDlgReplayBtn');
 
     portrait.src = spot.portrait;
-    nameEl.textContent = `${spotIdx + 1}번 친구 · ${spot.emoji} ${spot.name}`;
-    subEl.textContent = `${spot.itemEmoji} ${spot.itemLabel}`;
+    nameEl.textContent = `${spot.emoji} ${spot.name} (${spotIdx + 1}/12)`;
     actionBtn.disabled = true;
     actionBtn.textContent = '🎧 원어민 이야기를 끝까지 들어요...';
     dlg.style.display = 'flex';
@@ -686,7 +731,8 @@ export class FarmGame3D {
           iconsEl.innerHTML = (card.icons || []).map(([em, lbl]) =>
             lbl ? `<span class="farm-icon-chip">${em} <small>${lbl}</small></span>` : `<span class="farm-icon-arrow">${em}</span>`
           ).join('');
-          enEl.textContent = card.en;
+          this._typewriterCaption(enEl, card.en);
+          if (koEl) koEl.textContent = card.ko || '';
         },
         onAllDone: () => {
           this.isListening = false;
@@ -731,6 +777,8 @@ export class FarmGame3D {
   }
 
   _hideDialogue() {
+    clearInterval(this._typeTimer);
+    this._typeTimer = null;
     this.audio.stopAll();
     this.isListening = false;
     this.activeDialogueSpot = null;
@@ -752,6 +800,20 @@ export class FarmGame3D {
   }
 
   _startLoop() {
+    const hoverEl = this.container?.querySelector('#farmHoverBubble');
+    const hoverText = this.container?.querySelector('#farmHoverText');
+    const projVec = new this.THREE.Vector3();
+    let hoverSpotIdx = -1;
+
+    if (hoverEl) {
+      hoverEl.onclick = () => {
+        if (hoverSpotIdx >= 0) {
+          this.audio.unlock();
+          this._handleSpotTap(hoverSpotIdx, true);
+        }
+      };
+    }
+
     const animate = () => {
       if (!this.mounted || !this.renderer) return;
       this.rafId = requestAnimationFrame(animate);
@@ -782,7 +844,7 @@ export class FarmGame3D {
           const dx = this.walkTarget.x - this.avatarPos.x;
           const dz = this.walkTarget.z - this.avatarPos.z;
           const dist = Math.hypot(dx, dz);
-          const stopDist = this.pendingSpotTrigger ? 2.3 : 0.25;
+          const stopDist = this.pendingSpotTrigger ? 2.4 : 0.25;
           if (dist > stopDist) {
             this.avatarPos.x += (dx / dist) * speed * dt;
             this.avatarPos.z += (dz / dist) * speed * dt;
@@ -798,10 +860,10 @@ export class FarmGame3D {
           }
         }
 
-        // Proximity auto-trigger when walking up to the active animal
+        // Proximity auto-trigger when walking right up to the active animal
         if (moving && !this.pendingSpotTrigger && this.currentSpotIndex < FARM_SPOTS.length) {
-          const active = FARM_SPOTS[this.currentSpotIndex];
-          if (Math.hypot(this.avatarPos.x - active.pos.x, this.avatarPos.z - active.pos.z) < 2.35) {
+          const activeEntry = this.spotEntries[this.currentSpotIndex];
+          if (activeEntry && Math.hypot(this.avatarPos.x - activeEntry.curX, this.avatarPos.z - activeEntry.curZ) < 2.4) {
             this.walkTarget = null;
             this._openDialogue(this.currentSpotIndex, false);
           }
@@ -820,60 +882,123 @@ export class FarmGame3D {
         this.wooju.rightArm.rotation.x = swing * 0.8;
       }
 
-      // 2. Animated 3D Dashed Guiding Path (따라가기 길 점선) from Wooju → Active Target!
-      if (this.currentSpotIndex < FARM_SPOTS.length && this.dashedTrail.length) {
-        const target = FARM_SPOTS[this.currentSpotIndex].pos;
-        const dx = target.x - this.avatarPos.x;
-        const dz = target.z - this.avatarPos.z;
-        const dist = Math.hypot(dx, dz);
-        const yaw = Math.atan2(dx, dz);
-        // Flowing offset animates dashes moving forward toward the target animal
-        const flow = (t * 0.65) % 1;
+      // 2. Living Villager Wandering AI + Turn-to-Face Wooju + Nearest Villager Speech Bubble!
+      let nearestIdx = -1;
+      let nearestDist = 4.9;
 
-        this.dashedTrail.forEach((dash, i) => {
-          const frac = (i + flow) / this.dashedTrail.length;
-          if (dist < 2.4 || frac < 0.08 || frac > 0.92) {
-            dash.visible = false;
-            return;
-          }
-          dash.visible = true;
-          dash.position.set(
-            this.avatarPos.x + dx * frac,
-            0.16 + Math.sin(t * 5 - i * 0.6) * 0.05,
-            this.avatarPos.z + dz * frac
-          );
-          dash.rotation.y = yaw;
-        });
-      }
-
-      if (this.activeRing && this.activeRing.visible) {
-        const s = 1 + Math.sin(t * 4.5) * 0.1;
-        this.activeRing.scale.set(s, s, 1);
-      }
-      if (this.exclaimSprite && this.exclaimSprite.visible && this.currentSpotIndex < FARM_SPOTS.length) {
-        const baseY = this.spotEntries[this.currentSpotIndex].baseY;
-        this.exclaimSprite.position.y = baseY + 3.15 + Math.sin(t * 5) * 0.22;
-      }
-
-      // 3. 3D Character Animations (idle breathing, speaking bounce, floating item spin, dancing pig!)
       this.spotEntries.forEach((m, idx) => {
-        const isSpeaking = this.activeDialogueSpot === idx && this.isListening;
+        const distToWooju = Math.hypot(this.avatarPos.x - m.curX, this.avatarPos.z - m.curZ);
+        const isSpeaking = this.activeDialogueSpot === idx;
+        const isNearWooju = this.entered && distToWooju < 4.9;
         const isDancingPig = idx === FARM_SPOTS.length - 1 && (this.currentSpotIndex >= FARM_SPOTS.length || isSpeaking);
+
+        if (isNearWooju && this.activeDialogueSpot === null && distToWooju < nearestDist) {
+          nearestDist = distToWooju;
+          nearestIdx = idx;
+        }
+
+        if (isSpeaking || isNearWooju) {
+          // Stop strolling and turn warmly toward Wooju (like Animal Crossing!)
+          m.isMoving = false;
+          const targetYaw = Math.atan2(this.avatarPos.x - m.curX, this.avatarPos.z - m.curZ);
+          let diff = targetYaw - m.group.rotation.y;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          m.group.rotation.y += diff * 0.12;
+        } else {
+          // Gentle autonomous wandering within villager's cozy zone
+          m.wanderTimer -= dt;
+          if (!m.wanderTarget && m.wanderTimer <= 0) {
+            const ang = Math.random() * Math.PI * 2;
+            const rad = 0.5 + Math.random() * m.wanderRadius;
+            m.wanderTarget = {
+              x: m.homeX + Math.cos(ang) * rad,
+              z: m.homeZ + Math.sin(ang) * rad,
+            };
+          }
+          if (m.wanderTarget) {
+            const wdx = m.wanderTarget.x - m.curX;
+            const wdz = m.wanderTarget.z - m.curZ;
+            const wd = Math.hypot(wdx, wdz);
+            if (wd > 0.12) {
+              const wSpeed = 1.35;
+              m.curX += (wdx / wd) * wSpeed * dt;
+              m.curZ += (wdz / wd) * wSpeed * dt;
+              m.group.position.x = m.curX;
+              m.group.position.z = m.curZ;
+              const walkYaw = Math.atan2(wdx, wdz);
+              let diff = walkYaw - m.group.rotation.y;
+              while (diff > Math.PI) diff -= Math.PI * 2;
+              while (diff < -Math.PI) diff += Math.PI * 2;
+              m.group.rotation.y += diff * 0.1;
+              m.isMoving = true;
+            } else {
+              m.wanderTarget = null;
+              m.wanderTimer = 1.6 + Math.random() * 2.4;
+              m.isMoving = false;
+            }
+          }
+        }
+
+        // Expressive 3D body animations (dance / talk / waddle walk / idle breath)
         if (isDancingPig) {
           m.bodyRoot.position.y = Math.abs(Math.sin(t * 9)) * 0.48;
           m.bodyRoot.rotation.y = Math.sin(t * 6) * 0.55;
           m.bodyRoot.rotation.z = Math.sin(t * 9) * 0.14;
-        } else if (isSpeaking) {
-          m.bodyRoot.position.y = Math.abs(Math.sin(t * 7)) * 0.25;
+        } else if (isSpeaking && this.isListening) {
+          m.bodyRoot.position.y = Math.abs(Math.sin(t * 7)) * 0.24;
           m.bodyRoot.rotation.z = Math.sin(t * 7) * 0.06;
+        } else if (m.isMoving) {
+          m.bodyRoot.position.y = Math.abs(Math.sin(t * 8 + idx)) * 0.12;
+          m.bodyRoot.rotation.z = Math.sin(t * 8 + idx) * 0.09;
         } else {
           m.bodyRoot.position.y = Math.sin(t * 2.2 + idx) * 0.04;
           m.bodyRoot.rotation.z = 0;
         }
+
         if (m.itemMesh && m.itemMesh.visible) {
           m.itemMesh.rotation.y = t * 1.8 + idx;
         }
       });
+
+      // 3. Track Active Villager's Live Position for Golden Ring, '!' & Animated Dashed Path!
+      if (this.currentSpotIndex < FARM_SPOTS.length && this.spotEntries[this.currentSpotIndex]) {
+        const activeEntry = this.spotEntries[this.currentSpotIndex];
+        if (this.activeRing && this.activeRing.visible) {
+          this.activeRing.position.set(activeEntry.curX, activeEntry.baseY + 0.08, activeEntry.curZ);
+          const s = 1 + Math.sin(t * 4.5) * 0.1;
+          this.activeRing.scale.set(s, s, 1);
+        }
+        if (this.exclaimSprite && this.exclaimSprite.visible) {
+          this.exclaimSprite.position.set(
+            activeEntry.curX,
+            activeEntry.baseY + 3.15 + Math.sin(t * 5) * 0.22,
+            activeEntry.curZ
+          );
+        }
+        if (this.dashedTrail.length) {
+          const dx = activeEntry.curX - this.avatarPos.x;
+          const dz = activeEntry.curZ - this.avatarPos.z;
+          const dist = Math.hypot(dx, dz);
+          const yaw = Math.atan2(dx, dz);
+          const flow = (t * 0.65) % 1;
+
+          this.dashedTrail.forEach((dash, i) => {
+            const frac = (i + flow) / this.dashedTrail.length;
+            if (dist < 2.5 || frac < 0.08 || frac > 0.92) {
+              dash.visible = false;
+              return;
+            }
+            dash.visible = true;
+            dash.position.set(
+              this.avatarPos.x + dx * frac,
+              0.16 + Math.sin(t * 5 - i * 0.6) * 0.05,
+              this.avatarPos.z + dz * frac
+            );
+            dash.rotation.y = yaw;
+          });
+        }
+      }
 
       if (this.tapRingLife > 0 && this.tapRing) {
         this.tapRingLife = Math.max(0, this.tapRingLife - dt * 2.5);
@@ -897,13 +1022,12 @@ export class FarmGame3D {
         let camHeight = 15.8 * portraitBoost;
         let camDist = 16.8 * portraitBoost;
         let lookOffsetZ = 0;
-        if (this.activeDialogueSpot !== null) {
-          const sp = FARM_SPOTS[this.activeDialogueSpot].pos;
-          focusX = sp.x;
-          focusZ = sp.z;
+        if (this.activeDialogueSpot !== null && this.spotEntries[this.activeDialogueSpot]) {
+          const sp = this.spotEntries[this.activeDialogueSpot];
+          focusX = sp.curX;
+          focusZ = sp.curZ;
           camHeight = 8.8 * portraitBoost;
           camDist = 10.8 * portraitBoost;
-          // Shift look target slightly south so the 3D character frames cleanly above the bottom dialogue card
           lookOffsetZ = 1.6;
         }
         this.camera.position.x += (focusX - this.camera.position.x) * 0.08;
@@ -913,6 +1037,31 @@ export class FarmGame3D {
       }
 
       this.renderer.render(this.scene, this.camera);
+
+      // 5. Project Floating Speech Bubble right above the nearest villager's 3D head!
+      if (hoverEl && hoverText) {
+        if (nearestIdx >= 0 && this.entered && this.activeDialogueSpot === null) {
+          const m = this.spotEntries[nearestIdx];
+          projVec.set(m.curX, m.baseY + 2.85, m.curZ);
+          projVec.project(this.camera);
+          const rect = this.renderer.domElement.getBoundingClientRect();
+          const sx = (projVec.x * 0.5 + 0.5) * rect.width;
+          const sy = (-projVec.y * 0.5 + 0.5) * rect.height;
+          hoverSpotIdx = nearestIdx;
+          if (nearestIdx <= this.currentSpotIndex) {
+            hoverText.textContent = `💬 ${m.spot.emoji} ${m.spot.name}에게 말 걸기!`;
+          } else {
+            const cur = FARM_SPOTS[this.currentSpotIndex];
+            hoverText.textContent = `👉 먼저 ${cur.emoji} ${cur.name} 만나요!`;
+          }
+          hoverEl.style.left = `${Math.max(80, Math.min(rect.width - 80, sx))}px`;
+          hoverEl.style.top = `${Math.max(100, Math.min(rect.height - 130, sy))}px`;
+          hoverEl.style.display = 'inline-flex';
+        } else {
+          hoverSpotIdx = -1;
+          hoverEl.style.display = 'none';
+        }
+      }
     };
     this.rafId = requestAnimationFrame(animate);
   }

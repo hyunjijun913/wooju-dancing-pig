@@ -515,20 +515,93 @@ body.farm-fullscreen .farm-card {
   pointer-events: none;
 }
 
-/* Animal Crossing-style Dialogue Overlay */
+/* Floating Speech Bubble above nearby 3D Villager */
+.farm-hover-bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: #FFFDF7;
+  color: #1E293B;
+  border: 3px solid #F59E0B;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+  cursor: pointer;
+  z-index: 11;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.farm-hover-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 10px 9px 0 9px;
+  border-style: solid;
+  border-color: #F59E0B transparent transparent transparent;
+}
+
+/* Prominent Bottom-Right 🎒 Pocket Bag Button */
+.farm-pocket-fab {
+  position: absolute;
+  right: 18px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  background: linear-gradient(135deg, #FEF08A 0%, #FDE047 100%);
+  border: 3.5px solid #F59E0B;
+  border-radius: 22px;
+  padding: 10px 14px;
+  min-width: 112px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(180, 83, 9, 0.28);
+  z-index: 9;
+  transition: transform 0.15s;
+}
+.farm-pocket-fab:active { transform: scale(0.94); }
+.farm-pocket-fab.bag-bounce { animation: bagBounce 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.pocket-ico { font-size: 30px; line-height: 1; }
+.pocket-label { font-size: 13px; font-weight: 900; color: #78350F; }
+.pocket-preview { font-size: 14px; letter-spacing: 1px; color: #92400E; min-height: 18px; }
+
+/* Animal Crossing-style Dialogue Bubble */
 .farm-dialogue {
   position: absolute;
-  left: 14px; right: 14px; bottom: 14px;
-  background: rgba(255, 253, 245, 0.97);
-  border: 3px solid #F59E0B;
-  border-radius: 22px;
-  padding: 14px 16px;
-  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.25);
-  z-index: 12;
+  left: 14px; right: 14px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: 680px;
+  margin: 0 auto;
+  background: #FFFDF4;
+  border: 4px solid #F59E0B;
+  border-radius: 30px;
+  padding: 18px 18px 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.28);
+  z-index: 14;
   display: flex;
   flex-direction: column;
   gap: 10px;
   animation: popIn 0.22s ease;
+}
+.ac-name-tag {
+  position: absolute;
+  top: -19px;
+  left: 22px;
+  background: linear-gradient(135deg, #FF8A3D, #F59E0B);
+  color: #fff;
+  border: 3px solid #FFFDF4;
+  border-radius: 999px;
+  padding: 4px 16px;
+  font-size: 15px;
+  font-weight: 900;
+  transform: rotate(-2deg);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
 }
 .farm-dlg-head { display: flex; align-items: center; gap: 12px; }
 .farm-dlg-portrait {
@@ -537,10 +610,11 @@ body.farm-fullscreen .farm-card {
   object-fit: cover;
   border: 3px solid #FACC15;
   background: #FFFBEB;
+  flex-shrink: 0;
 }
 .farm-dlg-meta { flex: 1; }
-.farm-dlg-name { font-size: 16px; font-weight: 900; color: #1E293B; }
-.farm-dlg-sub { font-size: 13px; font-weight: 700; color: #B45309; }
+.farm-dlg-en { text-align: left; font-size: 17px; font-weight: 900; color: #1E293B; line-height: 1.35; }
+.farm-dlg-ko { text-align: left; font-size: 13px; font-weight: 700; color: #64748B; margin-top: 2px; }
 .farm-dlg-icons {
   display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
   background: #FEF9C3; border-radius: 14px; padding: 8px;
