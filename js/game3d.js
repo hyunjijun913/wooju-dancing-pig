@@ -7,7 +7,7 @@ import { buildWooju3D, buildSpotCharacter3D, buildFarmWorld3D } from './models3d
 let THREE_MOD = null;
 async function loadThree() {
   if (THREE_MOD) return THREE_MOD;
-  THREE_MOD = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js');
+  THREE_MOD = await import('three');
   return THREE_MOD;
 }
 
@@ -892,13 +892,9 @@ export class FarmGame3D {
       if (this.wooju) {
         this.wooju.group.position.x = this.avatarPos.x;
         this.wooju.group.position.z = this.avatarPos.z;
-        this.wooju.group.position.y = moving ? Math.abs(Math.sin(t * 11)) * 0.16 : 0;
         this.wooju.group.rotation.y = this.avatarAngle;
-        const swing = moving ? Math.sin(t * 11) * 0.65 : 0;
-        this.wooju.leftLeg.rotation.x = swing;
-        this.wooju.rightLeg.rotation.x = -swing;
-        this.wooju.leftArm.rotation.x = -swing * 0.8;
-        this.wooju.rightArm.rotation.x = swing * 0.8;
+        if (this.wooju.setAnim) this.wooju.setAnim(moving ? 'walk' : 'idle');
+        if (this.wooju.updateMixer) this.wooju.updateMixer(dt);
       }
 
       // 2. Living Villager AI: Locked villagers FLEE from Wooju; active/done villagers stroll & turn to face Wooju!
@@ -933,7 +929,6 @@ export class FarmGame3D {
           let nx = m.curX + dirX * fleeSpeed * dt;
           let nz = m.curZ + dirZ * fleeSpeed * dt;
 
-          // If fleeing hits the outer farm fence, steer tangentially along the circle away from Wooju!
           const nr = Math.hypot(nx, nz);
           if (nr > 15.6) {
             const tangX = -m.curZ / Math.max(0.01, Math.hypot(m.curX, m.curZ));
@@ -960,7 +955,6 @@ export class FarmGame3D {
           while (diff < -Math.PI) diff += Math.PI * 2;
           m.group.rotation.y += diff * 0.22;
         } else if (isSpeaking || (!isLocked && isNearWooju)) {
-          // Stop strolling and turn warmly toward Wooju
           m.isMoving = false;
           const targetYaw = Math.atan2(this.avatarPos.x - m.curX, this.avatarPos.z - m.curZ);
           let diff = targetYaw - m.group.rotation.y;
@@ -968,7 +962,6 @@ export class FarmGame3D {
           while (diff < -Math.PI) diff += Math.PI * 2;
           m.group.rotation.y += diff * 0.14;
         } else {
-          // Gentle autonomous wandering (or returning toward home after fleeing)
           const distHome = Math.hypot(m.homeX - m.curX, m.homeZ - m.curZ);
           m.wanderTimer -= dt;
           if (!m.wanderTarget && (m.wanderTimer <= 0 || distHome > m.wanderRadius + 1.2)) {
@@ -1003,27 +996,19 @@ export class FarmGame3D {
           }
         }
 
-        // Expressive 3D body animations (flee hop / dance / talk / waddle walk / idle breath)
-        if (m.isFleeing) {
-          m.bodyRoot.position.y = Math.abs(Math.sin(t * 16 + idx)) * 0.36;
-          m.bodyRoot.rotation.z = Math.sin(t * 16 + idx) * 0.16;
-        } else if (isDancingPig) {
-          m.bodyRoot.position.y = Math.abs(Math.sin(t * 9)) * 0.48;
-          m.bodyRoot.rotation.y = Math.sin(t * 6) * 0.55;
-          m.bodyRoot.rotation.z = Math.sin(t * 9) * 0.14;
-        } else if (isSpeaking && this.isListening) {
-          m.bodyRoot.position.y = Math.abs(Math.sin(t * 7)) * 0.24;
-          m.bodyRoot.rotation.z = Math.sin(t * 7) * 0.06;
-        } else if (m.isMoving) {
-          m.bodyRoot.position.y = Math.abs(Math.sin(t * 8 + idx)) * 0.12;
-          m.bodyRoot.rotation.z = Math.sin(t * 8 + idx) * 0.09;
-        } else {
-          m.bodyRoot.position.y = Math.sin(t * 2.2 + idx) * 0.04;
-          m.bodyRoot.rotation.z = 0;
-        }
+        // Drive real GLB skeletal animations (run / dance / talk / walk / idle)!
+        let animState = 'idle';
+        if (m.isFleeing) animState = 'run';
+        else if (isDancingPig) animState = 'dance';
+        else if (isSpeaking && this.isListening) animState = 'talk';
+        else if (m.isMoving) animState = 'walk';
+
+        if (m.setAnim) m.setAnim(animState);
+        if (m.updateMixer) m.updateMixer(dt);
 
         if (m.itemMesh && m.itemMesh.visible) {
           m.itemMesh.rotation.y = t * 1.8 + idx;
+          m.itemMesh.position.y = 0.35 + Math.sin(t * 3 + idx) * 0.08;
         }
       });
 
