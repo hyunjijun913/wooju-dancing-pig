@@ -201,6 +201,7 @@ const farmGame = new FarmGame3D({
   onToast: showToast,
   onOpenSequenceQuiz: () => quizController.openSequenceQuiz(),
   onGoToParrotMode: () => switchMode(2, 1),
+  onExitFullscreen: () => switchMode(1),
 });
 
 // --- Echo Overlay UI Hooks ---

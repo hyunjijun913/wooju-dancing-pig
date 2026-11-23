@@ -243,8 +243,33 @@ body {
 }
 
 /* ===========================
-   0단계: 3D Mini Farm Game
+   0단계: Fullscreen 3D Mini Farm Game
    =========================== */
+body.farm-fullscreen {
+  overflow: hidden;
+  height: 100dvh;
+}
+body.farm-fullscreen .topbar,
+body.farm-fullscreen .mission-banner,
+body.farm-fullscreen .mode-bar {
+  display: none !important;
+}
+body.farm-fullscreen .container {
+  max-width: none;
+  padding: 0;
+  gap: 0;
+  height: 100dvh;
+}
+body.farm-fullscreen .farm-card {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  border-radius: 0;
+  border: none;
+  z-index: 40;
+}
+
 .farm-card {
   background: var(--card);
   border-radius: var(--radius);
@@ -254,65 +279,100 @@ body {
   display: flex;
   flex-direction: column;
 }
-.farm-hud-top {
+.farm-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  background: #BAE6FD;
+  overflow: hidden;
+  touch-action: none;
+}
+.farm-stage-full {
+  height: 100dvh;
+}
+.farm-canvas { width: 100%; height: 100%; display: block; }
+
+/* Floating Top HUD in Fullscreen */
+.farm-float-top {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
-  background: linear-gradient(90deg, #F0FDF4, #FEFCE8);
-  border-bottom: 2px solid #DCFCE7;
+  z-index: 10;
+  pointer-events: none;
 }
+.farm-float-top > * { pointer-events: auto; }
+.farm-pill-btn {
+  border: 2.5px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  color: #1E293B;
+  border-radius: 999px;
+  padding: 8px 13px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.16);
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+  transition: transform 0.15s;
+}
+.farm-pill-btn:active { transform: scale(0.94); }
+.farm-bag-btn {
+  background: linear-gradient(135deg, #FEF08A, #FDE047);
+  border-color: #F59E0B;
+  color: #78350F;
+}
+.farm-bag-btn.bag-bounce {
+  animation: bagBounce 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes bagBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.26) rotate(-5deg); }
+}
+
 .farm-ribbon {
   flex: 1;
   display: flex;
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding: 2px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
 }
 .farm-ribbon::-webkit-scrollbar { display: none; }
 .ribbon-chip {
   flex: 0 0 auto;
   border: 2px solid #E2E8F0;
   background: #F8FAFC;
-  border-radius: 14px;
-  padding: 5px 9px;
+  border-radius: 999px;
+  padding: 4px 9px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   cursor: pointer;
-  opacity: 0.65;
+  opacity: 0.7;
   transition: all 0.2s;
 }
-.ribbon-chip.done {
-  background: #DCFCE7;
-  border-color: #22C55E;
-  opacity: 1;
-}
+.ribbon-chip.done { background: #DCFCE7; border-color: #22C55E; opacity: 1; }
 .ribbon-chip.active {
-  background: #FEF08A;
-  border-color: #F59E0B;
-  opacity: 1;
-  transform: scale(1.07);
-  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+  background: #FEF08A; border-color: #F59E0B; opacity: 1;
+  transform: scale(1.07); box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
 }
-.rb-emo { font-size: 18px; }
-.rb-item { font-size: 15px; }
+.rb-emo { font-size: 17px; }
+.rb-item { font-size: 14px; }
 .rb-num { font-size: 11px; font-weight: 800; color: #64748B; }
 
-.farm-stage {
-  position: relative;
-  width: 100%;
-  height: min(64vh, 520px);
-  min-height: 360px;
-  background: #C8E9FF;
-  overflow: hidden;
-  touch-action: none;
-}
-.farm-canvas { width: 100%; height: 100%; display: block; }
 .farm-guide-pill {
   position: absolute;
-  top: 12px; left: 50%;
+  top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+  left: 50%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.94);
   color: #1E293B;
@@ -322,19 +382,124 @@ body {
   font-size: 14px;
   font-weight: 900;
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
-  z-index: 5;
+  z-index: 8;
   white-space: nowrap;
   max-width: 92%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Entry Splash Overlay */
+.farm-entry-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(3px);
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.farm-entry-card {
+  background: rgba(255, 253, 245, 0.96);
+  border: 4px solid #FACC15;
+  border-radius: 28px;
+  padding: 28px 24px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.farm-entry-emoji { font-size: 56px; line-height: 1.1; }
+.farm-entry-card h2 { margin: 0; font-size: 24px; font-weight: 900; color: #1E293B; }
+.farm-entry-card p { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #475569; line-height: 1.5; }
+.farm-enter-btn { width: 100%; font-size: 19px; min-height: 62px; }
+
+/* Flying Item to Bag Animation */
+.flying-item {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%) scale(1.3);
+  font-size: 56px;
+  z-index: 25;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.25));
+  transition: left 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+              top 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.65s ease,
+              opacity 0.65s ease;
+}
+
+/* Inventory Bag Modal */
+.farm-bag-modal {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.farm-bag-sheet {
+  background: #FFFDF7;
+  border: 3px solid #F59E0B;
+  border-radius: 26px;
+  max-width: 580px;
+  width: 100%;
+  max-height: 82dvh;
+  overflow-y: auto;
+  padding: 20px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+}
+.farm-bag-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+@media (max-width: 520px) {
+  .farm-bag-grid { grid-template-columns: repeat(3, 1fr); }
+}
+.bag-slot {
+  border: 2px dashed #CBD5E1;
+  background: #F8FAFC;
+  border-radius: 18px;
+  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+.bag-slot.got {
+  border-style: solid;
+  border-color: #22C55E;
+  background: #DCFCE7;
+  cursor: pointer;
+  opacity: 1;
+  transition: transform 0.14s;
+}
+.bag-slot.got:active { transform: scale(0.95); }
+.bag-slot-ico { font-size: 32px; line-height: 1.1; }
+.bag-slot-name { font-size: 12px; font-weight: 900; color: #1E293B; }
+.bag-slot-who { font-size: 11px; font-weight: 700; color: #475569; }
+
 .farm-joystick {
   position: absolute;
-  left: 18px; bottom: 18px;
-  width: 96px; height: 96px;
+  left: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 100px; height: 100px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.45);
-  border: 3px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.48);
+  border: 3px solid rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(4px);
   display: grid;
   place-items: center;
@@ -342,7 +507,7 @@ body {
   touch-action: none;
 }
 .farm-joy-knob {
-  width: 42px; height: 42px;
+  width: 44px; height: 44px;
   border-radius: 50%;
   background: linear-gradient(135deg, #4F46E5, #6366F1);
   border: 3px solid #fff;
