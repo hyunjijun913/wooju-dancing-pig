@@ -478,24 +478,43 @@ export class FarmGame3D {
     const h = wrap.clientHeight || window.innerHeight;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#BAE6FD');
-    this.scene.fog = new THREE.Fog('#BAE6FD', 42, 95);
+    this.scene.background = new THREE.Color('#9BD8FF');
+    this.scene.fog = new THREE.Fog('#BFE8FF', 34, 88);
 
-    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 140);
-    this.camera.position.set(this.avatarPos.x, 17.5, this.avatarPos.z + 18.0);
-    this.camera.lookAt(this.avatarPos.x, 1.0, this.avatarPos.z);
+    this.camera = new THREE.PerspectiveCamera(46, w / h, 0.1, 140);
+    this.camera.position.set(this.avatarPos.x, 5.8, this.avatarPos.z + 11.5);
+    this.camera.lookAt(this.avatarPos.x, 1.7, this.avatarPos.z - 1.2);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'default' });
     this.renderer.setSize(w, h);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.06;
     this.renderer.domElement.className = 'farm-canvas';
     wrap.prepend(this.renderer.domElement);
 
-    // Warm sunny lighting
-    this.scene.add(new THREE.HemisphereLight('#FFFDF5', '#74C69D', 1.2));
-    const dir = new THREE.DirectionalLight('#FFF7E0', 1.15);
-    dir.position.set(14, 24, 16);
+    // Warm golden-hour Animal Crossing lighting with soft real shadows
+    this.scene.add(new THREE.HemisphereLight('#FFFDF5', '#68C456', 0.95));
+    const dir = new THREE.DirectionalLight('#FFF5D6', 1.35);
+    dir.position.set(16, 26, 18);
+    dir.castShadow = true;
+    dir.shadow.mapSize.width = 1024;
+    dir.shadow.mapSize.height = 1024;
+    dir.shadow.camera.near = 2;
+    dir.shadow.camera.far = 75;
+    dir.shadow.camera.left = -24;
+    dir.shadow.camera.right = 24;
+    dir.shadow.camera.top = 24;
+    dir.shadow.camera.bottom = -24;
+    dir.shadow.bias = -0.0005;
     this.scene.add(dir);
+
+    // Subtle warm bounce rim light from opposite side
+    const fill = new THREE.DirectionalLight('#FFE4B5', 0.35);
+    fill.position.set(-14, 10, -12);
+    this.scene.add(fill);
 
     this.raycaster = new THREE.Raycaster();
     this.clock = new THREE.Clock();
@@ -882,35 +901,79 @@ export class FarmGame3D {
         this.wooju.rightArm.rotation.x = swing * 0.8;
       }
 
-      // 2. Living Villager Wandering AI + Turn-to-Face Wooju + Nearest Villager Speech Bubble!
+      // 2. Living Villager AI: Locked villagers FLEE from Wooju; active/done villagers stroll & turn to face Wooju!
       let nearestIdx = -1;
-      let nearestDist = 4.9;
+      let nearestDist = 5.6;
 
       this.spotEntries.forEach((m, idx) => {
-        const distToWooju = Math.hypot(this.avatarPos.x - m.curX, this.avatarPos.z - m.curZ);
+        const dxFromWooju = m.curX - this.avatarPos.x;
+        const dzFromWooju = m.curZ - this.avatarPos.z;
+        const distToWooju = Math.hypot(dxFromWooju, dzFromWooju);
+        const isLocked = idx > this.currentSpotIndex;
         const isSpeaking = this.activeDialogueSpot === idx;
-        const isNearWooju = this.entered && distToWooju < 4.9;
+        const isNearWooju = this.entered && distToWooju < (isLocked ? 5.6 : 4.8);
         const isDancingPig = idx === FARM_SPOTS.length - 1 && (this.currentSpotIndex >= FARM_SPOTS.length || isSpeaking);
+        m.isFleeing = false;
 
         if (isNearWooju && this.activeDialogueSpot === null && distToWooju < nearestDist) {
           nearestDist = distToWooju;
           nearestIdx = idx;
         }
 
-        if (isSpeaking || isNearWooju) {
-          // Stop strolling and turn warmly toward Wooju (like Animal Crossing!)
+        if (isLocked && isNearWooju && this.activeDialogueSpot === null) {
+          // Run away from Wooju faster than Wooju walks so Wooju literally cannot approach locked characters!
+          m.isFleeing = true;
+          m.isMoving = true;
+          m.wanderTarget = null;
+          const safeDist = Math.max(0.01, distToWooju);
+          let dirX = dxFromWooju / safeDist;
+          let dirZ = dzFromWooju / safeDist;
+
+          const fleeSpeed = 8.6;
+          let nx = m.curX + dirX * fleeSpeed * dt;
+          let nz = m.curZ + dirZ * fleeSpeed * dt;
+
+          // If fleeing hits the outer farm fence, steer tangentially along the circle away from Wooju!
+          const nr = Math.hypot(nx, nz);
+          if (nr > 15.6) {
+            const tangX = -m.curZ / Math.max(0.01, Math.hypot(m.curX, m.curZ));
+            const tangZ = m.curX / Math.max(0.01, Math.hypot(m.curX, m.curZ));
+            const dot = tangX * dirX + tangZ * dirZ;
+            const sign = dot >= 0 ? 1 : -1;
+            dirX = tangX * sign;
+            dirZ = tangZ * sign;
+            nx = m.curX + dirX * fleeSpeed * dt;
+            nz = m.curZ + dirZ * fleeSpeed * dt;
+            const cr = Math.hypot(nx, nz);
+            if (cr > 15.6) {
+              nx = (nx / cr) * 15.6;
+              nz = (nz / cr) * 15.6;
+            }
+          }
+          m.curX = nx;
+          m.curZ = nz;
+          m.group.position.x = m.curX;
+          m.group.position.z = m.curZ;
+          const fleeYaw = Math.atan2(dirX, dirZ);
+          let diff = fleeYaw - m.group.rotation.y;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          m.group.rotation.y += diff * 0.22;
+        } else if (isSpeaking || (!isLocked && isNearWooju)) {
+          // Stop strolling and turn warmly toward Wooju
           m.isMoving = false;
           const targetYaw = Math.atan2(this.avatarPos.x - m.curX, this.avatarPos.z - m.curZ);
           let diff = targetYaw - m.group.rotation.y;
           while (diff > Math.PI) diff -= Math.PI * 2;
           while (diff < -Math.PI) diff += Math.PI * 2;
-          m.group.rotation.y += diff * 0.12;
+          m.group.rotation.y += diff * 0.14;
         } else {
-          // Gentle autonomous wandering within villager's cozy zone
+          // Gentle autonomous wandering (or returning toward home after fleeing)
+          const distHome = Math.hypot(m.homeX - m.curX, m.homeZ - m.curZ);
           m.wanderTimer -= dt;
-          if (!m.wanderTarget && m.wanderTimer <= 0) {
+          if (!m.wanderTarget && (m.wanderTimer <= 0 || distHome > m.wanderRadius + 1.2)) {
             const ang = Math.random() * Math.PI * 2;
-            const rad = 0.5 + Math.random() * m.wanderRadius;
+            const rad = 0.4 + Math.random() * m.wanderRadius;
             m.wanderTarget = {
               x: m.homeX + Math.cos(ang) * rad,
               z: m.homeZ + Math.sin(ang) * rad,
@@ -920,8 +983,8 @@ export class FarmGame3D {
             const wdx = m.wanderTarget.x - m.curX;
             const wdz = m.wanderTarget.z - m.curZ;
             const wd = Math.hypot(wdx, wdz);
-            if (wd > 0.12) {
-              const wSpeed = 1.35;
+            if (wd > 0.14) {
+              const wSpeed = distHome > m.wanderRadius + 1.2 ? 3.2 : 1.35;
               m.curX += (wdx / wd) * wSpeed * dt;
               m.curZ += (wdz / wd) * wSpeed * dt;
               m.group.position.x = m.curX;
@@ -940,8 +1003,11 @@ export class FarmGame3D {
           }
         }
 
-        // Expressive 3D body animations (dance / talk / waddle walk / idle breath)
-        if (isDancingPig) {
+        // Expressive 3D body animations (flee hop / dance / talk / waddle walk / idle breath)
+        if (m.isFleeing) {
+          m.bodyRoot.position.y = Math.abs(Math.sin(t * 16 + idx)) * 0.36;
+          m.bodyRoot.rotation.z = Math.sin(t * 16 + idx) * 0.16;
+        } else if (isDancingPig) {
           m.bodyRoot.position.y = Math.abs(Math.sin(t * 9)) * 0.48;
           m.bodyRoot.rotation.y = Math.sin(t * 6) * 0.55;
           m.bodyRoot.rotation.z = Math.sin(t * 9) * 0.14;
@@ -1007,33 +1073,35 @@ export class FarmGame3D {
         this.tapRing.material.opacity = this.tapRingLife * 0.7;
       }
 
-      // 4. Camera: Wide cozy Animal Crossing view (auto-adjusts for iPad portrait vs landscape)
+      // 4. Camera: Low, immersive Animal Crossing horizon view (~23 deg) so you feel INSIDE the village!
       const aspect = this.camera.aspect || 1;
-      const portraitBoost = aspect < 1 ? 1.24 : 1.0;
+      const portraitBoost = aspect < 1 ? 1.18 : 1.0;
 
       if (!this.entered) {
-        const angle = t * 0.18;
-        const r = 27 * portraitBoost;
-        this.camera.position.set(Math.sin(angle) * r, 18.5 * portraitBoost, Math.cos(angle) * r);
-        this.camera.lookAt(0, 0.8, 0);
+        const angle = t * 0.16;
+        const r = 21 * portraitBoost;
+        this.camera.position.set(Math.sin(angle) * r, 8.2 * portraitBoost, Math.cos(angle) * r);
+        this.camera.lookAt(0, 1.8, 0);
       } else {
         let focusX = this.avatarPos.x;
         let focusZ = this.avatarPos.z;
-        let camHeight = 15.8 * portraitBoost;
-        let camDist = 16.8 * portraitBoost;
-        let lookOffsetZ = 0;
+        let camHeight = 5.4 * portraitBoost;
+        let camDist = 11.2 * portraitBoost;
+        let lookY = 1.7;
+        let lookOffsetZ = -1.2;
         if (this.activeDialogueSpot !== null && this.spotEntries[this.activeDialogueSpot]) {
           const sp = this.spotEntries[this.activeDialogueSpot];
           focusX = sp.curX;
           focusZ = sp.curZ;
-          camHeight = 8.8 * portraitBoost;
-          camDist = 10.8 * portraitBoost;
-          lookOffsetZ = 1.6;
+          camHeight = 3.2 * portraitBoost;
+          camDist = 6.8 * portraitBoost;
+          lookY = 1.25;
+          lookOffsetZ = 0.6;
         }
         this.camera.position.x += (focusX - this.camera.position.x) * 0.08;
         this.camera.position.y += (camHeight - this.camera.position.y) * 0.08;
         this.camera.position.z += (focusZ + camDist - this.camera.position.z) * 0.08;
-        this.camera.lookAt(focusX, 1.0, focusZ + lookOffsetZ);
+        this.camera.lookAt(focusX, lookY, focusZ + lookOffsetZ);
       }
 
       this.renderer.render(this.scene, this.camera);
@@ -1042,7 +1110,7 @@ export class FarmGame3D {
       if (hoverEl && hoverText) {
         if (nearestIdx >= 0 && this.entered && this.activeDialogueSpot === null) {
           const m = this.spotEntries[nearestIdx];
-          projVec.set(m.curX, m.baseY + 2.85, m.curZ);
+          projVec.set(m.curX, m.baseY + 2.75, m.curZ);
           projVec.project(this.camera);
           const rect = this.renderer.domElement.getBoundingClientRect();
           const sx = (projVec.x * 0.5 + 0.5) * rect.width;
@@ -1052,10 +1120,10 @@ export class FarmGame3D {
             hoverText.textContent = `💬 ${m.spot.emoji} ${m.spot.name}에게 말 걸기!`;
           } else {
             const cur = FARM_SPOTS[this.currentSpotIndex];
-            hoverText.textContent = `👉 먼저 ${cur.emoji} ${cur.name} 만나요!`;
+            hoverText.textContent = `💨 도망간다! 먼저 ${cur.emoji} ${cur.name} 만나요!`;
           }
-          hoverEl.style.left = `${Math.max(80, Math.min(rect.width - 80, sx))}px`;
-          hoverEl.style.top = `${Math.max(100, Math.min(rect.height - 130, sy))}px`;
+          hoverEl.style.left = `${Math.max(95, Math.min(rect.width - 95, sx))}px`;
+          hoverEl.style.top = `${Math.max(100, Math.min(rect.height - 140, sy))}px`;
           hoverEl.style.display = 'inline-flex';
         } else {
           hoverSpotIdx = -1;
