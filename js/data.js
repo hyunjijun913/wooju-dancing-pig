@@ -1,0 +1,1019 @@
+// Story cards, chunk timestamps, 3D farm spots, daily missions & pure logic
+export const BASE_CARDS = [
+  {
+    "id": 1,
+    "chapter": 1,
+    "scene": "scene1",
+    "start": 2.7,
+    "end": 6.0,
+    "cam": {
+      "scale": 1.0,
+      "ox": 50,
+      "oy": 50
+    },
+    "anim": "bounce",
+    "speaker": "📖 이야기 시작!",
+    "icons": [
+      [
+        "🐷",
+        "춤추는 돼지"
+      ],
+      [
+        "💃",
+        "댄스!"
+      ]
+    ],
+    "en": "The Dancing Pig",
+    "ko": "춤추는 돼지 (제목)",
+    "gesture": "🐷 양손을 펼치고 신나게 제목 외치기!"
+  },
+  {
+    "id": 2,
+    "chapter": 1,
+    "scene": "scene1",
+    "start": 7.8,
+    "end": 10.8,
+    "cam": {
+      "scale": 1.25,
+      "ox": 34,
+      "oy": 56
+    },
+    "anim": "",
+    "speaker": "🏡 조용한 농장",
+    "icons": [
+      [
+        "🏡",
+        "농장"
+      ],
+      [
+        "🤫",
+        "조용해요"
+      ]
+    ],
+    "en": "The farm is quiet.",
+    "ko": "농장이 조용해요.",
+    "gesture": "🤫 입에 검지 손가락 대고 '쉿!' 하기"
+  },
+  {
+    "id": 3,
+    "chapter": 1,
+    "scene": "scene1",
+    "start": 11.1,
+    "end": 14.7,
+    "cam": {
+      "scale": 1.85,
+      "ox": 67,
+      "oy": 60
+    },
+    "anim": "bounce",
+    "speaker": "🏚️ 헛간 속 동물들",
+    "icons": [
+      [
+        "🐄🐑🐴",
+        "동물들"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🏚️",
+        "헛간 안에!"
+      ]
+    ],
+    "en": "The animals are all in the barn.",
+    "ko": "동물들이 모두 헛간 안에 있어요.",
+    "gesture": "🏠 두 팔로 머리 위에 지붕 모양 만들기"
+  },
+  {
+    "id": 4,
+    "chapter": 1,
+    "scene": "scene2",
+    "start": 18.2,
+    "end": 21.9,
+    "cam": {
+      "scale": 1.6,
+      "ox": 28,
+      "oy": 66
+    },
+    "anim": "",
+    "speaker": "🐸 개구리가 말해요",
+    "icons": [
+      [
+        "👨‍🌾",
+        "농부 아저씨"
+      ],
+      [
+        "😢",
+        "슬퍼요"
+      ],
+      [
+        "🐸",
+        "개구리"
+      ]
+    ],
+    "en": "\"Farmer Brown is sad,\" said the frog.",
+    "ko": "\"브라운 농부 아저씨가 슬퍼요.\" 개구리가 말했어요.",
+    "gesture": "😢 슬픈 표정 짓고 🐸 개구리처럼 폴짝!"
+  },
+  {
+    "id": 5,
+    "chapter": 1,
+    "scene": "scene2",
+    "start": 22.0,
+    "end": 25.5,
+    "cam": {
+      "scale": 1.48,
+      "ox": 72,
+      "oy": 52
+    },
+    "anim": "bounce",
+    "speaker": "🐾 동물 친구들 고민",
+    "icons": [
+      [
+        "🤔",
+        "뭘 할까?"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "😄",
+        "행복하게!"
+      ]
+    ],
+    "en": "\"What can we do to make him happy?\"",
+    "ko": "\"아저씨를 행복하게 하려면 뭘 할 수 있을까?\"",
+    "gesture": "🤔 턱에 손 대고 고민하다가 활짝 웃기!"
+  },
+  {
+    "id": 6,
+    "chapter": 2,
+    "scene": "scene3",
+    "start": 28.5,
+    "end": 31.4,
+    "cam": {
+      "scale": 1.85,
+      "ox": 25,
+      "oy": 66
+    },
+    "anim": "bounce",
+    "speaker": "🦉 부엉이가 말해요",
+    "icons": [
+      [
+        "💡",
+        "알았어!"
+      ],
+      [
+        "🦉",
+        "부엉이"
+      ]
+    ],
+    "en": "\"I know,\" said the owl.",
+    "ko": "\"알았어!\" 부엉이가 말했어요.",
+    "gesture": "💡 검지 손가락 번쩍 들고 🦉 눈 동그랗게!"
+  },
+  {
+    "id": 7,
+    "chapter": 2,
+    "scene": "scene3",
+    "start": 31.6,
+    "end": 34.7,
+    "cam": {
+      "scale": 1.95,
+      "ox": 34,
+      "oy": 36
+    },
+    "anim": "bounce",
+    "speaker": "🦉 부엉이의 아이디어",
+    "icons": [
+      [
+        "👨‍🍳",
+        "만들자!"
+      ],
+      [
+        "🍽️",
+        "맛있는 저녁!"
+      ]
+    ],
+    "en": "\"Let's make him a nice dinner!\"",
+    "ko": "\"아저씨께 맛있는 저녁을 만들어 드리자!\"",
+    "gesture": "🍽️ 냠냠 맛있게 먹는 시늉하기"
+  },
+  {
+    "id": 8,
+    "chapter": 2,
+    "scene": "scene3",
+    "start": 35.3,
+    "end": 41.5,
+    "cam": {
+      "scale": 2.1,
+      "ox": 60,
+      "oy": 28
+    },
+    "anim": "bounce",
+    "speaker": "🐔 닭이 말해요",
+    "icons": [
+      [
+        "🐔",
+        "닭"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🥚",
+        "달걀"
+      ],
+      [
+        "🍽️",
+        "저녁"
+      ]
+    ],
+    "en": "\"I will give him an egg for his dinner,\" said the chicken.",
+    "ko": "\"나는 저녁으로 달걀을 드릴게.\" 닭이 말했어요.",
+    "gesture": "🥚 손으로 동그란 달걀 들고 🐔 날개 파닥파닥!",
+    "chunks": [
+      {
+        "start": 35.3,
+        "end": 39.59,
+        "en": "\"I will give him an egg for his dinner,\"",
+        "ko": "저녁으로 달걀을 드릴게"
+      },
+      {
+        "start": 39.59,
+        "end": 41.5,
+        "en": "said the chicken.",
+        "ko": "닭이 말했어요"
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "chapter": 2,
+    "scene": "scene3",
+    "start": 42.9,
+    "end": 49.0,
+    "cam": {
+      "scale": 2.05,
+      "ox": 80,
+      "oy": 76
+    },
+    "anim": "bounce",
+    "speaker": "🐰 토끼가 말해요",
+    "icons": [
+      [
+        "🐰",
+        "토끼"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🥕✨",
+        "크고 멋진 당근!"
+      ]
+    ],
+    "en": "\"And I will give him my nice, big carrot!\" said the rabbit.",
+    "ko": "\"그리고 난 내 멋지고 큰 당근을 드릴래!\" 토끼가 말했어요.",
+    "gesture": "🥕 양손으로 큰 당근 들고 🐰 머리 위로 토끼 귀!",
+    "chunks": [
+      {
+        "start": 42.9,
+        "end": 46.02,
+        "en": "\"And I will give him my nice, big carrot!\"",
+        "ko": "내 크고 멋진 당근을 드릴래!"
+      },
+      {
+        "start": 46.02,
+        "end": 49.0,
+        "en": "said the rabbit.",
+        "ko": "토끼가 말했어요"
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "chapter": 2,
+    "scene": "scene4",
+    "start": 52.8,
+    "end": 59.2,
+    "cam": {
+      "scale": 1.85,
+      "ox": 26,
+      "oy": 50
+    },
+    "anim": "bounce",
+    "speaker": "🐄 젖소가 말해요",
+    "icons": [
+      [
+        "🐄",
+        "젖소"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🥛",
+        "우유"
+      ],
+      [
+        "🍽️",
+        "저녁"
+      ]
+    ],
+    "en": "\"I will give him some milk for his dinner,\" said the cow.",
+    "ko": "\"나는 저녁으로 우유를 드릴게.\" 젖소가 말했어요.",
+    "gesture": "🥛 우유 컵 들고 꿀꺽꿀꺽 마시는 시늉!",
+    "chunks": [
+      {
+        "start": 52.8,
+        "end": 57.16,
+        "en": "\"I will give him some milk for his dinner,\"",
+        "ko": "저녁으로 우유를 드릴게"
+      },
+      {
+        "start": 57.16,
+        "end": 59.2,
+        "en": "said the cow.",
+        "ko": "젖소가 말했어요"
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "chapter": 2,
+    "scene": "scene4",
+    "start": 59.4,
+    "end": 65.9,
+    "cam": {
+      "scale": 1.85,
+      "ox": 74,
+      "oy": 50
+    },
+    "anim": "bounce",
+    "speaker": "🐴 말과 조랑말이 말해요",
+    "icons": [
+      [
+        "🐴🐎",
+        "말·조랑말"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🌽",
+        "옥수수 따기!"
+      ]
+    ],
+    "en": "\"We will pick corn for his dinner,\" said the horse and the pony.",
+    "ko": "\"우리는 저녁으로 옥수수를 딸게.\" 말과 조랑말이 말했어요.",
+    "gesture": "🌽 위로 손 뻗어 옥수수 똑똑 따기!",
+    "chunks": [
+      {
+        "start": 59.4,
+        "end": 63.16,
+        "en": "\"We will pick corn for his dinner,\"",
+        "ko": "저녁으로 옥수수를 딸게"
+      },
+      {
+        "start": 63.16,
+        "end": 65.9,
+        "en": "said the horse and the pony.",
+        "ko": "말과 조랑말이 말했어요"
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "chapter": 3,
+    "scene": "scene5",
+    "start": 69.1,
+    "end": 75.2,
+    "cam": {
+      "scale": 1.85,
+      "ox": 30,
+      "oy": 46
+    },
+    "anim": "bounce",
+    "speaker": "🐱 고양이가 말해요",
+    "icons": [
+      [
+        "🐱",
+        "고양이"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🐭",
+        "생쥐?!"
+      ],
+      [
+        "🍽️",
+        "저녁"
+      ]
+    ],
+    "en": "\"I will get a mouse for his dinner,\" said the cat.",
+    "ko": "\"나는 저녁으로 생쥐를 잡아올게.\" 고양이가 말했어요.",
+    "gesture": "🐱 고양이 발톱 세우고 입맛 다시기!",
+    "chunks": [
+      {
+        "start": 69.1,
+        "end": 73.83,
+        "en": "\"I will get a mouse for his dinner,\"",
+        "ko": "저녁으로 생쥐를 잡아올게"
+      },
+      {
+        "start": 73.83,
+        "end": 75.2,
+        "en": "said the cat.",
+        "ko": "고양이가 말했어요"
+      }
+    ]
+  },
+  {
+    "id": 13,
+    "chapter": 3,
+    "scene": "scene5",
+    "start": 75.8,
+    "end": 79.6,
+    "cam": {
+      "scale": 2.25,
+      "ox": 20,
+      "oy": 38
+    },
+    "anim": "shake",
+    "speaker": "🐭 생쥐가 소리쳤어요!",
+    "icons": [
+      [
+        "🐭",
+        "생쥐"
+      ],
+      [
+        "🙅‍♂️❌",
+        "안 돼!!"
+      ]
+    ],
+    "en": "\"No, you won't!\" the mouse yelled.",
+    "ko": "\"안 돼, 어림없어!\" 생쥐가 소리쳤어요.",
+    "gesture": "🙅 팔로 큰 X 표시하며 힘차게 외치기!"
+  },
+  {
+    "id": 14,
+    "chapter": 3,
+    "scene": "scene5",
+    "start": 79.9,
+    "end": 84.6,
+    "cam": {
+      "scale": 1.95,
+      "ox": 24,
+      "oy": 44
+    },
+    "anim": "shake",
+    "speaker": "🐭 생쥐가 말해요",
+    "icons": [
+      [
+        "👨‍🌾",
+        "농부 아저씨"
+      ],
+      [
+        "🐭",
+        "생쥐"
+      ],
+      [
+        "🚫",
+        "안 먹어!"
+      ]
+    ],
+    "en": "\"Farmer Brown does not like to eat mice!\"",
+    "ko": "\"브라운 아저씨는 생쥐 먹는 걸 안 좋아해!\"",
+    "gesture": "😖 고개를 도리도리 저으며 손 흔들기"
+  },
+  {
+    "id": 15,
+    "chapter": 3,
+    "scene": "scene5",
+    "start": 85.0,
+    "end": 90.9,
+    "cam": {
+      "scale": 1.9,
+      "ox": 76,
+      "oy": 52
+    },
+    "anim": "bounce",
+    "speaker": "🐱 고양이의 낚시!",
+    "icons": [
+      [
+        "🐱",
+        "고양이"
+      ],
+      [
+        "🎣",
+        "그럼"
+      ],
+      [
+        "🐟",
+        "물고기!"
+      ]
+    ],
+    "en": "\"Then I will get a fish for his dinner,\" said the cat.",
+    "ko": "\"그럼 저녁으로 물고기를 잡아올게.\" 고양이가 말했어요.",
+    "gesture": "🎣 낚싯대 던지고 휙! 끌어올리기",
+    "chunks": [
+      {
+        "start": 85.0,
+        "end": 88.84,
+        "en": "\"Then I will get a fish for his dinner,\"",
+        "ko": "그럼 물고기를 잡아올게"
+      },
+      {
+        "start": 88.84,
+        "end": 90.9,
+        "en": "said the cat.",
+        "ko": "고양이가 말했어요"
+      }
+    ]
+  },
+  {
+    "id": 16,
+    "chapter": 3,
+    "scene": "scene6",
+    "start": 95.6,
+    "end": 100.2,
+    "cam": {
+      "scale": 2.25,
+      "ox": 14,
+      "oy": 24
+    },
+    "anim": "bounce",
+    "speaker": "🦆 오리가 말해요",
+    "icons": [
+      [
+        "🦆",
+        "오리"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🍳",
+        "저녁 요리!"
+      ]
+    ],
+    "en": "\"And I will fix his dinner,\" said the duck.",
+    "ko": "\"그리고 내가 저녁을 요리할게.\" 오리가 말했어요.",
+    "gesture": "🍳 냄비를 휘휘 저으며 요리하는 시늉!"
+  },
+  {
+    "id": 17,
+    "chapter": 3,
+    "scene": "scene6",
+    "start": 100.6,
+    "end": 106.4,
+    "cam": {
+      "scale": 1.8,
+      "ox": 48,
+      "oy": 78
+    },
+    "anim": "bounce",
+    "speaker": "🐶 개와 염소가 말해요",
+    "icons": [
+      [
+        "🐶🐐",
+        "개·염소"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🧹",
+        "헛간 청소!"
+      ]
+    ],
+    "en": "\"And we will clean the barn,\" said the dog and the goat.",
+    "ko": "\"그리고 우리는 헛간을 청소할게.\" 개와 염소가 말했어요.",
+    "gesture": "🧹 빗자루로 쓱싹쓱싹 바닥 쓸기!",
+    "chunks": [
+      {
+        "start": 100.6,
+        "end": 105.17,
+        "en": "\"And we will clean the barn,\"",
+        "ko": "우리는 헛간을 청소할게"
+      },
+      {
+        "start": 105.17,
+        "end": 106.4,
+        "en": "said the dog and the goat.",
+        "ko": "개와 염소가 말했어요"
+      }
+    ]
+  },
+  {
+    "id": 18,
+    "chapter": 3,
+    "scene": "scene6",
+    "start": 106.8,
+    "end": 113.0,
+    "cam": {
+      "scale": 2.2,
+      "ox": 84,
+      "oy": 28
+    },
+    "anim": "dance",
+    "speaker": "🐑 당나귀와 양이 말해요",
+    "icons": [
+      [
+        "🐴🐑",
+        "당나귀·양"
+      ],
+      [
+        "➡️",
+        ""
+      ],
+      [
+        "🎵",
+        "노래 불러요!"
+      ]
+    ],
+    "en": "\"We will sing him a song,\" said the donkey and the sheep.",
+    "ko": "\"우리는 아저씨께 노래를 불러드릴게.\" 당나귀와 양이 말했어요.",
+    "gesture": "🎵 마이크 들고 랄랄라 노래 부르기!",
+    "chunks": [
+      {
+        "start": 106.8,
+        "end": 111.55,
+        "en": "\"We will sing him a song,\"",
+        "ko": "아저씨께 노래를 불러드릴게"
+      },
+      {
+        "start": 111.55,
+        "end": 113.0,
+        "en": "said the donkey and the sheep.",
+        "ko": "당나귀와 양이 말했어요"
+      }
+    ]
+  },
+  {
+    "id": 19,
+    "chapter": 4,
+    "scene": "scene7",
+    "start": 115.8,
+    "end": 119.3,
+    "cam": {
+      "scale": 1.9,
+      "ox": 26,
+      "oy": 56
+    },
+    "anim": "",
+    "speaker": "🐷 슬픈 돼지",
+    "icons": [
+      [
+        "🐷",
+        "돼지"
+      ],
+      [
+        "😢",
+        "슬펐어요"
+      ]
+    ],
+    "en": "The pig was sad.",
+    "ko": "돼지는 슬펐어요.",
+    "gesture": "😔 어깨 축 내리고 고개 숙이기"
+  },
+  {
+    "id": 20,
+    "chapter": 4,
+    "scene": "scene7",
+    "start": 119.6,
+    "end": 124.2,
+    "cam": {
+      "scale": 1.85,
+      "ox": 34,
+      "oy": 44
+    },
+    "anim": "",
+    "speaker": "🐷 고민하는 돼지",
+    "icons": [
+      [
+        "🐷",
+        "돼지"
+      ],
+      [
+        "❓",
+        "뭘 해야 하지?"
+      ],
+      [
+        "👨‍🌾",
+        "아저씨 위해"
+      ]
+    ],
+    "en": "He did not know what to do for the farmer.",
+    "ko": "농부 아저씨를 위해 뭘 해야 할지 몰랐어요.",
+    "gesture": "🤷 양손 으쓱하며 고개 갸웃하기"
+  },
+  {
+    "id": 21,
+    "chapter": 4,
+    "scene": "scene7",
+    "start": 125.6,
+    "end": 132.1,
+    "cam": {
+      "scale": 1.9,
+      "ox": 73,
+      "oy": 50
+    },
+    "anim": "bounce",
+    "speaker": "🐷 반짝! 아이디어!",
+    "icons": [
+      [
+        "💡",
+        "알았어!"
+      ],
+      [
+        "🐷",
+        "돼지"
+      ],
+      [
+        "👀🌀",
+        "꼬불꼬불 꼬리!"
+      ]
+    ],
+    "en": "\"I know,\" said the pig, as he looked at the curl in his tail.",
+    "ko": "\"알았어!\" 돼지가 꼬불꼬불한 자기 꼬리를 보며 말했어요.",
+    "gesture": "🌀 뒤돌아 엉덩이 꼬리 보며 손가락 빙글빙글!",
+    "chunks": [
+      {
+        "start": 125.6,
+        "end": 128.32,
+        "en": "\"I know,\" said the pig,",
+        "ko": "\"알았어!\" 돼지가 말했어요"
+      },
+      {
+        "start": 128.32,
+        "end": 132.1,
+        "en": "as he looked at the curl in his tail.",
+        "ko": "꼬불꼬불한 꼬리를 보면서요"
+      }
+    ]
+  },
+  {
+    "id": 22,
+    "chapter": 4,
+    "scene": "scene7",
+    "start": 132.3,
+    "end": 136.0,
+    "cam": {
+      "scale": 2.0,
+      "ox": 75,
+      "oy": 58
+    },
+    "anim": "dance",
+    "speaker": "🐷 신나는 돼지!",
+    "icons": [
+      [
+        "🐷",
+        "내가"
+      ],
+      [
+        "💃🎵",
+        "춤출 거야!"
+      ],
+      [
+        "👨‍🌾",
+        "아저씨 위해!"
+      ]
+    ],
+    "en": "\"I will dance for Farmer Brown!\"",
+    "ko": "\"브라운 아저씨를 위해 춤을 출 거야!\"",
+    "gesture": "💃 양팔 들고 엉덩이 흔들며 신나게 춤추기!"
+  },
+  {
+    "id": 23,
+    "chapter": 4,
+    "scene": "scene8",
+    "start": 144.4,
+    "end": 153.8,
+    "cam": {
+      "scale": 1.52,
+      "ox": 48,
+      "oy": 58
+    },
+    "anim": "bounce",
+    "speaker": "🎉 모두가 행복해요!",
+    "icons": [
+      [
+        "👨‍🌾😄",
+        "아저씨 행복!"
+      ],
+      [
+        "😂",
+        "하하 웃었어요"
+      ],
+      [
+        "🐷💃",
+        "춤추는 돼지"
+      ]
+    ],
+    "en": "The animals made Farmer Brown very happy, and he laughed at the dancing pig.",
+    "ko": "동물들은 브라운 아저씨를 아주 행복하게 했고, 아저씨는 춤추는 돼지를 보고 웃었어요.",
+    "gesture": "😂 배 잡고 하하하 크게 웃기!",
+    "chunks": [
+      {
+        "start": 144.4,
+        "end": 149.11,
+        "en": "The animals made Farmer Brown very happy,",
+        "ko": "동물들은 아저씨를 아주 행복하게 했고,"
+      },
+      {
+        "start": 149.11,
+        "end": 153.8,
+        "en": "and he laughed at the dancing pig.",
+        "ko": "아저씨는 춤추는 돼지를 보고 웃었어요"
+      }
+    ]
+  },
+  {
+    "id": 24,
+    "chapter": 4,
+    "scene": "scene8",
+    "start": 154.0,
+    "end": 157.8,
+    "cam": {
+      "scale": 2.05,
+      "ox": 60,
+      "oy": 72
+    },
+    "anim": "dance",
+    "speaker": "😲 깜짝 놀랐어요!",
+    "icons": [
+      [
+        "😲",
+        "한 번도 못 봤대요!"
+      ],
+      [
+        "🐷💃",
+        "춤추는 돼지!"
+      ]
+    ],
+    "en": "He had never seen a dancing pig!",
+    "ko": "아저씨는 춤추는 돼지를 한 번도 본 적이 없었거든요!",
+    "gesture": "😲 눈 크게 뜨고 양손으로 얼굴 감싸기!"
+  },
+  {
+    "id": 25,
+    "chapter": 4,
+    "scene": "scene8",
+    "start": 157.9,
+    "end": 160.3,
+    "cam": {
+      "scale": 1.0,
+      "ox": 50,
+      "oy": 50
+    },
+    "anim": "bounce",
+    "speaker": "🙋 마지막 질문!",
+    "icons": [
+      [
+        "🙋‍♂️",
+        "여러분은"
+      ],
+      [
+        "👀❓",
+        "본 적 있나요?"
+      ]
+    ],
+    "en": "Have you?",
+    "ko": "여러분은 본 적 있나요?",
+    "gesture": "🙋 관객을 바라보며 양손 활짝 펼치고 웃기!"
+  }
+];
+
+export const REHEARSAL_OUTRO = {
+  id: 99,
+  chapter: 0,
+  isBanner: true,
+  bannerEmoji: "🏆🎉",
+  bannerTitle: "발표회 대성공!!",
+  bannerSub: "우주야 정말 멋졌어! 마지막 인사하고 박수 받자!",
+  speaker: "🏆 끝인사",
+  icons: [["🙌", "감사합니다!"], ["👏", "짝짝짝!"]],
+  en: "Thank you for listening!",
+  ko: "들어주셔서 감사합니다!",
+  gesture: "🙌 환하게 웃으며 멋지게 끝인사!"
+};
+
+// 12 sequential 3D farm spots mapped 1:1 to BASE_CARDS #1..#25 along a cozy circular path
+export const FARM_SPOTS = [
+  { id: "farmer",       zone: 1, cardIds: [1, 2, 3],      name: "브라운 아저씨", emoji: "👨‍🌾", itemEmoji: "😢", itemLabel: "슬픈 농장",    portrait: "assets/char_farmer.png",       pos: { x: 0, z: 12.5 },   prop: "sign" },
+  { id: "frog",         zone: 1, cardIds: [4, 5],         name: "개구리",        emoji: "🐸",  itemEmoji: "💭", itemLabel: "고민 시작",    portrait: "assets/char_frog.png",         pos: { x: -6.8, z: 10.5 }, prop: "lily" },
+  { id: "owl",          zone: 2, cardIds: [6, 7],         name: "부엉이",        emoji: "🦉",  itemEmoji: "💡", itemLabel: "저녁 아이디어", portrait: "assets/char_owl.png",          pos: { x: -11.5, z: 5.5 }, prop: "stump" },
+  { id: "chicken",      zone: 2, cardIds: [8],            name: "닭",            emoji: "🐔",  itemEmoji: "🥚", itemLabel: "달걀",         portrait: "assets/char_chicken.png",      pos: { x: -12.5, z: -1.0 }, prop: "nest" },
+  { id: "rabbit",       zone: 2, cardIds: [9],            name: "토끼",          emoji: "🐰",  itemEmoji: "🥕", itemLabel: "큰 당근",      portrait: "assets/char_rabbit.png",       pos: { x: -10.2, z: -7.5 }, prop: "garden" },
+  { id: "cow",          zone: 2, cardIds: [10],           name: "젖소",          emoji: "🐄",  itemEmoji: "🥛", itemLabel: "우유",         portrait: "assets/char_cow.png",          pos: { x: -4.8, z: -11.8 }, prop: "bucket" },
+  { id: "horse_pony",   zone: 2, cardIds: [11],           name: "말과 조랑말",   emoji: "🐴",  itemEmoji: "🌽", itemLabel: "옥수수",       portrait: "assets/char_horse_pony.png",   pos: { x: 2.5, z: -12.2 },  prop: "corn" },
+  { id: "cat_mouse",    zone: 3, cardIds: [12, 13, 14, 15], name: "고양이와 생쥐", emoji: "🐱",  itemEmoji: "🐟", itemLabel: "물고기 낚시",  portrait: "assets/char_cat_mouse.png",    pos: { x: 9.2, z: -8.8 },   prop: "pond" },
+  { id: "duck",         zone: 3, cardIds: [16],           name: "오리",          emoji: "🦆",  itemEmoji: "🍳", itemLabel: "저녁 요리",    portrait: "assets/char_duck.png",         pos: { x: 12.4, z: -2.2 },  prop: "pot" },
+  { id: "dog_goat",     zone: 3, cardIds: [17],           name: "개와 염소",     emoji: "🐶",  itemEmoji: "🧹", itemLabel: "헛간 청소",    portrait: "assets/char_dog_goat.png",     pos: { x: 11.4, z: 5.0 },   prop: "broom" },
+  { id: "donkey_sheep", zone: 3, cardIds: [18],           name: "당나귀와 양",   emoji: "🐑",  itemEmoji: "🎵", itemLabel: "노래 선물",    portrait: "assets/char_donkey_sheep.png", pos: { x: 6.5, z: 10.6 },   prop: "music" },
+  { id: "pig_finale",   zone: 4, cardIds: [19, 20, 21, 22, 23, 24, 25], name: "춤추는 돼지", emoji: "🐷", itemEmoji: "💃", itemLabel: "댄스 파티!", portrait: "assets/char_pig.png", pos: { x: 0, z: 0 }, prop: "stage" },
+];
+
+export const DAILY_MISSIONS = [
+  { day: 1,  title: "🗺️ 3D 농장 한 바퀴 돌며 친구들 만나기!", mode: 0, chapter: 0 },
+  { day: 2,  title: "🗺️ 3D 농장 다시 탐험 + 👂 귀 쫑긋 찾기!", mode: 0, chapter: 0 },
+  { day: 3,  title: "🎬 1단계 스토리 보며 몸짓 놀이하기!", mode: 1, chapter: 0 },
+  { day: 4,  title: "🦜 2단계 앵무새 — 1구간 (슬픈 농부) 따라하기", mode: 2, chapter: 1 },
+  { day: 5,  title: "🦜 2단계 앵무새 — 2구간 (맛있는 저녁) 쪼개서 말하기", mode: 2, chapter: 2 },
+  { day: 6,  title: "🦜 2단계 앵무새 — 3구간 (고양이와 친구들) 주고받기", mode: 2, chapter: 3 },
+  { day: 7,  title: "🦜 2단계 앵무새 — 4구간 (춤추는 돼지!) 완성", mode: 2, chapter: 4 },
+  { day: 8,  title: "🔍 3단계 그림보고 — 1·2구간 말해보기", mode: 3, chapter: 1 },
+  { day: 9,  title: "🔍 3단계 그림보고 — 3구간 말해보기", mode: 3, chapter: 3 },
+  { day: 10, title: "🔍 3단계 그림보고 — 4구간 + 전체 도전!", mode: 3, chapter: 4 },
+  { day: 11, title: "🔥 약한 문장 집중 연습 + 그림보고 전체", mode: 3, chapter: 0 },
+  { day: 12, title: "🎤 4단계 발표회 — 첫 리허설 도전!", mode: 4, chapter: 0 },
+  { day: 13, title: "🎤 4단계 발표회 — 큰 목소리로 통녹음!", mode: 4, chapter: 0 },
+  { day: 14, title: "🏆 발표회 파이널 리허설! 우주 화이팅!", mode: 4, chapter: 0 },
+];
+
+export function computeEchoWaitMs(durationSec) {
+  const dur = typeof durationSec === "number" && durationSec > 0 ? durationSec : 3;
+  return Math.max(3000, Math.round(dur * 1400 + 1000));
+}
+
+export function getDeck({ mode = 1, chapter = 0, weakIds = new Set() } = {}) {
+  let cards;
+  if (chapter === -1) {
+    cards = BASE_CARDS.filter(c => weakIds && weakIds.has(c.id));
+    if (cards.length === 0) cards = BASE_CARDS;
+  } else if (chapter === 0) {
+    cards = BASE_CARDS;
+  } else {
+    cards = BASE_CARDS.filter(c => c.chapter === chapter);
+  }
+  // Mode 4 removes REHEARSAL_INTRO per user decision; starts at card #1 and ends with REHEARSAL_OUTRO
+  if (mode === 4) return [...cards, REHEARSAL_OUTRO];
+  return cards;
+}
+
+export function getNextMission(stamps = {}) {
+  for (const m of DAILY_MISSIONS) {
+    if (!stamps[m.day]) return m;
+  }
+  return DAILY_MISSIONS[DAILY_MISSIONS.length - 1];
+}
+
+export function resolveSpotInteraction(spotIndex, currentSpotIndex, isListening) {
+  if (isListening) return { action: "busy" };
+  if (spotIndex > currentSpotIndex) return { action: "locked", redirectTo: currentSpotIndex };
+  if (spotIndex < currentSpotIndex) return { action: "revisit" };
+  return { action: "start" };
+}
+
+function shuffleWithRng(arr, rng = Math.random) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+export function buildSequenceQuestion(spotIndex, rng = Math.random) {
+  const safeIdx = Math.max(0, Math.min(FARM_SPOTS.length - 2, spotIndex));
+  const promptSpot = FARM_SPOTS[safeIdx];
+  const correctSpot = FARM_SPOTS[safeIdx + 1];
+  const distractors = shuffleWithRng(
+    FARM_SPOTS.filter(s => s.id !== promptSpot.id && s.id !== correctSpot.id),
+    rng
+  ).slice(0, 2);
+  const choices = shuffleWithRng([correctSpot, ...distractors], rng);
+  return { promptSpot, correctSpot, choices };
+}
+
+export function buildListenQuestion(cardPool = BASE_CARDS, rng = Math.random) {
+  const pool = cardPool.length >= 3 ? cardPool : BASE_CARDS;
+  const bySpot = new Map();
+  for (const card of pool) {
+    const spot = FARM_SPOTS.find(s => s.cardIds.includes(card.id));
+    const key = spot ? spot.id : `card_${card.id}`;
+    if (!bySpot.has(key)) bySpot.set(key, []);
+    bySpot.get(key).push(card);
+  }
+  const spotKeys = shuffleWithRng([...bySpot.keys()], rng).slice(0, 3);
+  const picked = spotKeys.map(k => {
+    const cardsInSpot = bySpot.get(k);
+    return cardsInSpot[Math.floor(rng() * cardsInSpot.length)];
+  });
+  const targetCard = picked[0];
+  const choices = shuffleWithRng(picked, rng);
+  return { targetCard, choices };
+}
