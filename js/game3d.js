@@ -461,10 +461,10 @@ export class FarmGame3D {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#BAE6FD');
-    this.scene.fog = new THREE.Fog('#BAE6FD', 28, 62);
+    this.scene.fog = new THREE.Fog('#BAE6FD', 42, 95);
 
-    this.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 120);
-    this.camera.position.set(this.avatarPos.x, 12.0, this.avatarPos.z + 11.5);
+    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 140);
+    this.camera.position.set(this.avatarPos.x, 17.5, this.avatarPos.z + 18.0);
     this.camera.lookAt(this.avatarPos.x, 1.0, this.avatarPos.z);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'default' });
@@ -882,27 +882,34 @@ export class FarmGame3D {
         this.tapRing.material.opacity = this.tapRingLife * 0.7;
       }
 
-      // 4. Camera: Gentle Orbit during Entry Splash, Smooth Animal Crossing Follow after entering
+      // 4. Camera: Wide cozy Animal Crossing view (auto-adjusts for iPad portrait vs landscape)
+      const aspect = this.camera.aspect || 1;
+      const portraitBoost = aspect < 1 ? 1.24 : 1.0;
+
       if (!this.entered) {
         const angle = t * 0.18;
-        this.camera.position.set(Math.sin(angle) * 20, 14.5, Math.cos(angle) * 20);
-        this.camera.lookAt(0, 1.0, 0);
+        const r = 27 * portraitBoost;
+        this.camera.position.set(Math.sin(angle) * r, 18.5 * portraitBoost, Math.cos(angle) * r);
+        this.camera.lookAt(0, 0.8, 0);
       } else {
         let focusX = this.avatarPos.x;
         let focusZ = this.avatarPos.z;
-        let camHeight = 10.6;
-        let camDist = 10.4;
+        let camHeight = 15.8 * portraitBoost;
+        let camDist = 16.8 * portraitBoost;
+        let lookOffsetZ = 0;
         if (this.activeDialogueSpot !== null) {
           const sp = FARM_SPOTS[this.activeDialogueSpot].pos;
           focusX = sp.x;
           focusZ = sp.z;
-          camHeight = 4.8;
-          camDist = 6.2;
+          camHeight = 8.8 * portraitBoost;
+          camDist = 10.8 * portraitBoost;
+          // Shift look target slightly south so the 3D character frames cleanly above the bottom dialogue card
+          lookOffsetZ = 1.6;
         }
         this.camera.position.x += (focusX - this.camera.position.x) * 0.08;
         this.camera.position.y += (camHeight - this.camera.position.y) * 0.08;
         this.camera.position.z += (focusZ + camDist - this.camera.position.z) * 0.08;
-        this.camera.lookAt(focusX, 1.1, focusZ);
+        this.camera.lookAt(focusX, 1.0, focusZ + lookOffsetZ);
       }
 
       this.renderer.render(this.scene, this.camera);
