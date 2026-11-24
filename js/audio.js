@@ -38,6 +38,8 @@ export class AudioEngine {
     this.echoDoneCb = null;
     this.customAudioEl = typeof Audio !== 'undefined' ? new Audio() : null;
     if (this.customAudioEl) this.customAudioEl.playsInline = true;
+    this.wordAudioEl = typeof Audio !== 'undefined' ? new Audio() : null;
+    if (this.wordAudioEl) this.wordAudioEl.playsInline = true;
     this.activeCustomAudio = null;
     this.preferredVoice = null;
     this.playToken = 0;
@@ -86,11 +88,14 @@ export class AudioEngine {
       try { this.storyAudio.load(); } catch (_) {}
     }
     if (this.customAudioEl && !this.customAudioEl.src) {
-      // Silent 1-frame WAV data URI unlocks reusable customAudioEl on iOS Safari
-      this.customAudioEl.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-      this.customAudioEl.play().then(() => {
-        this.customAudioEl.pause();
-      }).catch(() => {});
+      // Silent 1-frame WAV data URI unlocks reusable audio elements on iOS Safari
+      const silentWav = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      this.customAudioEl.src = silentWav;
+      this.customAudioEl.play().then(() => { this.customAudioEl.pause(); }).catch(() => {});
+      if (this.wordAudioEl && !this.wordAudioEl.src) {
+        this.wordAudioEl.src = silentWav;
+        this.wordAudioEl.play().then(() => { this.wordAudioEl.pause(); }).catch(() => {});
+      }
     }
   }
 
@@ -789,23 +794,26 @@ export class AudioEngine {
     }
   }
 
-  // --- v6/v8.2: Native story.m4a Word Slice & Point-to-Hear Single Word ---
-  playWordSlice(startSec, endSec, { rate = 0.92 } = {}) {
-    if (!this.storyAudio || typeof startSec !== 'number' || typeof endSec !== 'number') return false;
-    this.unlock();
-    if (this.segmentTimer) {
-      clearInterval(this.segmentTimer);
-      this.segmentTimer = null;
+  // --- v8.4: Studio Neural Individual Word MP3 Playback (clean, warm, zero seek-clip!) ---
+  speakSingleWord(word) {
+    const norm = String(word || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (norm && this.wordAudioEl) {
+      this.unlock();
+      try {
+        this.wordAudioEl.pause();
+        this.wordAudioEl.src = `assets/words/${norm}.mp3`;
+        this.wordAudioEl.currentTime = 0;
+        const p = this.wordAudioEl.play();
+        if (p && p.catch) {
+          p.catch(() => this._fallbackSpeakWordTTS(word));
+        }
+        return;
+      } catch (_) {}
     }
-    const token = this.playToken;
-    this.playSegment(startSec, endSec, { rate, token });
-    return true;
+    this._fallbackSpeakWordTTS(word);
   }
 
-  speakSingleWord(word, timing = null) {
-    if (Array.isArray(timing) && timing.length === 2) {
-      if (this.playWordSlice(timing[0], timing[1])) return;
-    }
+  _fallbackSpeakWordTTS(word) {
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     const clean = String(word || '').replace(/[^a-zA-Z0-9'\- ]/g, '').trim();
     if (!clean) return;
