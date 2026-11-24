@@ -832,7 +832,62 @@ export function buildFarmWorld3D(THREE, scene) {
     clouds.push(cg);
   });
 
-  return { groundMesh, clouds };
+  // Wooju's Always-Present Cozy 3D Home right near the entrance! Walk to the door to go inside!
+  const woojuHouseGroup = new THREE.Group();
+  const HOUSE_X = -6.2;
+  const HOUSE_Z = 14.6;
+  const DOOR_POS = { x: -4.8, z: 12.6 };
+  woojuHouseGroup.position.set(HOUSE_X, 0, HOUSE_Z);
+  woojuHouseGroup.rotation.y = Math.PI * 0.18;
+  loadGLTF('assets/models/quaternius/House_1.glb').then((gltf) => {
+    const inst = instantiateGLTF(THREE, gltf, 5.4, 0);
+    woojuHouseGroup.add(inst.holder);
+  }).catch(() => {});
+  const houseHitMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(2.6, 2.6, 5.0, 12),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  houseHitMesh.position.y = 2.5;
+  houseHitMesh.userData = { isWoojuHouse: true };
+  woojuHouseGroup.add(houseHitMesh);
+
+  // Cute floating "🏡 우주 집" badge above Wooju's house
+  const houseBadge = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, '🏡', '#DCFCE7'), transparent: true })
+  );
+  houseBadge.scale.set(1.35, 1.35, 1);
+  houseBadge.position.set(0, 5.9, 0);
+  woojuHouseGroup.add(houseBadge);
+  scene.add(woojuHouseGroup);
+
+  // Cozy Welcome Doormat & Glowing Door Ring right in front of Wooju's House!
+  const doorMat = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 0.06, 1.0),
+    new THREE.MeshStandardMaterial({ color: '#F59E0B', roughness: 0.85 })
+  );
+  doorMat.position.set(DOOR_POS.x, 0.04, DOOR_POS.z);
+  doorMat.rotation.y = Math.PI * 0.18;
+  doorMat.userData = { isWoojuHouse: true };
+  scene.add(doorMat);
+
+  const doorRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.95, 1.25, 24),
+    new THREE.MeshBasicMaterial({ color: '#4ADE80', side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+  );
+  doorRing.rotation.x = -Math.PI / 2;
+  doorRing.position.set(DOOR_POS.x, 0.06, DOOR_POS.z);
+  scene.add(doorRing);
+
+  return {
+    groundMesh,
+    clouds,
+    woojuHouse: {
+      hitMeshes: [houseHitMesh, doorMat],
+      doorPos: DOOR_POS,
+      exitPos: { x: -3.4, z: 10.6 },
+      doorRing,
+    },
+  };
 }
 
 /**
@@ -1860,6 +1915,23 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
   winGroup.position.set(0, 3.3, -4.95);
   roomShell.add(winGroup);
 
+  // Indoor Exit Doormat right at the front edge of the room (walk onto it or tap to exit to farm!)
+  const exitMat = new THREE.Mesh(
+    new THREE.BoxGeometry(1.9, 0.07, 1.05),
+    new THREE.MeshStandardMaterial({ color: '#10B981', roughness: 0.85 })
+  );
+  exitMat.position.set(0, 0.04, 4.15);
+  exitMat.userData = { isHomeExitMat: true };
+  group.add(exitMat);
+
+  const exitBadge = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, '🚪', '#DCFCE7'), transparent: true })
+  );
+  exitBadge.scale.set(1.0, 1.0, 1);
+  exitBadge.position.set(0, 1.15, 4.15);
+  exitBadge.userData = { isHomeExitMat: true };
+  group.add(exitBadge);
+
   // Placed 3D furniture container
   const furnRoot = new THREE.Group();
   group.add(furnRoot);
@@ -1881,6 +1953,9 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
     const scaleXZ = roomSize / 10;
     roomShell.scale.set(scaleXZ, 1, scaleXZ);
     currentHalfSize = (roomSize / 2) - 0.9;
+    const exitZ = currentHalfSize - 0.1;
+    exitMat.position.set(0, 0.04, exitZ);
+    exitBadge.position.set(0, 1.15, exitZ);
   };
 
   const syncFurniture = (placedList = [], popId = null) => {
@@ -1938,6 +2013,8 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
   return {
     group,
     floorMesh,
+    exitMeshes: [exitMat, exitBadge],
+    getExitPos: () => ({ x: 0, z: currentHalfSize - 0.1 }),
     syncRoomStyle,
     syncFurniture,
     update,

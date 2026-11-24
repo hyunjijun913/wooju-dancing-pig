@@ -143,6 +143,9 @@ export class FarmGame3D {
     // 3D refs
     this.THREE = null;
     this.outdoorGroup = null;
+    this.woojuHouse = null;
+    this.doorCooldownUntil = 0;
+    this.walkingToHouseDoor = false;
     this.wooju = null;
     this.partyRewards = null;
     this.villageBuildings = null;
@@ -1133,14 +1136,21 @@ export class FarmGame3D {
     this._hideFinale();
     this._closeBagModal();
     this._exitPlaceMode();
+    this._hideInspectBar();
+    this.walkingToHouseDoor = false;
+    this.doorCooldownUntil = performance.now() + 1400;
     if (!this.inHome) {
-      this.savedOutdoorPos = { x: this.avatarPos.x, z: this.avatarPos.z };
+      // When exiting later, place Wooju cleanly in front of his house door (not on top of the trigger mat!)
+      this.savedOutdoorPos = this.woojuHouse?.exitPos
+        ? { ...this.woojuHouse.exitPos }
+        : { x: this.avatarPos.x, z: this.avatarPos.z };
     }
     this.inHome = true;
     this.walkTarget = null;
     this.pendingSpotTrigger = null;
-    this.avatarPos = { x: 0, z: 2.2 };
+    this.avatarPos = { x: 0, z: 1.4 };
     this.avatarAngle = Math.PI;
+    this.audio.playChimeSFX();
 
     const ownedFurnCount = this._getOwnedFurnitureIds().length;
     const homeLv = getHomeLevel(ownedFurnCount);
@@ -1183,9 +1193,14 @@ export class FarmGame3D {
   _exitMyHome() {
     this._closeHomeModal();
     this._exitPlaceMode();
+    this._hideInspectBar();
     this.inHome = false;
+    this.walkingToHouseDoor = false;
+    this.doorCooldownUntil = performance.now() + 1600;
     this.walkTarget = null;
     this.avatarPos = { ...this.savedOutdoorPos };
+    this.avatarAngle = 0;
+    this.audio.playChimeSFX();
 
     if (this.outdoorGroup) this.outdoorGroup.visible = true;
     if (this.myHome3D) this.myHome3D.group.visible = false;
@@ -1722,6 +1737,7 @@ export class FarmGame3D {
     const world = buildFarmWorld3D(THREE, this.outdoorGroup);
     this.groundMesh = world.groundMesh;
     this.clouds = world.clouds;
+    this.woojuHouse = world.woojuHouse || null;
 
     // 1b. v3/v4/v7 Living Party Feast, 12 Unlockable Village Buildings & Placed 3D Treasures
     this.partyRewards = buildPartyRewards3D(THREE, this.outdoorGroup);
@@ -1845,8 +1861,16 @@ export class FarmGame3D {
       );
       this.raycaster.setFromCamera(ndc, this.camera);
 
-      // Indoor 🏡 My-Home floor tap (furniture placement, inspect/pickup, or indoor walking)
+      // Indoor 🏡 My-Home floor tap (exit door mat, furniture placement, inspect/pickup, or indoor walking)
       if (this.inHome && this.myHome3D) {
+        if (!this.placingFurnitureId && this.myHome3D.exitMeshes) {
+          const exitHits = this.raycaster.intersectObjects(this.myHome3D.exitMeshes, false);
+          if (exitHits.length > 0) {
+            this._exitMyHome();
+            this.onToast('🌳 농장으로 나왔어요!');
+            return;
+          }
+        }
         if (!this.placingFurnitureId && this.myHome3D.getHitMeshes) {
           const furnHits = this.raycaster.intersectObjects(this.myHome3D.getHitMeshes(), false);
           if (furnHits.length > 0) {
@@ -1878,6 +1902,26 @@ export class FarmGame3D {
           this._commitTreasurePlacement(this.placingTreasureId, gHits[0].point.x, gHits[0].point.z);
         }
         return;
+      }
+
+      // Tap Wooju's 3D House or Welcome Mat -> walk to the front door and enter!
+      if (this.woojuHouse?.hitMeshes) {
+        const hHits = this.raycaster.intersectObjects(this.woojuHouse.hitMeshes, false);
+        if (hHits.length > 0) {
+          const dp = this.woojuHouse.doorPos;
+          const d = Math.hypot(this.avatarPos.x - dp.x, this.avatarPos.z - dp.z);
+          if (d < 2.2) {
+            this._enterMyHome();
+            this.onToast('🏡 우주의 집에 들어왔어요!');
+          } else {
+            this.walkTarget = { x: dp.x, z: dp.z };
+            this.walkingToHouseDoor = true;
+            this.pendingSpotTrigger = null;
+            this._spawnTapRing(dp.x, dp.z);
+            this.onToast('🏡 우주 집 문으로 걸어가는 중!');
+          }
+          return;
+        }
       }
 
       // Tap any placed outdoor 3D treasure to Move or Pick Up back into Bag!
@@ -2571,6 +2615,31 @@ export class FarmGame3D {
               this._openDialogue(spotIdx, isRevisit);
             }
           }
+        }
+
+        // Proximity auto-trigger: walk onto Wooju's house doormat to enter, or indoor exit mat to leave!
+        if (performance.now() > this.doorCooldownUntil) {
+          if (!this.inHome && this.woojuHouse?.doorPos) {
+            const dp = this.woojuHouse.doorPos;
+            if (Math.hypot(this.avatarPos.x - dp.x, this.avatarPos.z - dp.z) < 1.55) {
+              this.walkTarget = null;
+              this._enterMyHome();
+              this.onToast('🏡 우주의 집에 들어왔어요!');
+            }
+          } else if (this.inHome && this.myHome3D?.getExitPos && moving) {
+            const ep = this.myHome3D.getExitPos();
+            if (Math.hypot(this.avatarPos.x - ep.x, this.avatarPos.z - ep.z) < 1.15) {
+              this.walkTarget = null;
+              this._exitMyHome();
+              this.onToast('🌳 농장으로 나왔어요!');
+            }
+          }
+        }
+
+        // Pulse the green welcome door ring outside Wooju's house
+        if (!this.inHome && this.woojuHouse?.doorRing) {
+          const ds = 1 + Math.sin(t * 4) * 0.1;
+          this.woojuHouse.doorRing.scale.set(ds, ds, 1);
         }
 
         // Proximity auto-trigger when walking right up to the active unmet animal (outdoor only)
