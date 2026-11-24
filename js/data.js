@@ -1175,6 +1175,17 @@ export function getHomeLevel(ownedFurnitureCount = 0) {
   return { level: 1, name: '1단계 아담한 우주 방', size: 10 };
 }
 
+// v11: Grand Rewards for completing the 3D Central Stage Presentation Show!
+export const STAGE_CLEAR_MONUMENTS = [
+  { clearReq: 1, id: 'mon_gold_trophy', emoji: '🏆', name: '황금 슈퍼스타 기념탑',   desc: '무대 발표회 1회 완주!' },
+  { clearReq: 2, id: 'mon_heart_balloon', emoji: '🎈', name: '하늘 둥둥 하트 열기구', desc: '무대 발표회 2회 완주!' },
+  { clearReq: 3, id: 'mon_dia_crown',   emoji: '👑', name: '전설의 다이아 왕관탑',  desc: '무대 발표회 3회 완주!' },
+];
+
+export function getUnlockedMonuments(stageClears = 0) {
+  return STAGE_CLEAR_MONUMENTS.filter(m => stageClears >= m.clearReq).map(m => m.id);
+}
+
 // 15 Unlockable 3D Wooju Avatar Gear Items across 3 simultaneous slots ('head' | 'back' | 'aura')
 export const WOOJU_GEAR = [
   // Head (5)

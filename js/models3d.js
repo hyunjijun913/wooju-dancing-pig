@@ -159,45 +159,47 @@ function makeCanvasTex(THREE, size, drawFn, repeat = 1) {
 
 function createACGrassTexture(THREE) {
   return makeCanvasTex(THREE, 512, (ctx, s) => {
-    // Rich sunlit Animal Crossing layered meadow grass
+    // Dreamy bright pastel Animal Crossing apple-mint meadow grass!
     const grad = ctx.createLinearGradient(0, 0, s, s);
-    grad.addColorStop(0, '#6ED14E');
-    grad.addColorStop(0.5, '#7BDE5A');
-    grad.addColorStop(1, '#6AC94A');
+    grad.addColorStop(0, '#88E874');
+    grad.addColorStop(0.5, '#9DF28A');
+    grad.addColorStop(1, '#84E370');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, s, s);
 
-    // Soft dappled warm sunlight patches
-    for (let i = 0; i < 18; i++) {
+    // Soft pastel sunlit meadow patches
+    for (let i = 0; i < 20; i++) {
       const rx = (i * 97 + 41) % s;
       const ry = (i * 67 + 23) % s;
-      ctx.fillStyle = i % 2 === 0 ? 'rgba(190, 242, 100, 0.22)' : 'rgba(74, 222, 128, 0.18)';
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(217, 249, 157, 0.36)' : 'rgba(134, 239, 172, 0.28)';
       ctx.beginPath();
-      ctx.arc(rx, ry, 28 + (i % 4) * 12, 0, Math.PI * 2);
+      ctx.arc(rx, ry, 30 + (i % 4) * 12, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Iconic Animal Crossing soft rounded triangle turf pattern
-    ctx.fillStyle = 'rgba(134, 239, 108, 0.42)';
-    for (let y = 0; y < s; y += 32) {
-      for (let x = 0; x < s; x += 32) {
-        const ox = ((y / 32) % 2) * 16;
+    // Cute soft rounded pastel clover-dots turf pattern
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    for (let y = 0; y < s; y += 36) {
+      for (let x = 0; x < s; x += 36) {
+        const ox = ((y / 36) % 2) * 18;
         ctx.beginPath();
-        ctx.moveTo(x + ox + 8, y + 6);
-        ctx.lineTo(x + ox + 16, y + 19);
-        ctx.lineTo(x + ox, y + 19);
-        ctx.closePath();
+        ctx.arc(x + ox + 10, y + 12, 6, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // Tiny painted clover/daisy highlights
-    for (let i = 0; i < 24; i++) {
+    // Tiny painted pastel daisies (white, pink, butter-yellow!)
+    const daisyCols = ['#FFFFFF', '#FBCFE8', '#FEF08A'];
+    for (let i = 0; i < 32; i++) {
       const cx = (i * 83 + 19) % s;
       const cy = (i * 113 + 37) % s;
-      ctx.fillStyle = i % 3 === 0 ? 'rgba(255, 255, 255, 0.55)' : 'rgba(254, 240, 138, 0.55)';
+      ctx.fillStyle = daisyCols[i % 3];
       ctx.beginPath();
-      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FACC15';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
       ctx.fill();
     }
   }, 18);
@@ -205,16 +207,16 @@ function createACGrassTexture(THREE) {
 
 function createACPathTexture(THREE) {
   return makeCanvasTex(THREE, 512, (ctx, s) => {
-    // Warm cream-sand Animal Crossing cobblestone path
-    ctx.fillStyle = '#F2D8A7';
+    // Cozy warm milk-cream Animal Crossing pastel cobblestone path!
+    ctx.fillStyle = '#FFF4DC';
     ctx.fillRect(0, 0, s, s);
-    const stones = ['#E9C78F', '#FAF0D7', '#DFB678', '#F6E3BE'];
-    for (let i = 0; i < 72; i++) {
+    const stones = ['#FFE8C2', '#FFFFFF', '#FCE7F3', '#FEF3C7'];
+    for (let i = 0; i < 76; i++) {
       const rx = (i * 79 + 17) % s;
       const ry = (i * 53 + 31) % s;
-      const rw = 16 + (i % 9) * 2;
-      const rh = 11 + (i % 6) * 2;
-      ctx.fillStyle = 'rgba(180, 130, 70, 0.22)';
+      const rw = 16 + (i % 8) * 2;
+      const rh = 12 + (i % 5) * 2;
+      ctx.fillStyle = 'rgba(217, 165, 110, 0.18)';
       ctx.beginPath();
       ctx.ellipse(rx + 2, ry + 3, rw, rh, (i % 5) * 0.35, 0, Math.PI * 2);
       ctx.fill();
@@ -802,10 +804,10 @@ export function buildFarmWorld3D(THREE, scene) {
   plazaCircle.receiveShadow = true;
   scene.add(plazaCircle);
 
-  // Central Dance Stage Platform with warm wooden rim & festive gold trim
+  // Central Dance Stage Platform — Cute Strawberry-Cream & Lemon Pastel Party Stage!
   const stageDeck = new THREE.Mesh(
     new THREE.CylinderGeometry(3.8, 4.2, 0.42, 40),
-    new THREE.MeshStandardMaterial({ color: '#C2671D', roughness: 0.72 })
+    new THREE.MeshStandardMaterial({ color: '#FDA4AF', roughness: 0.6 })
   );
   stageDeck.position.set(0, 0.21, 0);
   stageDeck.castShadow = true;
@@ -813,20 +815,39 @@ export function buildFarmWorld3D(THREE, scene) {
   scene.add(stageDeck);
 
   const stageTop = new THREE.Mesh(
-    new THREE.CylinderGeometry(3.5, 3.5, 0.07, 40),
-    new THREE.MeshStandardMaterial({ color: '#FEF3C7', roughness: 0.78 })
+    new THREE.CylinderGeometry(3.5, 3.5, 0.08, 40),
+    new THREE.MeshStandardMaterial({ color: '#FFFBEB', roughness: 0.7 })
   );
   stageTop.position.set(0, 0.43, 0);
   stageTop.receiveShadow = true;
   scene.add(stageTop);
 
   const stageTrim = new THREE.Mesh(
-    new THREE.TorusGeometry(3.65, 0.09, 8, 40),
-    new THREE.MeshStandardMaterial({ color: '#FACC15', metalness: 0.55, roughness: 0.3 })
+    new THREE.TorusGeometry(3.65, 0.11, 10, 40),
+    new THREE.MeshStandardMaterial({ color: '#FDE047', emissive: '#F59E0B', emissiveIntensity: 0.15, roughness: 0.3 })
   );
   stageTrim.rotation.x = Math.PI / 2;
-  stageTrim.position.set(0, 0.44, 0);
+  stageTrim.position.set(0, 0.45, 0);
   scene.add(stageTrim);
+
+  // Cute Pastel Bunting Pennants (삼각 가랜드 깃발!) strung between the 4 stage lanterns!
+  const buntingCols = ['#F472B6', '#FDE047', '#38BDF8', '#A78BFA', '#4ADE80', '#FB923C'];
+  const lanternCorners = [[-3.6, -2.8], [3.6, -2.8], [3.6, 2.8], [-3.6, 2.8]];
+  for (let c = 0; c < 4; c++) {
+    const [x1, z1] = lanternCorners[c];
+    const [x2, z2] = lanternCorners[(c + 1) % 4];
+    for (let k = 1; k <= 5; k++) {
+      const f = k / 6;
+      const sag = Math.sin(f * Math.PI) * 0.45;
+      const flag = new THREE.Mesh(
+        new THREE.ConeGeometry(0.22, 0.42, 3),
+        new THREE.MeshStandardMaterial({ color: buntingCols[(c * 5 + k) % buntingCols.length], roughness: 0.5 })
+      );
+      flag.rotation.x = Math.PI;
+      flag.position.set(x1 + (x2 - x1) * f, 2.55 - sag, z1 + (z2 - z1) * f);
+      scene.add(flag);
+    }
+  }
 
   // Sparkling Blue Pond at Zone 3 (Cat & Mouse fishing spot — scaled to spacious island!)
   const pond = new THREE.Mesh(
@@ -968,9 +989,58 @@ export function buildFarmWorld3D(THREE, scene) {
   doorRing.position.set(DOOR_POS.x, 0.06, DOOR_POS.z);
   scene.add(doorRing);
 
+  // Iconic Animal Crossing Cute Red Mailbox + Pastel Flower Pots right outside Wooju's House!
+  const mbPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.15, 8), new THREE.MeshStandardMaterial({ color: '#FFFBEB', roughness: 0.6 }));
+  mbPost.position.set(HOUSE_X + 3.2, 0.58, HOUSE_Z - 1.2);
+  const mbBox = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.38, 0.65), new THREE.MeshStandardMaterial({ color: '#F43F5E', roughness: 0.4 }));
+  mbBox.position.set(HOUSE_X + 3.2, 1.22, HOUSE_Z - 1.2);
+  const mbFlag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.26, 0.06), new THREE.MeshStandardMaterial({ color: '#FACC15' }));
+  mbFlag.position.set(HOUSE_X + 3.45, 1.35, HOUSE_Z - 1.2);
+  scene.add(mbPost, mbBox, mbFlag);
+
+  // Cute Pastel Cotton-Candy Pink Blossom Trees & Fluttering Pastel Butterflies!
+  const pinkLeafMat = new THREE.MeshStandardMaterial({ color: '#F9A8D4', roughness: 0.72 });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: '#A16207', roughness: 0.8 });
+  [[-12.5, 19.0], [12.5, 19.5], [-19.5, -14.5], [19.5, -13.5], [0, -22.5]].forEach(([bx, bz]) => {
+    const bt = new THREE.Group();
+    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.42, 2.2, 10), trunkMat);
+    tr.position.y = 1.1;
+    tr.castShadow = true;
+    [[0, 2.8, 0, 1.45], [-0.95, 2.4, 0.35, 0.95], [0.95, 2.45, -0.3, 1.0]].forEach(([cx, cy, cz, cr]) => {
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(cr, 14, 12), pinkLeafMat);
+      puff.position.set(cx, cy, cz);
+      puff.castShadow = true;
+      bt.add(puff);
+    });
+    bt.add(tr);
+    bt.position.set(bx, 0, bz);
+    scene.add(bt);
+  });
+
+  // 12 Fluttering Pastel Butterflies around the island!
+  const butterflies = [];
+  const bfCols = ['#FDE047', '#F472B6', '#38BDF8', '#C084FC', '#FFFFFF'];
+  for (let i = 0; i < 12; i++) {
+    const bfg = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: bfCols[i % bfCols.length], side: THREE.DoubleSide });
+    const wl = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.2), mat);
+    wl.position.x = -0.14;
+    const wr = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.2), mat);
+    wr.position.x = 0.14;
+    const lp = new THREE.Group(); lp.add(wl);
+    const rp = new THREE.Group(); rp.add(wr);
+    bfg.add(lp, rp);
+    const ang = (i / 12) * Math.PI * 2;
+    const rad = 7.5 + (i % 4) * 4.2;
+    bfg.position.set(Math.cos(ang) * rad, 1.6 + (i % 3) * 0.5, Math.sin(ang) * rad);
+    scene.add(bfg);
+    butterflies.push({ group: bfg, lp, rp, ang, rad, baseY: 1.5 + (i % 3) * 0.55, idx: i });
+  }
+
   return {
     groundMesh,
     clouds,
+    butterflies,
     woojuHouse: {
       hitMeshes: [houseHitMesh, doorMat],
       doorPos: DOOR_POS,
@@ -2301,4 +2371,79 @@ export function buildGoldenBalloon3D(THREE, parentGroup) {
   };
 
   return { group, hitMesh, pop, update, isActive: () => active };
+}
+
+// --- v11: Grand Stage-Clear Monuments (Unlocked permanently when finishing the 3D Stage Show!) ---
+export function buildStageMonuments3D(THREE, parentGroup) {
+  const root = new THREE.Group();
+  parentGroup.add(root);
+  const monuments = new Map();
+  let airBalloon = null;
+  let diaCrown = null;
+
+  // 1st Clear: Giant Golden Superstar Pig Trophy Monument right beside the plaza!
+  const m1 = new THREE.Group();
+  const base1 = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.7, 0.9, 18), new THREE.MeshStandardMaterial({ color: '#FFFBEB', roughness: 0.5 }));
+  base1.position.y = 0.45;
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.45, 1.4, 18), new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#D97706', emissiveIntensity: 0.35, metalness: 0.72, roughness: 0.2 }));
+  cup.position.y = 1.65;
+  const starTop = new THREE.Mesh(new THREE.OctahedronGeometry(0.65), new THREE.MeshStandardMaterial({ color: '#FEF08A', emissive: '#F59E0B', emissiveIntensity: 0.6 }));
+  starTop.position.y = 2.9;
+  m1.add(base1, cup, starTop);
+  m1.position.set(-7.5, 0, -5.5);
+  m1.visible = false;
+  root.add(m1);
+  monuments.set('mon_gold_trophy', m1);
+
+  // 2nd Clear: Giant Pastel Heart Hot-Air Balloon floating joyfully over the island!
+  const m2 = new THREE.Group();
+  const bal = new THREE.Mesh(new THREE.SphereGeometry(2.6, 20, 16), new THREE.MeshStandardMaterial({ color: '#F472B6', emissive: '#EC4899', emissiveIntensity: 0.2, roughness: 0.4 }));
+  bal.scale.set(1, 1.15, 1);
+  bal.position.y = 3.2;
+  const stripe = new THREE.Mesh(new THREE.TorusGeometry(2.55, 0.26, 10, 28), new THREE.MeshStandardMaterial({ color: '#FEF08A', roughness: 0.4 }));
+  stripe.rotation.x = Math.PI / 2;
+  stripe.position.y = 3.2;
+  const basket = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 1.2), new THREE.MeshStandardMaterial({ color: '#D97706', roughness: 0.7 }));
+  basket.position.y = -0.3;
+  m2.add(bal, stripe, basket);
+  m2.position.set(10, 9.5, -10);
+  m2.visible = false;
+  root.add(m2);
+  airBalloon = m2;
+  monuments.set('mon_heart_balloon', m2);
+
+  // 3rd Clear: Legendary Spinning Diamond Crown Spire!
+  const m3 = new THREE.Group();
+  const base3 = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.85, 1.0, 20), new THREE.MeshStandardMaterial({ color: '#E0F2FE', roughness: 0.35 }));
+  base3.position.y = 0.5;
+  diaCrown = createGoldCrownMesh(THREE, 2.2);
+  diaCrown.position.y = 2.2;
+  m3.add(base3, diaCrown);
+  m3.position.set(7.5, 0, -5.5);
+  m3.visible = false;
+  root.add(m3);
+  monuments.set('mon_dia_crown', m3);
+
+  const syncMonuments = (unlockedIds = []) => {
+    const set = new Set(unlockedIds);
+    monuments.forEach((grp, id) => {
+      grp.visible = set.has(id);
+    });
+  };
+
+  const update = (t) => {
+    if (airBalloon && airBalloon.visible) {
+      const a = t * 0.12;
+      airBalloon.position.x = Math.cos(a) * 14;
+      airBalloon.position.z = Math.sin(a) * 14 - 4;
+      airBalloon.position.y = 9.5 + Math.sin(t * 1.4) * 0.8;
+      airBalloon.rotation.y = -a;
+    }
+    if (diaCrown && diaCrown.parent?.visible) {
+      diaCrown.rotation.y = t * 1.2;
+      diaCrown.position.y = 2.2 + Math.sin(t * 2.5) * 0.18;
+    }
+  };
+
+  return { syncMonuments, update };
 }

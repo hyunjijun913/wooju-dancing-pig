@@ -11,6 +11,8 @@ import {
   ROOM_FURNITURE,
   ALL_COLLECTIBLES,
   getHomeLevel,
+  STAGE_CLEAR_MONUMENTS,
+  getUnlockedMonuments,
   WOOJU_GEAR,
   FARM_ACHIEVEMENTS,
   ATTENDANCE_REWARDS,
@@ -43,6 +45,7 @@ import {
   buildMyHome3D,
   buildAtmosphere3D,
   buildGoldenBalloon3D,
+  buildStageMonuments3D,
 } from './models3d.js';
 import { WORD_TIMINGS } from './wordTimings.js';
 
@@ -108,7 +111,9 @@ export class FarmGame3D {
     this.equippedGear = {}; // { [gearId]: boolean }
     this.speakCount = 0;
     this.perfectCount = 0;
-    this.treasures = []; // owned treasure IDs (up to 24)
+    this.stageClears = 0;
+    this.chestQueue = [];
+    this.treasures = []; // owned treasure IDs (up to 100)
     this.placedTreasures = []; // [{ id, x, z }] placed directly in 3D farm!
     this.homeState = { wallpaper: 'wall_sky', floor: 'floor_oak', placedFurniture: [] };
     this.inHome = false;
@@ -134,6 +139,8 @@ export class FarmGame3D {
     this.dirLight = null;
     this.atmosphere3D = null;
     this.goldenBalloon3D = null;
+    this.stageMonuments3D = null;
+    this.butterflies = [];
 
     // Runtime dialogue & navigation state
     this.currentSpotIndex = 0;
@@ -190,6 +197,7 @@ export class FarmGame3D {
         this.equippedGear = parsed.equippedGear && typeof parsed.equippedGear === 'object' ? parsed.equippedGear : {};
         this.speakCount = Number.isFinite(parsed.speakCount) ? parsed.speakCount : 0;
         this.perfectCount = Number.isFinite(parsed.perfectCount) ? parsed.perfectCount : 0;
+        this.stageClears = Number.isFinite(parsed.stageClears) ? parsed.stageClears : 0;
         this.treasures = Array.isArray(parsed.treasures) ? parsed.treasures : [];
         this.placedTreasures = Array.isArray(parsed.placedTreasures) ? parsed.placedTreasures : [];
         this.homeState = parsed.homeState && typeof parsed.homeState === 'object'
@@ -226,6 +234,7 @@ export class FarmGame3D {
         equippedGear: this.equippedGear,
         speakCount: this.speakCount,
         perfectCount: this.perfectCount,
+        stageClears: this.stageClears,
         treasures: this.treasures,
         placedTreasures: this.placedTreasures,
         homeState: this.homeState,
@@ -999,13 +1008,40 @@ export class FarmGame3D {
 
     if (this.liveStageIdx >= deck.length - 1) {
       this._exitLiveStage();
-      this.onRewardStar(10);
+      const prevBuildings = new Set(getUnlockedBuildings(this.speakCount));
+      this.stageClears += 1;
+      this.speakCount += 5; // Big +5 construction boost!
+      this.onRewardStar(20); // Massive +20 stars!
+      this._saveRpgState();
+
+      // Unlock permanent Stage Clear Monument!
+      if (this.stageMonuments3D) {
+        this.stageMonuments3D.syncMonuments(getUnlockedMonuments(this.stageClears));
+      }
+      // Also trigger any newly unlocked village building from the +5 boost!
+      const nextBuildings = getUnlockedBuildings(this.speakCount);
+      const newlyBuilt = nextBuildings.filter(id => !prevBuildings.has(id));
+      if (this.villageBuildings) {
+        this.villageBuildings.syncBuildings(nextBuildings, newlyBuilt[0] || null);
+      }
+
+      this._updateBagBadge();
       this.audio.playFanfareSFX();
-      this.onConfetti(120);
-      this.onToast('🏆 우와!! 3D 무대 발표회 끝까지 대성공!! 별 +10 & 황금 보물상자!!');
+      this.onConfetti(140);
+
+      const newMon = STAGE_CLEAR_MONUMENTS.find(m => m.clearReq === this.stageClears);
+      const monMsg = newMon ? ` + 광장에 ${newMon.emoji} ${newMon.name} 완성!!` : '';
+      this.onToast(`🏆 무대 발표회 ${this.stageClears}회 완주 대성공!! 별 +20 · 건물 +5 부스트 · 대보물상자 3개!!${monMsg}`);
+
+      // Queue 3 consecutive High-Rarity Grand Treasure Chests!
+      this.chestQueue = [
+        { title: `🏆 발표회 완주 대보물상자 (1/3)!`, preferHigherRarity: true },
+        { title: `🏆 발표회 완주 대보물상자 (2/3)!`, preferHigherRarity: true },
+        { title: `🏆 발표회 완주 대보물상자 (3/3)!`, preferHigherRarity: true },
+      ];
       setTimeout(() => {
-        if (this.mounted) this._openChestModal('🏆 3D 무대 발표회 대성공 황금 보물상자!', { preferHigherRarity: true });
-      }, 450);
+        if (this.mounted) this._popNextQueuedChest();
+      }, 500);
       return;
     }
 
@@ -1300,9 +1336,20 @@ export class FarmGame3D {
     this._updateBagBadge();
   }
 
+  _popNextQueuedChest() {
+    if (!this.chestQueue || this.chestQueue.length === 0) return;
+    const next = this.chestQueue.shift();
+    this._openChestModal(next.title, { preferHigherRarity: next.preferHigherRarity });
+  }
+
   _closeChestModal() {
     const modal = this.container?.querySelector('#farmChestModal');
     if (modal) modal.style.display = 'none';
+    if (this.chestQueue && this.chestQueue.length > 0) {
+      setTimeout(() => {
+        if (this.mounted) this._popNextQueuedChest();
+      }, 260);
+    }
   }
 
   _enterPlaceMode(treasureId) {
@@ -1960,13 +2007,14 @@ export class FarmGame3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.08;
+    this.renderer.toneMappingExposure = 1.15;
     this.renderer.domElement.className = 'farm-canvas';
     wrap.prepend(this.renderer.domElement);
 
-    this.hemiLight = new THREE.HemisphereLight('#FFFDF5', '#68C456', 0.98);
+    // Bright, dreamy, soft pastel Animal Crossing lighting!
+    this.hemiLight = new THREE.HemisphereLight('#FFFFFF', '#B7F4A4', 1.22);
     this.scene.add(this.hemiLight);
-    const dir = new THREE.DirectionalLight('#FFF5D6', 1.4);
+    const dir = new THREE.DirectionalLight('#FFF8E7', 1.25);
     this.dirLight = dir;
     dir.position.set(22, 34, 24);
     dir.castShadow = true;
@@ -1981,8 +2029,8 @@ export class FarmGame3D {
     dir.shadow.bias = -0.0004;
     this.scene.add(dir);
 
-    const fill = new THREE.DirectionalLight('#FFE4B5', 0.35);
-    fill.position.set(-14, 10, -12);
+    const fill = new THREE.DirectionalLight('#FFE4F0', 0.55);
+    fill.position.set(-14, 12, -12);
     this.scene.add(fill);
 
     this.raycaster = new THREE.Raycaster();
@@ -1995,9 +2043,10 @@ export class FarmGame3D {
     const world = buildFarmWorld3D(THREE, this.outdoorGroup);
     this.groundMesh = world.groundMesh;
     this.clouds = world.clouds;
+    this.butterflies = world.butterflies || [];
     this.woojuHouse = world.woojuHouse || null;
 
-    // 1b. v3/v4/v7 Living Party Feast, 12 Unlockable Village Buildings & Placed 3D Treasures
+    // 1b. v3..v11 Living Party Feast, Village Buildings, Placed Treasures, Atmosphere, Balloon & Stage Monuments
     this.partyRewards = buildPartyRewards3D(THREE, this.outdoorGroup);
     this.partyRewards.syncMastery(this.mastery);
     this.villageBuildings = buildVillageBuildings3D(THREE, this.outdoorGroup);
@@ -2006,6 +2055,8 @@ export class FarmGame3D {
     this.placedTreasures3D.syncPlaced(this.placedTreasures);
     this.atmosphere3D = buildAtmosphere3D(THREE, this.outdoorGroup);
     this.goldenBalloon3D = buildGoldenBalloon3D(THREE, this.outdoorGroup);
+    this.stageMonuments3D = buildStageMonuments3D(THREE, this.outdoorGroup);
+    this.stageMonuments3D.syncMonuments(getUnlockedMonuments(this.stageClears));
 
     // 1c. v8: Cozy 3D My-Home Room (hidden until Wooju enters 🏡 내 집!)
     this.myHome3D = buildMyHome3D(THREE, this.scene, {
@@ -2862,6 +2913,21 @@ export class FarmGame3D {
         if (this.villageBuildings) this.villageBuildings.update(t, dt);
         if (this.placedTreasures3D) this.placedTreasures3D.update(t, dt);
         if (this.atmosphere3D) this.atmosphere3D.update(t, dt);
+        if (this.stageMonuments3D) this.stageMonuments3D.update(t);
+        if (this.butterflies && this.butterflies.length) {
+          this.butterflies.forEach((bf) => {
+            const a = bf.ang + t * 0.25 * (bf.idx % 2 === 0 ? 1 : -1);
+            bf.group.position.set(
+              Math.cos(a) * bf.rad,
+              bf.baseY + Math.sin(t * 3.2 + bf.idx) * 0.35,
+              Math.sin(a) * bf.rad
+            );
+            bf.group.rotation.y = -a;
+            const flap = Math.sin(t * 16 + bf.idx) * 0.65;
+            bf.lp.rotation.z = flap;
+            bf.rp.rotation.z = -flap;
+          });
+        }
         if (this.goldenBalloon3D) {
           const canSpawn = this.entered && this.activeDialogueSpot === null && !this.inLiveStage;
           this.goldenBalloon3D.update(t, dt, canSpawn);
