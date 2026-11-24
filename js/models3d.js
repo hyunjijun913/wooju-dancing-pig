@@ -1205,31 +1205,125 @@ export function buildFarmWorld3D(THREE, scene) {
   plazaCircle.receiveShadow = true;
   scene.add(plazaCircle);
 
-  // Central Dance Stage Platform — Cute Strawberry-Cream & Lemon Pastel Party Stage!
+  // Central Dance & Presentation Stage Platform — Raised 3D Concert Stage with Stairs, Standing Mic & Star Arch!
+  const STAGE_Y = 0.64;
   const stageDeck = new THREE.Mesh(
-    new THREE.CylinderGeometry(3.8, 4.2, 0.42, 40),
-    new THREE.MeshStandardMaterial({ color: '#FDA4AF', roughness: 0.6 })
+    new THREE.CylinderGeometry(3.85, 4.25, STAGE_Y, 40),
+    new THREE.MeshStandardMaterial({ color: '#FDA4AF', roughness: 0.55 })
   );
-  stageDeck.position.set(0, 0.21, 0);
+  stageDeck.position.set(0, STAGE_Y / 2, 0);
   stageDeck.castShadow = true;
   stageDeck.receiveShadow = true;
   scene.add(stageDeck);
 
   const stageTop = new THREE.Mesh(
-    new THREE.CylinderGeometry(3.5, 3.5, 0.08, 40),
-    new THREE.MeshStandardMaterial({ color: '#FFFBEB', roughness: 0.7 })
+    new THREE.CylinderGeometry(3.55, 3.55, 0.08, 40),
+    new THREE.MeshStandardMaterial({ color: '#FFFBEB', roughness: 0.68 })
   );
-  stageTop.position.set(0, 0.43, 0);
+  stageTop.position.set(0, STAGE_Y + 0.02, 0);
   stageTop.receiveShadow = true;
   scene.add(stageTop);
 
+  const stageCarpet = new THREE.Mesh(
+    new THREE.CylinderGeometry(2.15, 2.15, 0.04, 32),
+    new THREE.MeshStandardMaterial({ color: '#F43F5E', roughness: 0.75 })
+  );
+  stageCarpet.position.set(0, STAGE_Y + 0.06, 0.1);
+  stageCarpet.receiveShadow = true;
+  scene.add(stageCarpet);
+
   const stageTrim = new THREE.Mesh(
-    new THREE.TorusGeometry(3.65, 0.11, 10, 40),
-    new THREE.MeshStandardMaterial({ color: '#FDE047', emissive: '#F59E0B', emissiveIntensity: 0.15, roughness: 0.3 })
+    new THREE.TorusGeometry(3.68, 0.12, 10, 40),
+    new THREE.MeshStandardMaterial({ color: '#FDE047', emissive: '#F59E0B', emissiveIntensity: 0.25, roughness: 0.3 })
   );
   stageTrim.rotation.x = Math.PI / 2;
-  stageTrim.position.set(0, 0.45, 0);
+  stageTrim.position.set(0, STAGE_Y + 0.04, 0);
   scene.add(stageTrim);
+
+  // Two cute red-carpet stairs on the front (south) side so Wooju can walk right up onto the stage!
+  const stairMat = new THREE.MeshStandardMaterial({ color: '#F43F5E', roughness: 0.65 });
+  const stairEdgeMat = new THREE.MeshStandardMaterial({ color: '#FDE047', roughness: 0.4 });
+  const step1 = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.24, 0.7), stairMat);
+  step1.position.set(0, 0.12, 4.45);
+  step1.castShadow = true;
+  step1.receiveShadow = true;
+  const step2 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.44, 0.7), stairMat);
+  step2.position.set(0, 0.22, 3.85);
+  step2.castShadow = true;
+  step2.receiveShadow = true;
+  const stepRim1 = new THREE.Mesh(new THREE.BoxGeometry(2.34, 0.05, 0.08), stairEdgeMat);
+  stepRim1.position.set(0, 0.24, 4.78);
+  const stepRim2 = new THREE.Mesh(new THREE.BoxGeometry(2.24, 0.05, 0.08), stairEdgeMat);
+  stepRim2.position.set(0, 0.44, 4.18);
+  scene.add(step1, step2, stepRim1, stepRim2);
+
+  // Golden Standing Microphone at front-center of the stage!
+  const micStandGrp = new THREE.Group();
+  const micBase = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.34, 0.08, 16),
+    new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.5, roughness: 0.3 })
+  );
+  micBase.position.y = 0.04;
+  const micPole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.045, 0.05, 1.35, 10),
+    new THREE.MeshStandardMaterial({ color: '#FACC15', metalness: 0.7, roughness: 0.2 })
+  );
+  micPole.position.y = 0.72;
+  const micHead = new THREE.Mesh(
+    new THREE.SphereGeometry(0.16, 14, 12),
+    new THREE.MeshStandardMaterial({ color: '#FDE047', emissive: '#F59E0B', emissiveIntensity: 0.45, metalness: 0.6, roughness: 0.2 })
+  );
+  micHead.position.set(0, 1.44, -0.05);
+  micStandGrp.add(micBase, micPole, micHead);
+  micStandGrp.position.set(0, STAGE_Y + 0.05, 1.45);
+  scene.add(micStandGrp);
+
+  // Festive Stage Backdrop Arch behind the mic with glowing pastel fairy bulbs!
+  const stageArch = new THREE.Mesh(
+    new THREE.TorusGeometry(2.85, 0.18, 12, 32, Math.PI),
+    new THREE.MeshStandardMaterial({ color: '#F472B6', roughness: 0.45 })
+  );
+  stageArch.position.set(0, STAGE_Y + 0.1, -2.55);
+  scene.add(stageArch);
+  const bulbCols = ['#FDE047', '#38BDF8', '#4ADE80', '#FB923C', '#C084FC'];
+  for (let b = 0; b <= 8; b++) {
+    const ba = (b / 8) * Math.PI;
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 10, 8),
+      new THREE.MeshStandardMaterial({
+        color: bulbCols[b % bulbCols.length],
+        emissive: bulbCols[b % bulbCols.length],
+        emissiveIntensity: 0.85,
+      })
+    );
+    bulb.position.set(Math.cos(ba) * 2.85, STAGE_Y + 0.1 + Math.sin(ba) * 2.85, -2.42);
+    scene.add(bulb);
+  }
+
+  // Pulsing Golden Mic-Spot Ring + Floating 🎤 Stage Sign so Wooju immediately sees where to step up!
+  const stageMicRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.85, 1.12, 28),
+    new THREE.MeshBasicMaterial({ color: '#FDE047', side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+  );
+  stageMicRing.rotation.x = -Math.PI / 2;
+  stageMicRing.position.set(0, STAGE_Y + 0.09, 0.25);
+  scene.add(stageMicRing);
+
+  const stageSignBadge = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, '🎤', '#FEF08A'), transparent: true })
+  );
+  stageSignBadge.scale.set(1.45, 1.45, 1);
+  stageSignBadge.position.set(0, STAGE_Y + 3.55, -2.35);
+  stageSignBadge.userData = { isCentralStage: true };
+  scene.add(stageSignBadge);
+
+  const stageHitMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.7, 3.7, 2.2, 16),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  stageHitMesh.position.set(0, STAGE_Y + 1.0, 0);
+  stageHitMesh.userData = { isCentralStage: true };
+  scene.add(stageHitMesh);
 
   // Cute Pastel Bunting Pennants (삼각 가랜드 깃발!) strung between the 4 stage lanterns!
   const buntingCols = ['#F472B6', '#FDE047', '#38BDF8', '#A78BFA', '#4ADE80', '#FB923C'];
@@ -1442,6 +1536,14 @@ export function buildFarmWorld3D(THREE, scene) {
     groundMesh,
     clouds,
     butterflies,
+    stage: {
+      hitMeshes: [stageHitMesh, stageSignBadge],
+      micRing: stageMicRing,
+      stageY: STAGE_Y + 0.06,
+      radius: 3.85,
+      triggerPos: { x: 0, z: 0.25 },
+      exitPos: { x: 0, z: 6.2 },
+    },
     woojuHouse: {
       hitMeshes: [houseHitMesh, doorMat],
       doorPos: DOOR_POS,

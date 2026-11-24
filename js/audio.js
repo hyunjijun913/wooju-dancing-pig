@@ -181,29 +181,102 @@ export class AudioEngine {
     } catch (_) {}
   }
 
-  playApplauseSFX() {
+  playApplauseSFX({ grand = false } = {}) {
+    this.unlock();
     try {
       const ctx = this.getAudioCtx();
       if (!ctx) return;
-      const duration = 1.6;
-      const bufferSize = Math.floor(ctx.sampleRate * duration);
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        const t = i / ctx.sampleRate;
-        const env = Math.sin(Math.min(1, t / 0.15) * Math.PI * 0.5) * Math.max(0, 1 - t / duration);
-        const burst = (Math.sin(t * 55) > 0.2 ? 1.0 : 0.45);
-        data[i] = (Math.random() * 2 - 1) * 0.22 * env * burst;
+      const now = ctx.currentTime;
+      const dur = grand ? 2.8 : 1.9;
+
+      // 1. Realistic layered individual handclaps (staggered crisp filtered noise bursts)
+      const clapCount = grand ? 58 : 34;
+      const clapBufLen = Math.floor(ctx.sampleRate * 0.045);
+      const clapBuf = ctx.createBuffer(1, clapBufLen, ctx.sampleRate);
+      const cd = clapBuf.getChannelData(0);
+      for (let i = 0; i < clapBufLen; i++) {
+        const t = i / clapBufLen;
+        const env = Math.pow(1 - t, 2.4) * (t < 0.08 ? t / 0.08 : 1);
+        cd[i] = (Math.random() * 2 - 1) * env;
       }
-      const src = ctx.createBufferSource();
-      src.buffer = buffer;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.value = 1100;
-      filter.Q.value = 0.7;
-      src.connect(filter);
-      filter.connect(ctx.destination);
-      src.start();
+
+      for (let c = 0; c < clapCount; c++) {
+        const offset = (c / clapCount) * (dur - 0.35) + Math.random() * 0.14;
+        const src = ctx.createBufferSource();
+        src.buffer = clapBuf;
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 950 + Math.random() * 1450;
+        bp.Q.value = 1.2 + Math.random() * 1.1;
+        const gain = ctx.createGain();
+        const fade = Math.sin(Math.min(1, offset / 0.18) * Math.PI * 0.5) * Math.max(0.15, 1 - offset / dur);
+        gain.gain.setValueAtTime((grand ? 0.24 : 0.2) * fade * (0.7 + Math.random() * 0.5), now + offset);
+        src.connect(bp);
+        bp.connect(gain);
+        gain.connect(ctx.destination);
+        src.start(now + offset);
+      }
+
+      // 2. Warm crowd applause bed
+      const bedLen = Math.floor(ctx.sampleRate * dur);
+      const bedBuf = ctx.createBuffer(1, bedLen, ctx.sampleRate);
+      const bd = bedBuf.getChannelData(0);
+      for (let i = 0; i < bedLen; i++) {
+        const t = i / ctx.sampleRate;
+        const env = Math.sin(Math.min(1, t / 0.2) * Math.PI * 0.5) * Math.max(0, 1 - Math.pow(t / dur, 1.5));
+        bd[i] = (Math.random() * 2 - 1) * 0.16 * env;
+      }
+      const bedSrc = ctx.createBufferSource();
+      bedSrc.buffer = bedBuf;
+      const bedBp = ctx.createBiquadFilter();
+      bedBp.type = 'bandpass';
+      bedBp.frequency.value = 1350;
+      bedBp.Q.value = 0.65;
+      bedSrc.connect(bedBp);
+      bedBp.connect(ctx.destination);
+      bedSrc.start(now);
+
+      // 3. Joyful kids/animal crowd cheering ("와아~! 야호~!") formant voices!
+      const cheers = grand
+        ? [
+            { t: 0.06, f0: 440, f1: 680, f2: 590, d: 0.62, vol: 0.11 },
+            { t: 0.16, f0: 520, f1: 820, f2: 720, d: 0.7,  vol: 0.11 },
+            { t: 0.28, f0: 390, f1: 620, f2: 540, d: 0.68, vol: 0.10 },
+            { t: 0.55, f0: 560, f1: 920, f2: 780, d: 0.72, vol: 0.11 },
+            { t: 0.88, f0: 480, f1: 790, f2: 680, d: 0.65, vol: 0.10 },
+          ]
+        : [
+            { t: 0.06, f0: 460, f1: 740, f2: 640, d: 0.52, vol: 0.10 },
+            { t: 0.18, f0: 550, f1: 860, f2: 740, d: 0.58, vol: 0.10 },
+            { t: 0.34, f0: 420, f1: 660, f2: 580, d: 0.52, vol: 0.09 },
+          ];
+
+      cheers.forEach((ch) => {
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(ch.f0, now + ch.t);
+        osc.frequency.exponentialRampToValueAtTime(ch.f1, now + ch.t + ch.d * 0.42);
+        osc.frequency.exponentialRampToValueAtTime(ch.f2, now + ch.t + ch.d);
+
+        // Vowel-like formant filter ("Ah / Woo!")
+        const formant = ctx.createBiquadFilter();
+        formant.type = 'bandpass';
+        formant.frequency.setValueAtTime(1150, now + ch.t);
+        formant.frequency.exponentialRampToValueAtTime(1850, now + ch.t + ch.d * 0.45);
+        formant.frequency.exponentialRampToValueAtTime(1400, now + ch.t + ch.d);
+        formant.Q.value = 3.2;
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now + ch.t);
+        gain.gain.linearRampToValueAtTime(ch.vol, now + ch.t + 0.07);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + ch.t + ch.d);
+
+        osc.connect(formant);
+        formant.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + ch.t);
+        osc.stop(now + ch.t + ch.d + 0.03);
+      });
     } catch (_) {}
   }
 

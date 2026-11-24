@@ -136,6 +136,10 @@ export class FarmGame3D {
     this.weatherMode = 'day'; // 'day' | 'sunset' | 'night' | 'blossom'
     this.inLiveStage = false;
     this.liveStageIdx = 0;
+    this.liveStageUnlocked = false;
+    this._liveStageAutoTimer = null;
+    this.stageCooldownUntil = 0;
+    this.centralStage = null;
     this.audienceCheerUntil = 0;
     this.hemiLight = null;
     this.dirLight = null;
@@ -542,7 +546,7 @@ export class FarmGame3D {
           </div>
         </div>
 
-        <!-- 🎪 v9 (#4): 3D Central Stage Live Presentation Overlay -->
+        <!-- 🎪 v9 (#4) / v12.5: 3D Central Stage Live Presentation Overlay (Strict Speech-Gated + Applause & Cheer!) -->
         <div class="farm-live-stage" id="farmLiveStage" style="display:none;">
           <div class="live-stage-head">
             <span class="live-stage-badge" id="liveStageBadge">🎪 3D 무대 발표회 · 1 / 26</span>
@@ -553,10 +557,20 @@ export class FarmGame3D {
           </div>
           <div class="farm-dlg-icons" id="liveStageIcons"></div>
           <div class="farm-dlg-en" id="liveStageWords"></div>
+          <div class="farm-magic-gauge" id="liveStageMagicGauge">
+            <span class="magic-label" id="liveStageMagicLabel">🎤 마이크에 대고 영어로 발표해 주세요!</span>
+            <div class="magic-track">
+              <div class="magic-fill" id="liveStageMagicFill"></div>
+            </div>
+            <span class="magic-pct" id="liveStageMagicPct">0%</span>
+          </div>
           <div class="speech-quality-bar" id="liveStageQuality"></div>
           <div class="farm-judge-row">
             <button class="big-btn btn-slow farm-judge-btn" id="liveStagePrevBtn">⬅️ 이전</button>
-            <button class="big-btn btn-star farm-judge-btn" id="liveStageNextBtn">👏 박수 받고 다음 문장! ➡️</button>
+            <button class="big-btn btn-star farm-judge-btn" id="liveStageNextBtn" disabled>🔒 먼저 영어로 말해요!</button>
+          </div>
+          <div class="parent-override-row">
+            <button type="button" class="parent-hold-btn" id="liveStageParentUnlockBtn">🔐 부모님 직접 넘기기 (1초 꾹 누르기)</button>
           </div>
         </div>
 
@@ -971,16 +985,18 @@ export class FarmGame3D {
     this._hideInspectBar();
     this.inLiveStage = true;
     this.liveStageIdx = 0;
+    this.liveStageUnlocked = false;
+    this.avatarPose = null;
     this.audio.setBgmDucked(true);
     this.walkTarget = null;
-    this.avatarPos = { x: 0, z: 0 };
+    this.avatarPos = { x: 0, z: 0.25 };
     this.avatarAngle = 0;
 
     const panel = this.container?.querySelector('#farmLiveStage');
     if (panel) panel.style.display = 'flex';
     this.audio.playFanfareSFX();
     this.onConfetti(70);
-    this.onToast('🎪 3D 중앙 무대 발표회 시작!! 12마리 동물 관객 앞에서 멋지게 발표해요!');
+    this.onToast('🎤 무대에 올라왔어요!! 12마리 동물 관객 앞에서 영어로 발표해요!');
     this._renderLiveStageCard();
   }
 
@@ -989,26 +1005,81 @@ export class FarmGame3D {
     const card = deck[this.liveStageIdx];
     if (!card) return;
 
+    clearTimeout(this._liveStageAutoTimer);
+    this._liveStageAutoTimer = null;
+    this.liveStageUnlocked = false;
+
     const badge = this.container?.querySelector('#liveStageBadge');
     const iconsEl = this.container?.querySelector('#liveStageIcons');
     const wordsEl = this.container?.querySelector('#liveStageWords');
     const qualEl = this.container?.querySelector('#liveStageQuality');
+    const gaugeEl = this.container?.querySelector('#liveStageMagicGauge');
+    const fillEl = this.container?.querySelector('#liveStageMagicFill');
+    const pctEl = this.container?.querySelector('#liveStageMagicPct');
+    const labelEl = this.container?.querySelector('#liveStageMagicLabel');
     const hintBtn = this.container?.querySelector('#liveStageHintBtn');
     const nextBtn = this.container?.querySelector('#liveStageNextBtn');
+    const parentBtn = this.container?.querySelector('#liveStageParentUnlockBtn');
+
+    const isLast = this.liveStageIdx === deck.length - 1;
+    const readyLabel = isLast ? '🏆 발표회 대성공!! 박수 받기!' : '👏 박수 받고 다음 문장! ➡️';
 
     if (badge) badge.textContent = `🎪 3D 무대 발표회 · ${this.liveStageIdx + 1} / ${deck.length}`;
     if (iconsEl) {
       iconsEl.innerHTML = (card.icons || []).map(([em]) => `<span class="farm-icon-chip">${em}</span>`).join('');
     }
+    if (gaugeEl) gaugeEl.classList.remove('filled');
+    if (fillEl) fillEl.style.width = '0%';
+    if (pctEl) pctEl.textContent = '0%';
+    if (labelEl) labelEl.textContent = '🎤 마이크에 대고 영어로 말하면 박수 버튼이 열려요!';
     if (nextBtn) {
-      nextBtn.textContent = this.liveStageIdx === deck.length - 1
-        ? '🏆 발표회 대성공!! 박수 받기!'
-        : '👏 박수 받고 다음 문장! ➡️';
+      nextBtn.disabled = true;
+      nextBtn.classList.remove('pulse-ready');
+      nextBtn.textContent = '🔒 먼저 영어로 말해요!';
+    }
+
+    const unlockNext = (reasonText = null) => {
+      if (this.liveStageUnlocked) return;
+      this.liveStageUnlocked = true;
+      if (gaugeEl) gaugeEl.classList.add('filled');
+      if (nextBtn) {
+        nextBtn.disabled = false;
+        nextBtn.textContent = readyLabel;
+        nextBtn.classList.add('pulse-ready');
+      }
+      if (reasonText && labelEl) labelEl.textContent = reasonText;
+    };
+
+    // Parent 1-second hold override in case SpeechRecognition is unavailable/noisy
+    if (parentBtn) {
+      parentBtn.textContent = '🔐 부모님 직접 넘기기 (1초 꾹 누르기)';
+      let holdTimer = null;
+      const cancelHold = () => {
+        if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+        parentBtn.classList.remove('holding');
+      };
+      parentBtn.onpointerdown = (e) => {
+        e.preventDefault();
+        parentBtn.classList.add('holding');
+        holdTimer = setTimeout(() => {
+          holdTimer = null;
+          parentBtn.classList.remove('holding');
+          unlockNext('🔓 부모님 확인 완료! 다음 문장으로 넘어가요!');
+          parentBtn.textContent = '✅ 잠금 해제됨!';
+          this.audio.playChimeSFX();
+        }, 1000);
+      };
+      parentBtn.onpointerup = cancelHold;
+      parentBtn.onpointerleave = cancelHold;
+      parentBtn.onpointercancel = cancelHold;
     }
 
     this.audio.stopSpeechMatch();
+    this.audio.stopVoiceGauge();
     let matched = new Set();
-    this._renderWordChips(wordsEl, card.en, { matchedIndices: matched, hiddenMode: true });
+    let autoAdvanced = false;
+    const cardTimings = WORD_TIMINGS[card.id] || [];
+    this._renderWordChips(wordsEl, card.en, { matchedIndices: matched, hiddenMode: true, timings: cardTimings });
     if (qualEl) {
       qualEl.innerHTML = `<span class="sq-pill">🎤 영어로 발표하면 단어가 반짝 열려요!</span>`;
     }
@@ -1020,30 +1091,95 @@ export class FarmGame3D {
       };
     }
 
-    this.audio.startSpeechMatch({
+    const startFallbackGauge = () => {
+      if (!this.inLiveStage) return;
+      if (labelEl) labelEl.textContent = '🎤 큰 소리로 영어를 말하면 게이지가 차올라요!';
+      this.audio.startVoiceGauge({
+        targetSpeechSec: 1.1,
+        onProgress: (pct) => {
+          if (!this.inLiveStage) return;
+          if (fillEl) fillEl.style.width = `${pct}%`;
+          if (pctEl) pctEl.textContent = `${pct}%`;
+        },
+        onFilled: () => {
+          if (!this.inLiveStage) return;
+          if (fillEl) fillEl.style.width = '100%';
+          if (pctEl) pctEl.textContent = '100%';
+          unlockNext('✨ 목소리 확인 완료!! 박수 받고 넘어가요!');
+        },
+        onMicDenied: () => {
+          if (!this.inLiveStage) return;
+          if (labelEl) labelEl.textContent = '🎤 마이크 권한이 없어요! 아래 부모님 버튼을 1초 꾹 눌러주세요!';
+          if (pctEl) pctEl.textContent = '🔐';
+        },
+      });
+    };
+
+    const started = this.audio.startSpeechMatch({
       onTranscript: (transcript) => {
-        if (!this.inLiveStage) return;
+        if (!this.inLiveStage || autoAdvanced) return;
         const q = evaluateSpeechQuality(card.en, transcript, matched);
         matched = q.matchedIndices;
-        this._renderWordChips(wordsEl, card.en, { matchedIndices: matched, hiddenMode: true });
+        this._renderWordChips(wordsEl, card.en, { matchedIndices: matched, hiddenMode: true, timings: cardTimings });
+
+        if (fillEl) fillEl.style.width = `${q.accuracyPct}%`;
+        if (pctEl) pctEl.textContent = `${q.matchedCount}/${q.totalCount}`;
         if (qualEl) {
+          const missedHint = q.missedTokens.length > 0 && q.missedTokens.length <= 4
+            ? `<span class="sq-pill warn">👆 남은 단어: ${q.missedTokens.slice(0, 3).map(t => t.raw).join(', ')}</span>`
+            : '';
           qualEl.innerHTML = `
-            <span class="sq-pill ${q.accuracyPct >= 80 ? 'good' : 'warn'}">🎯 정확도 ${q.accuracyPct}%</span>
-            <span class="sq-pill ${q.orderPct >= 80 ? 'good' : 'warn'}">🔗 순서 ${q.orderPct}%</span>
-            ${q.isPerfect ? `<span class="sq-pill good">💎 완벽 발표!!</span>` : ''}
+            <span class="sq-pill ${q.accuracyPct >= 75 ? 'good' : 'warn'}">🎯 정확도 ${q.accuracyPct}%</span>
+            <span class="sq-pill ${q.orderPct >= 75 ? 'good' : 'warn'}">🔗 순서 ${q.orderPct}%</span>
+            ${q.isPerfect ? `<span class="sq-pill good">💎 완벽 발표!!</span>` : missedHint}
           `;
         }
+
+        const passed = q.accuracyPct >= 60 || (q.totalCount <= 3 && q.matchedCount >= Math.min(2, q.totalCount));
+        if (passed && !this.liveStageUnlocked) {
+          this.audio.playChimeSFX();
+          unlockNext('👏 잘했어요!! 박수 버튼을 누르거나 끝까지 말해요!');
+        }
+
+        if (q.isPerfect || (q.accuracyPct >= 85 && q.orderPct >= 75)) {
+          autoAdvanced = true;
+          this.audio.stopSpeechMatch();
+          const allIdx = new Set(q.targetTokens.map(t => t.index));
+          this._renderWordChips(wordsEl, card.en, { matchedIndices: allIdx, hiddenMode: false, timings: cardTimings });
+          if (fillEl) fillEl.style.width = '100%';
+          if (pctEl) pctEl.textContent = '💎100%';
+          unlockNext('💎 완벽 발표!! 동물 친구들이 박수치며 환호해요!!');
+          this._liveStageAutoTimer = setTimeout(() => {
+            if (this.inLiveStage) this._advanceLiveStage();
+          }, 950);
+        }
       },
+      onUnsupported: () => startFallbackGauge(),
+      onError: () => startFallbackGauge(),
     });
+
+    if (!started) {
+      startFallbackGauge();
+    }
   }
 
   _advanceLiveStage() {
-    const deck = [...BASE_CARDS, REHEARSAL_OUTRO];
-    this.audienceCheerUntil = performance.now() + 1400;
-    this.audio.playApplauseSFX();
-    this.onConfetti(50);
+    if (!this.liveStageUnlocked) {
+      this.onToast('🎤 먼저 마이크에 대고 영어로 멋지게 발표해 주세요!');
+      return;
+    }
+    clearTimeout(this._liveStageAutoTimer);
+    this._liveStageAutoTimer = null;
+    this.audio.stopSpeechMatch();
+    this.audio.stopVoiceGauge();
 
-    if (this.liveStageIdx >= deck.length - 1) {
+    const deck = [...BASE_CARDS, REHEARSAL_OUTRO];
+    const isFinal = this.liveStageIdx >= deck.length - 1;
+    this.audienceCheerUntil = performance.now() + (isFinal ? 2600 : 1800);
+    this.audio.playApplauseSFX({ grand: isFinal });
+    this.onConfetti(isFinal ? 140 : 55);
+
+    if (isFinal) {
       this._exitLiveStage();
       const prevBuildings = new Set(getUnlockedBuildings(this.speakCount));
       this.stageClears += 1;
@@ -1063,8 +1199,7 @@ export class FarmGame3D {
       }
 
       this._updateBagBadge();
-      this.audio.playFanfareSFX();
-      this.onConfetti(140);
+      setTimeout(() => { if (this.mounted) this.audio.playFanfareSFX(); }, 450);
 
       const newMon = STAGE_CLEAR_MONUMENTS.find(m => m.clearReq === this.stageClears);
       const monMsg = newMon ? ` + 광장에 ${newMon.emoji} ${newMon.name} 완성!!` : '';
@@ -1078,7 +1213,7 @@ export class FarmGame3D {
       ];
       setTimeout(() => {
         if (this.mounted) this._popNextQueuedChest();
-      }, 500);
+      }, 650);
       return;
     }
 
@@ -1087,12 +1222,17 @@ export class FarmGame3D {
   }
 
   _exitLiveStage() {
+    clearTimeout(this._liveStageAutoTimer);
+    this._liveStageAutoTimer = null;
     this.inLiveStage = false;
+    this.liveStageUnlocked = false;
+    this.stageCooldownUntil = performance.now() + 2600;
     this.audio.stopSpeechMatch();
+    this.audio.stopVoiceGauge();
     this.audio.setBgmDucked(false);
     const panel = this.container?.querySelector('#farmLiveStage');
     if (panel) panel.style.display = 'none';
-    this.avatarPos = { x: 0, z: 6.2 };
+    this.avatarPos = this.centralStage?.exitPos ? { ...this.centralStage.exitPos } : { x: 0, z: 6.2 };
     if (this.wooju) this.wooju.group.position.y = 0;
   }
 
@@ -2408,6 +2548,7 @@ export class FarmGame3D {
     this.clouds = world.clouds;
     this.butterflies = world.butterflies || [];
     this.woojuHouse = world.woojuHouse || null;
+    this.centralStage = world.stage || null;
 
     // 1b. v3..v11 Living Party Feast, Village Buildings, Placed Treasures, Atmosphere, Balloon & Stage Monuments
     this.partyRewards = buildPartyRewards3D(THREE, this.outdoorGroup);
@@ -2587,6 +2728,25 @@ export class FarmGame3D {
         if (bHits.length > 0) {
           this.goldenBalloon3D.pop();
           this._openBalloonQuiz();
+          return;
+        }
+      }
+
+      // Tap the Central 3D Presentation Stage or Mic -> walk up onto the stage & start the show!
+      if (this.centralStage?.hitMeshes) {
+        const stHits = this.raycaster.intersectObjects(this.centralStage.hitMeshes, false);
+        if (stHits.length > 0) {
+          const tp = this.centralStage.triggerPos;
+          const d = Math.hypot(this.avatarPos.x - tp.x, this.avatarPos.z - tp.z);
+          if (d < 2.2) {
+            this._startLiveStage();
+          } else {
+            this.stageCooldownUntil = 0;
+            this.walkTarget = { x: tp.x, z: tp.z };
+            this.pendingSpotTrigger = null;
+            this._spawnTapRing(tp.x, tp.z);
+            this.onToast('🎤 무대 위로 걸어 올라가는 중!!');
+          }
           return;
         }
       }
@@ -3506,10 +3666,22 @@ export class FarmGame3D {
           }
         }
 
-        // Pulse the green welcome door ring outside Wooju's house
+        // Pulse the green welcome door ring outside Wooju's house & golden mic ring on the central stage
         if (!this.inHome && this.woojuHouse?.doorRing) {
           const ds = 1 + Math.sin(t * 4) * 0.1;
           this.woojuHouse.doorRing.scale.set(ds, ds, 1);
+        }
+        if (!this.inHome && this.centralStage?.micRing) {
+          const ms = 1 + Math.sin(t * 4.5) * 0.12;
+          this.centralStage.micRing.scale.set(ms, ms, 1);
+          // Step onto the stage mic spot to automatically begin the 3D Live Presentation!
+          if (performance.now() > this.stageCooldownUntil) {
+            const tp = this.centralStage.triggerPos;
+            if (Math.hypot(this.avatarPos.x - tp.x, this.avatarPos.z - tp.z) < 1.55) {
+              this.walkTarget = null;
+              this._startLiveStage();
+            }
+          }
         }
 
         // Proximity auto-trigger when walking right up to the active unmet animal (outdoor only)
@@ -3548,8 +3720,10 @@ export class FarmGame3D {
             this.wooju.setAnim((p.mode === 'bounce' || p.mode === 'dance') ? 'dance' : 'idle');
           }
         } else {
+          const onStageDeck = !this.inHome && this.centralStage && Math.hypot(this.avatarPos.x, this.avatarPos.z) < this.centralStage.radius;
+          const stageElev = this.centralStage ? this.centralStage.stageY : 0.7;
           this.wooju.group.position.x = this.avatarPos.x;
-          this.wooju.group.position.y = this.inLiveStage ? 0.42 : 0;
+          this.wooju.group.position.y = (this.inLiveStage || onStageDeck) ? stageElev : 0;
           this.wooju.group.position.z = this.avatarPos.z;
           this.wooju.group.rotation.x = 0;
           this.wooju.group.rotation.y = this.avatarAngle;
