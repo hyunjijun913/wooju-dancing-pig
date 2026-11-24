@@ -32,6 +32,7 @@ import {
   buildFarmWorld3D,
   buildPartyRewards3D,
   buildVillageBuildings3D,
+  buildPlacedTreasures3D,
 } from './models3d.js';
 
 let THREE_MOD = null;
@@ -97,12 +98,16 @@ export class FarmGame3D {
     this.speakCount = 0;
     this.perfectCount = 0;
     this.treasures = []; // owned treasure IDs (up to 24)
+    this.placedTreasures = []; // [{ id, x, z }] placed directly in 3D farm!
     this.attendance = { days: [], lastClaimDate: null, streak: 0 };
     this.daily = normalizeDailyState(null, getLocalDateKey());
     this.paradeEnabled = true;
-    this.bagTab = 'collection'; // 'collection' | 'buildings' | 'treasures' | 'wardrobe' | 'achievements'
+    this.bagTab = 'collection';
     this.hasNewBadge = false;
     this.pendingChest = null;
+    this.lastRevealedTreasureId = null;
+    this.placingTreasureId = null;
+    this.cameraFocusOverride = null; // { x, z, until }
 
     // Runtime dialogue & navigation state
     this.currentSpotIndex = 0;
@@ -126,6 +131,7 @@ export class FarmGame3D {
     this.wooju = null;
     this.partyRewards = null;
     this.villageBuildings = null;
+    this.placedTreasures3D = null;
     this.spotEntries = [];
     this.clouds = [];
     this.activeRing = null;
@@ -154,6 +160,7 @@ export class FarmGame3D {
         this.speakCount = Number.isFinite(parsed.speakCount) ? parsed.speakCount : 0;
         this.perfectCount = Number.isFinite(parsed.perfectCount) ? parsed.perfectCount : 0;
         this.treasures = Array.isArray(parsed.treasures) ? parsed.treasures : [];
+        this.placedTreasures = Array.isArray(parsed.placedTreasures) ? parsed.placedTreasures : [];
         this.attendance = parsed.attendance && typeof parsed.attendance === 'object'
           ? parsed.attendance
           : { days: [], lastClaimDate: null, streak: 0 };
@@ -165,6 +172,7 @@ export class FarmGame3D {
       this.speakCount = 0;
       this.perfectCount = 0;
       this.treasures = [];
+      this.placedTreasures = [];
       this.attendance = { days: [], lastClaimDate: null, streak: 0 };
       this.daily = normalizeDailyState(null, getLocalDateKey());
     }
@@ -180,6 +188,7 @@ export class FarmGame3D {
         speakCount: this.speakCount,
         perfectCount: this.perfectCount,
         treasures: this.treasures,
+        placedTreasures: this.placedTreasures,
         attendance: this.attendance,
         daily: this.daily,
       }));
@@ -271,6 +280,9 @@ export class FarmGame3D {
     this.clouds = [];
     this.partyRewards = null;
     this.villageBuildings = null;
+    this.placedTreasures3D = null;
+    this.cameraFocusOverride = null;
+    this.placingTreasureId = null;
     this.scene = null;
     this.camera = null;
   }
@@ -286,6 +298,7 @@ export class FarmGame3D {
     this.speakCount = 0;
     this.perfectCount = 0;
     this.treasures = [];
+    this.placedTreasures = [];
     this.currentSpotIndex = 0;
     this._saveRpgState();
 
@@ -293,6 +306,8 @@ export class FarmGame3D {
     this.activeDialogueSpot = null;
     this.dialogueListened = false;
     this.pendingSpotTrigger = null;
+    this.placingTreasureId = null;
+    this.cameraFocusOverride = null;
     this.avatarPos = { x: 0, z: 15.2 };
     this.woojuTrail = [];
     this.walkTarget = null;
@@ -303,6 +318,7 @@ export class FarmGame3D {
     }
     if (this.partyRewards) this.partyRewards.syncMastery(this.mastery);
     if (this.villageBuildings) this.villageBuildings.syncBuildings([]);
+    if (this.placedTreasures3D) this.placedTreasures3D.syncPlaced([]);
 
     this.spotEntries.forEach((m) => {
       m.curX = m.homeX;
@@ -350,6 +366,12 @@ export class FarmGame3D {
 
         <div class="farm-guide-pill" id="farmGuidePill">👆 노란 점선 길을 따라 반짝이는 친구에게 가보세요!</div>
         <div class="farm-goal-pill" id="farmGoalPill">🗣️ 0회 · 다음 건물: 🌷 꽃길 정원 (3회)</div>
+        <div class="farm-cinematic-banner" id="farmCinematicBanner" style="display:none;">🏗️ 뚝딱뚝딱 새 건물 짓는 중!!</div>
+        <div class="farm-place-bar" id="farmPlaceBar" style="display:none;">
+          <span id="farmPlaceText">👆 농장 땅을 톡! 눌러 보물을 장식하세요!</span>
+          <button class="mini-btn" id="farmPlaceHereBtn">📍 내 발 앞에 놓기</button>
+          <button class="mini-btn del" id="farmPlaceCancelBtn">✕ 취소</button>
+        </div>
 
         <!-- Floating Speech Bubble projected right above a nearby 3D villager -->
         <button class="farm-hover-bubble" id="farmHoverBubble" style="display:none;">
@@ -445,7 +467,8 @@ export class FarmGame3D {
               <div class="chest-rarity" id="chestRarity">✨ 희귀 보물</div>
               <div class="chest-item-ico" id="chestItemIco">🏆</div>
               <div class="chest-item-name" id="chestItemName">춤추는 돼지 트로피</div>
-              <button class="big-btn btn-star" id="chestCloseBtn" style="margin-top:10px;width:100%;">🎒 도감에 쏙 넣기!</button>
+              <button class="big-btn btn-star" id="chestPlaceNowBtn" style="margin-top:8px;width:100%;">🏡 지금 농장에 바로 장식하기!</button>
+              <button class="mini-btn" id="chestCloseBtn" style="margin-top:4px;width:100%;">🎒 도감에만 넣어두기</button>
             </div>
           </div>
         </div>
@@ -492,6 +515,18 @@ export class FarmGame3D {
     this.container.querySelector('#farmDlgCloseBtn').addEventListener('click', () => this._hideDialogue());
     this.container.querySelector('#chestBoxBtn').addEventListener('click', () => this._revealPendingChest());
     this.container.querySelector('#chestCloseBtn').addEventListener('click', () => this._closeChestModal());
+    this.container.querySelector('#chestPlaceNowBtn').addEventListener('click', () => {
+      const id = this.lastRevealedTreasureId;
+      this._closeChestModal();
+      if (id) this._enterPlaceMode(id);
+    });
+    this.container.querySelector('#farmPlaceHereBtn').addEventListener('click', () => {
+      if (!this.placingTreasureId) return;
+      const fx = this.avatarPos.x + Math.sin(this.avatarAngle) * 2.1;
+      const fz = this.avatarPos.z + Math.cos(this.avatarAngle) * 2.1;
+      this._commitTreasurePlacement(this.placingTreasureId, fx, fz);
+    });
+    this.container.querySelector('#farmPlaceCancelBtn').addEventListener('click', () => this._exitPlaceMode());
 
     this.container.querySelector('#farmParadeBtn').addEventListener('click', () => {
       this.paradeEnabled = !this.paradeEnabled;
@@ -697,42 +732,60 @@ export class FarmGame3D {
 
     if (this.bagTab === 'buildings') {
       contentEl.innerHTML = `
-        <p class="bag-hint">영어로 누적 말하기 횟수가 쌓일 때마다 <b>3D 농장에 진짜 건물과 랜드마크</b>가 지어져요! (현재 누적: <b>${this.speakCount}회</b>)</p>
+        <p class="bag-hint">영어로 말할 때마다 <b>3D 농장에 건물이 뚝딱뚝딱 지어져요!</b> 완성된 건물을 톡! 누르면 카메라가 구경하러 가요! (누적: <b>${this.speakCount}회</b>)</p>
         <div class="farm-bag-grid">
           ${VILLAGE_BUILDINGS.map((b) => {
             const built = unlockedBuildings.has(b.id);
             return `
-              <div class="bag-slot ${built ? 'got mastered' : ''}">
-                <div class="bag-slot-stars">${built ? '🏗️ 완성!' : `${Math.min(this.speakCount, b.reqSpeaks)}/${b.reqSpeaks}회`}</div>
+              <button class="bag-slot ${built ? 'got mastered' : ''}" data-visit-build="${b.id}" ${built ? '' : 'disabled'}>
+                <div class="bag-slot-stars">${built ? '🏗️ 구경 가기!' : `${Math.min(this.speakCount, b.reqSpeaks)}/${b.reqSpeaks}회`}</div>
                 <div class="bag-slot-ico">${built ? b.emoji : '🔒'}</div>
                 <div class="bag-slot-name">${b.name}</div>
                 <div class="bag-slot-who">${b.desc}</div>
-              </div>
+              </button>
             `;
           }).join('')}
         </div>
       `;
+      contentEl.querySelectorAll('[data-visit-build]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const bId = btn.dataset.visitBuild;
+          this._closeBagModal();
+          this._playConstructionCinematic(bId, { isRevisit: true });
+        });
+      });
       return;
     }
 
     if (this.bagTab === 'treasures') {
       const rarityLbl = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
+      const placedIds = new Set(this.placedTreasures.map(p => p.id));
       contentEl.innerHTML = `
-        <p class="bag-hint"><b>💎 토씨 안 틀림!!</b>을 달성하거나 영어로 <b>5번 말할 때마다</b> 보물상자가 나와요! 24개 희귀 보물을 모두 모아보세요!</p>
+        <p class="bag-hint">모은 보물을 <b>🏡 농장에 놓기</b> 버튼으로 3D 농장 어디든 직접 전시하고 꾸밀 수 있어요! (전시 중: <b>${this.placedTreasures.length}개</b>)</p>
         <div class="farm-bag-grid">
           ${TREASURE_ITEMS.map((tr) => {
             const got = ownedTreasures.has(tr.id);
+            const isPlaced = placedIds.has(tr.id);
             return `
               <div class="bag-slot ${got ? `got rarity-${tr.rarity}` : ''}">
                 <div class="bag-slot-stars">${got ? rarityLbl[tr.rarity] : '???'}</div>
                 <div class="bag-slot-ico">${got ? tr.emoji : '🎁'}</div>
                 <div class="bag-slot-name">${got ? tr.name : '숨겨진 보물'}</div>
-                <div class="bag-slot-who">${got ? tr.cat : '상자를 열어보세요'}</div>
+                ${got
+                  ? `<button class="bag-place-btn ${isPlaced ? 'placed' : ''}" data-place-tr="${tr.id}">${isPlaced ? '📍 옮기기' : '🏡 농장에 놓기'}</button>`
+                  : `<div class="bag-slot-who">상자를 열어보세요</div>`}
               </div>
             `;
           }).join('')}
         </div>
       `;
+      contentEl.querySelectorAll('[data-place-tr]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.placeTr;
+          this._closeBagModal();
+          this._enterPlaceMode(id);
+        });
+      });
       return;
     }
 
@@ -839,6 +892,7 @@ export class FarmGame3D {
       this.hasNewBadge = true;
       this._saveRpgState();
     }
+    this.lastRevealedTreasureId = item.id;
 
     const boxBtn = this.container?.querySelector('#chestBoxBtn');
     const subEl = this.container?.querySelector('#chestSub');
@@ -867,6 +921,69 @@ export class FarmGame3D {
   _closeChestModal() {
     const modal = this.container?.querySelector('#farmChestModal');
     if (modal) modal.style.display = 'none';
+  }
+
+  _enterPlaceMode(treasureId) {
+    const item = TREASURE_ITEMS.find(t => t.id === treasureId);
+    if (!item) return;
+    this.placingTreasureId = treasureId;
+    const bar = this.container?.querySelector('#farmPlaceBar');
+    const txt = this.container?.querySelector('#farmPlaceText');
+    if (txt) txt.textContent = `👆 농장 땅을 톡! 눌러 ${item.emoji} ${item.name} 놓기!`;
+    if (bar) bar.style.display = 'flex';
+    this.onToast(`🏡 원하는 농장 바닥을 톡! 누르면 ${item.emoji} ${item.name}이(가) 장식돼요!`);
+  }
+
+  _exitPlaceMode() {
+    this.placingTreasureId = null;
+    const bar = this.container?.querySelector('#farmPlaceBar');
+    if (bar) bar.style.display = 'none';
+  }
+
+  _commitTreasurePlacement(treasureId, rawX, rawZ) {
+    const r = Math.hypot(rawX, rawZ);
+    const x = r > 15.8 ? (rawX / r) * 15.8 : rawX;
+    const z = r > 15.8 ? (rawZ / r) * 15.8 : rawZ;
+    const idx = this.placedTreasures.findIndex(p => p.id === treasureId);
+    if (idx >= 0) this.placedTreasures[idx] = { id: treasureId, x, z };
+    else this.placedTreasures.push({ id: treasureId, x, z });
+    this._saveRpgState();
+    if (this.placedTreasures3D) {
+      this.placedTreasures3D.syncPlaced(this.placedTreasures, treasureId);
+    }
+    this._exitPlaceMode();
+    this.audio.playStarSFX();
+    this.onConfetti(55);
+    const item = TREASURE_ITEMS.find(t => t.id === treasureId);
+    if (item) this.onToast(`✨ ${item.emoji} ${item.name}을(를) 3D 농장에 멋지게 장식했어요!`);
+  }
+
+  _playConstructionCinematic(buildingId, { isRevisit = false } = {}) {
+    const b = VILLAGE_BUILDINGS.find(x => x.id === buildingId);
+    if (!b || !this.villageBuildings) return;
+    const pos = this.villageBuildings.getFocusPos(buildingId);
+    const durationMs = isRevisit ? 2200 : 3100;
+    this.cameraFocusOverride = { x: pos.x, z: pos.z, until: performance.now() + durationMs };
+
+    const banner = this.container?.querySelector('#farmCinematicBanner');
+    if (banner) {
+      banner.textContent = isRevisit
+        ? `🏗️ 우주가 지은 ${b.emoji} ${b.name}!`
+        : `🏗️ 뚝딱뚝딱! ${b.emoji} ${b.name} 건설 중!!`;
+      banner.style.display = 'block';
+      if (!isRevisit) {
+        setTimeout(() => {
+          if (this.mounted && banner && banner.style.display === 'block') {
+            banner.textContent = `🎉 완공!! ${b.emoji} ${b.name}이(가) 완성됐어요!!`;
+            this.audio.playFanfareSFX();
+            this.onConfetti(90);
+          }
+        }, 1600);
+      }
+      setTimeout(() => {
+        if (this.mounted && banner) banner.style.display = 'none';
+      }, durationMs);
+    }
   }
 
   _openEventModal() {
@@ -1172,11 +1289,13 @@ export class FarmGame3D {
     this.groundMesh = world.groundMesh;
     this.clouds = world.clouds;
 
-    // 1b. v3/v4 Living Party Feast & 12 Unlockable Village Buildings
+    // 1b. v3/v4/v7 Living Party Feast, 12 Unlockable Village Buildings & Placed 3D Treasures
     this.partyRewards = buildPartyRewards3D(THREE, this.scene);
     this.partyRewards.syncMastery(this.mastery);
     this.villageBuildings = buildVillageBuildings3D(THREE, this.scene);
     this.villageBuildings.syncBuildings(getUnlockedBuildings(this.speakCount));
+    this.placedTreasures3D = buildPlacedTreasures3D(THREE, this.scene, TREASURE_ITEMS);
+    this.placedTreasures3D.syncPlaced(this.placedTreasures);
 
     // 2. 100% 3D Wooju Explorer Avatar + Equipped 3D Gear
     this.wooju = buildWooju3D(THREE);
@@ -1282,6 +1401,14 @@ export class FarmGame3D {
       );
       this.raycaster.setFromCamera(ndc, this.camera);
 
+      if (this.placingTreasureId) {
+        const gHits = this.raycaster.intersectObject(this.groundMesh, false);
+        if (gHits.length > 0) {
+          this._commitTreasurePlacement(this.placingTreasureId, gHits[0].point.x, gHits[0].point.z);
+        }
+        return;
+      }
+
       const spotTargets = this.spotEntries.map(m => m.hitMesh);
       const spotHits = this.raycaster.intersectObjects(spotTargets, false);
       if (spotHits.length > 0) {
@@ -1293,6 +1420,10 @@ export class FarmGame3D {
       const groundHits = this.raycaster.intersectObject(this.groundMesh, false);
       if (groundHits.length > 0) {
         const pt = groundHits[0].point;
+        if (this.placingTreasureId) {
+          this._commitTreasurePlacement(this.placingTreasureId, pt.x, pt.z);
+          return;
+        }
         const r = Math.hypot(pt.x, pt.z);
         const clamped = r > 16.0 ? { x: (pt.x / r) * 16.0, z: (pt.z / r) * 16.0 } : { x: pt.x, z: pt.z };
         this.walkTarget = clamped;
@@ -1737,6 +1868,9 @@ export class FarmGame3D {
     if (this.villageBuildings) {
       this.villageBuildings.syncBuildings(nextBuildings, newlyBuilt[0] || null);
     }
+    if (newlyBuilt.length > 0) {
+      this._playConstructionCinematic(newlyBuilt[0], { isRevisit: false });
+    }
 
     // 2. Check newly unlocked 3D Wooju Gear (auto-equips into its slot!)
     const extra = this._getExtraStats();
@@ -1870,9 +2004,10 @@ export class FarmGame3D {
         if (c.position.x > 26) c.position.x = -26;
       });
 
-      // Animate v3/v4 Living Farm 3D Party Rewards & Village Buildings
+      // Animate v3/v4/v7 Living Farm 3D Party Rewards, Village Buildings & Placed Treasures
       if (this.partyRewards) this.partyRewards.update(t, dt);
       if (this.villageBuildings) this.villageBuildings.update(t, dt);
+      if (this.placedTreasures3D) this.placedTreasures3D.update(t, dt);
 
       // 1. Wooju 3D Avatar Movement & Walking Limb Animation
       let moving = false;
@@ -2145,7 +2280,18 @@ export class FarmGame3D {
         let camDist = 11.2 * portraitBoost;
         let lookY = 1.7;
         let lookOffsetZ = -1.2;
-        if (this.activeDialogueSpot !== null && this.spotEntries[this.activeDialogueSpot]) {
+        if (this.cameraFocusOverride) {
+          if (performance.now() < this.cameraFocusOverride.until) {
+            focusX = this.cameraFocusOverride.x;
+            focusZ = this.cameraFocusOverride.z;
+            camHeight = 7.2 * portraitBoost;
+            camDist = 12.8 * portraitBoost;
+            lookY = 2.0;
+            lookOffsetZ = 0;
+          } else {
+            this.cameraFocusOverride = null;
+          }
+        } else if (this.activeDialogueSpot !== null && this.spotEntries[this.activeDialogueSpot]) {
           const sp = this.spotEntries[this.activeDialogueSpot];
           focusX = sp.curX;
           focusZ = sp.curZ;

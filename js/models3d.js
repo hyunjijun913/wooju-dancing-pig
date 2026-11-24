@@ -1069,12 +1069,34 @@ export function buildVillageBuildings3D(THREE, scene) {
 
   const entries = new Map();
   let rocketFlame = null;
-  let windmillGroup = null;
 
-  const register = (id, group) => {
+  // Construction FX: golden magic ring + rising cartoon dust puffs
+  const fxGroup = new THREE.Group();
+  fxGroup.visible = false;
+  const fxRing = new THREE.Mesh(
+    new THREE.RingGeometry(2.2, 3.1, 32),
+    new THREE.MeshBasicMaterial({ color: '#FACC15', side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+  );
+  fxRing.rotation.x = -Math.PI / 2;
+  fxRing.position.y = 0.14;
+  fxGroup.add(fxRing);
+
+  const fxPuffs = [];
+  const puffMat = new THREE.MeshStandardMaterial({ color: '#FFFBEB', roughness: 0.95, transparent: true, opacity: 0.9 });
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.65, 10, 8), puffMat.clone());
+    p.position.set(Math.cos(a) * 1.9, 0.7, Math.sin(a) * 1.9);
+    fxGroup.add(p);
+    fxPuffs.push({ mesh: p, angle: a });
+  }
+  scene.add(fxGroup);
+  let activeFx = null; // { id, x, z, elapsed, duration }
+
+  const register = (id, group, focusPos) => {
     group.visible = false;
     root.add(group);
-    entries.set(id, { group, popProgress: 1, active: false });
+    entries.set(id, { group, focusPos, buildProgress: 1, active: false });
   };
 
   const attachGLB = (parent, url, h, x = 0, y = 0, z = 0, rotY = 0) => {
@@ -1087,7 +1109,7 @@ export function buildVillageBuildings3D(THREE, scene) {
     }).catch(() => {});
   };
 
-  // 1. garden_arch (3 speaks) -> Lush entrance flower garden & mushrooms
+  // 1. garden_arch (3 speaks) -> Lush entrance flower garden
   const g1 = new THREE.Group();
   const fUrls = [
     'assets/models/nature/flower_redA.glb',
@@ -1097,57 +1119,56 @@ export function buildVillageBuildings3D(THREE, scene) {
   [[-2.5, 13.5], [-2.5, 11.5], [-2.5, 9.5], [2.5, 11.5], [2.5, 9.5], [2.5, 7.5]].forEach(([fx, fz], i) => {
     attachGLB(g1, fUrls[i % 3], 0.95, fx, 0, fz, i);
   });
-  register('garden_arch', g1);
+  register('garden_arch', g1, { x: 0, z: 11.0 });
 
   // 2. magic_well (6 speaks) -> Wishing Well
   const g2 = new THREE.Group();
   attachGLB(g2, 'assets/models/quaternius/Well.glb', 3.0, -8.5, 0, -14.8, 0.2);
-  register('magic_well', g2);
+  register('magic_well', g2, { x: -8.5, z: -14.8 });
 
   // 3. green_stall (10 speaks) -> Green Fruit Market Stall
   const g3 = new THREE.Group();
   attachGLB(g3, 'assets/models/fantasy-town/stall-green.glb', 3.4, -15.2, 0, -2.5, Math.PI * 0.45);
   attachGLB(g3, 'assets/models/food/apple.glb', 0.65, -14.5, 1.05, -2.3, 0);
-  register('green_stall', g3);
+  register('green_stall', g3, { x: -15.2, z: -2.5 });
 
   // 4. red_stall (15 speaks) -> Red Snack Stall + Farm Cart
   const g4 = new THREE.Group();
   attachGLB(g4, 'assets/models/fantasy-town/stall-red.glb', 3.4, 15.6, 0, -1.2, -Math.PI * 0.45);
   attachGLB(g4, 'assets/models/fantasy-town/cart.glb', 2.2, 1.5, 0, -15.8, 0.3);
-  register('red_stall', g4);
+  register('red_stall', g4, { x: 15.6, z: -1.2 });
 
   // 5. fountain (20 speaks) -> Sparkling Plaza Fountain
   const g5 = new THREE.Group();
   attachGLB(g5, 'assets/models/fantasy-town/fountain-round-detail.glb', 2.8, 7.8, 0, 13.8, 0);
-  register('fountain', g5);
+  register('fountain', g5, { x: 7.8, z: 13.8 });
 
   // 6. wooju_house (26 speaks) -> Wooju's Cozy Cottage
   const g6 = new THREE.Group();
   attachGLB(g6, 'assets/models/quaternius/House_1.glb', 6.0, -17.2, 0, -8.2, Math.PI * 0.35);
-  register('wooju_house', g6);
+  register('wooju_house', g6, { x: -17.2, z: -8.2 });
 
   // 7. friend_villa (32 speaks) -> Animal Friends Villa
   const g7 = new THREE.Group();
   attachGLB(g7, 'assets/models/quaternius/House_2.glb', 6.0, 17.5, 0, -5.8, -Math.PI * 0.35);
-  register('friend_villa', g7);
+  register('friend_villa', g7, { x: 17.5, z: -5.8 });
 
   // 8. gold_windmill (40 speaks) -> Golden Windmill
   const g8 = new THREE.Group();
   attachGLB(g8, 'assets/models/fantasy-town/windmill.glb', 8.5, 5.8, 0, -17.8, -0.25);
-  windmillGroup = g8;
-  register('gold_windmill', g8);
+  register('gold_windmill', g8, { x: 5.8, z: -17.8 });
 
   // 9. star_gazebo (50 speaks) -> Starlight Gazebo Pavilion
   const g9 = new THREE.Group();
   attachGLB(g9, 'assets/models/quaternius/Gazebo.glb', 5.6, 0, 0, -5.4, 0);
-  register('star_gazebo', g9);
+  register('star_gazebo', g9, { x: 0, z: -5.4 });
 
   // 10. royal_barn (62 speaks) -> Royal Golden Barn Cathedral + Red Banners
   const g10 = new THREE.Group();
   attachGLB(g10, 'assets/models/quaternius/Stable.glb', 6.5, -3.2, 0, -18.2, 0);
   attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.0, -6.2, 0, -16.0, 0.2);
   attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.0, 0.0, 0, -16.0, -0.2);
-  register('royal_barn', g10);
+  register('royal_barn', g10, { x: -3.2, z: -18.2 });
 
   // 11. rocket_pad (75 speaks) -> Giant 3D Wooju Space Rocket Launchpad!
   const g11 = new THREE.Group();
@@ -1189,7 +1210,7 @@ export function buildVillageBuildings3D(THREE, scene) {
   rocketFlame.rotation.x = Math.PI;
   rocketFlame.position.set(RX, 0.7, RZ);
   g11.add(pad, body, nose, win, rocketFlame);
-  register('rocket_pad', g11);
+  register('rocket_pad', g11, { x: RX, z: RZ });
 
   // 12. rainbow_arch (100 speaks) -> Legendary Giant 3D Rainbow Arch over the entire farm!
   const g12 = new THREE.Group();
@@ -1202,38 +1223,234 @@ export function buildVillageBuildings3D(THREE, scene) {
     arc.position.set(0, 0.2, -3.5);
     g12.add(arc);
   });
-  register('rainbow_arch', g12);
+  register('rainbow_arch', g12, { x: 0, z: -3.5 });
 
-  const syncBuildings = (unlockedIds = [], popId = null) => {
+  const getFocusPos = (id) => entries.get(id)?.focusPos || { x: 0, z: 0 };
+
+  const syncBuildings = (unlockedIds = [], constructId = null) => {
     const set = new Set(unlockedIds);
     entries.forEach((entry, id) => {
       const show = set.has(id);
       const wasActive = entry.active;
       entry.active = show;
       entry.group.visible = show;
-      if (show && (!wasActive || id === popId)) {
-        entry.popProgress = 0.01;
-        entry.group.scale.setScalar(0.01);
-      } else if (show && entry.popProgress >= 1) {
-        entry.group.scale.setScalar(1);
+      if (show && (id === constructId || !wasActive)) {
+        if (id === constructId) {
+          // Dramatic rising construction animation from underground + dust puffs!
+          entry.buildProgress = 0.0;
+          entry.group.position.y = -4.5;
+          entry.group.scale.set(0.3, 0.1, 0.3);
+          activeFx = {
+            id,
+            x: entry.focusPos.x,
+            z: entry.focusPos.z,
+            elapsed: 0,
+            duration: 2.3,
+          };
+          fxGroup.position.set(entry.focusPos.x, 0, entry.focusPos.z);
+          fxGroup.visible = true;
+        } else {
+          entry.buildProgress = 1;
+          entry.group.position.y = 0;
+          entry.group.scale.set(1, 1, 1);
+        }
       }
     });
   };
 
   const update = (t, dt) => {
     entries.forEach((entry) => {
-      if (entry.active && entry.popProgress < 1) {
-        entry.popProgress = Math.min(1, entry.popProgress + dt * 2.0);
-        const p = entry.popProgress;
-        const s = p < 0.7 ? (p / 0.7) * 1.12 : 1.12 - ((p - 0.7) / 0.3) * 0.12;
-        entry.group.scale.setScalar(Math.max(0.01, s));
+      if (entry.active && entry.buildProgress < 1) {
+        entry.buildProgress = Math.min(1, entry.buildProgress + dt * 0.58);
+        const p = entry.buildProgress;
+        if (p < 0.25) {
+          // Hammering dust phase before rising
+          entry.group.position.y = -4.2;
+          entry.group.scale.set(0.4, 0.08, 0.4);
+        } else if (p < 0.82) {
+          // Smooth rise from the ground with squash & stretch!
+          const r = (p - 0.25) / 0.57;
+          const ease = 1 - Math.pow(1 - r, 3);
+          entry.group.position.y = -4.2 * (1 - ease);
+          const sx = 0.7 + ease * 0.38;
+          const sy = 0.25 + ease * 0.92;
+          entry.group.scale.set(sx, sy, sx);
+        } else {
+          // Juicy bounce settle!
+          const b = (p - 0.82) / 0.18;
+          entry.group.position.y = 0;
+          const sx = 1.08 - b * 0.08;
+          const sy = 1.17 - b * 0.17;
+          entry.group.scale.set(sx, sy, sx);
+        }
       }
     });
+
+    if (activeFx) {
+      activeFx.elapsed += dt;
+      const frac = Math.min(1, activeFx.elapsed / activeFx.duration);
+      fxRing.rotation.z = t * 3.5;
+      fxRing.scale.setScalar(1 + Math.sin(t * 10) * 0.12);
+      fxRing.material.opacity = (1 - frac) * 0.9;
+      fxPuffs.forEach(({ mesh, angle }, i) => {
+        const cyc = (activeFx.elapsed * 1.9 + i * 0.22) % 1;
+        const rad = 1.6 + cyc * 1.8;
+        mesh.position.set(Math.cos(angle + t * 1.4) * rad, 0.4 + cyc * 2.4, Math.sin(angle + t * 1.4) * rad);
+        mesh.scale.setScalar(0.55 + Math.sin(cyc * Math.PI) * 0.85);
+        mesh.material.opacity = (1 - frac) * (1 - cyc * 0.7) * 0.9;
+      });
+      if (activeFx.elapsed >= activeFx.duration) {
+        fxGroup.visible = false;
+        activeFx = null;
+      }
+    }
+
     if (rocketFlame && rocketFlame.parent?.visible) {
       const s = 0.85 + Math.sin(t * 18) * 0.25;
       rocketFlame.scale.set(1, s, 1);
     }
   };
 
-  return { syncBuildings, update };
+  return { syncBuildings, update, getFocusPos };
+}
+
+// --- v7: Player-Placed 3D Treasure Decorations in the Farm World! ---
+const TREASURE_GLB_MAP = {
+  tr_gold_egg:    'assets/models/food/egg.glb',
+  tr_big_carrot:  'assets/models/food/carrot.glb',
+  tr_apple_pie:   'assets/models/food/apple.glb',
+  tr_galaxy_milk: 'assets/models/food/soda-bottle.glb',
+  tr_dia_corn:    'assets/models/food/corn.glb',
+  tr_star_mush:   'assets/models/nature/mushroom_redGroup.glb',
+  tr_crystal_flw: 'assets/models/nature/flower_purpleA.glb',
+  tr_magic_stew:  'assets/models/food/pot-stew.glb',
+  tr_legend_fish: 'assets/models/food/fish.glb',
+  tr_sunflower:   'assets/models/nature/flower_yellowA.glb',
+};
+
+const RARITY_COLORS = {
+  common:    { base: '#D97706', trim: '#FEF3C7', glow: '#FDE047' },
+  rare:      { base: '#0284C7', trim: '#E0F2FE', glow: '#38BDF8' },
+  epic:      { base: '#7E22CE', trim: '#F3E8FF', glow: '#C084FC' },
+  legendary: { base: '#D97706', trim: '#FEF08A', glow: '#FACC15' },
+};
+
+function createTreasureMedallionTex(THREE, emoji, bgHex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 160;
+  canvas.height = 160;
+  const ctx = canvas.getContext('2d');
+  ctx.beginPath();
+  ctx.arc(80, 80, 68, 0, Math.PI * 2);
+  ctx.fillStyle = bgHex;
+  ctx.fill();
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = '#FFFFFF';
+  ctx.stroke();
+  ctx.font = '82px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, 80, 86);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
+  const root = new THREE.Group();
+  scene.add(root);
+  const byId = new Map(treasureCatalog.map(t => [t.id, t]));
+  const placedMeshes = new Map(); // id -> { group, topObj, ring, popProgress }
+
+  const createPedestal = (item) => {
+    const col = RARITY_COLORS[item.rarity] || RARITY_COLORS.common;
+    const g = new THREE.Group();
+
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.62, 0.78, 0.65, 16),
+      new THREE.MeshStandardMaterial({ color: col.base, roughness: 0.4, metalness: item.rarity === 'legendary' ? 0.55 : 0.15 })
+    );
+    base.position.y = 0.325;
+    base.castShadow = true;
+    base.receiveShadow = true;
+
+    const topPlate = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.68, 0.68, 0.1, 16),
+      new THREE.MeshStandardMaterial({ color: col.trim, roughness: 0.35 })
+    );
+    topPlate.position.y = 0.68;
+
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.85, 1.05, 24),
+      new THREE.MeshBasicMaterial({ color: col.glow, side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.05;
+
+    const topObj = new THREE.Group();
+    topObj.position.y = 1.25;
+
+    const glbUrl = TREASURE_GLB_MAP[item.id];
+    if (glbUrl) {
+      loadGLTF(glbUrl).then((gltf) => {
+        const inst = instantiateGLTF(THREE, gltf, 0.95, 0);
+        topObj.add(inst.holder);
+      }).catch(() => {});
+    } else {
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, item.emoji, col.trim), transparent: true })
+      );
+      sprite.scale.set(1.25, 1.25, 1);
+      topObj.add(sprite);
+    }
+
+    g.add(base, topPlate, ring, topObj);
+    return { group: g, topObj, ring, popProgress: 0.01 };
+  };
+
+  const syncPlaced = (placedList = [], popId = null) => {
+    const keepIds = new Set(placedList.map(p => p.id));
+    // Remove unplaced
+    for (const [id, entry] of placedMeshes.entries()) {
+      if (!keepIds.has(id)) {
+        root.remove(entry.group);
+        placedMeshes.delete(id);
+      }
+    }
+    // Add or move placed
+    placedList.forEach(({ id, x, z }) => {
+      const item = byId.get(id);
+      if (!item) return;
+      let entry = placedMeshes.get(id);
+      if (!entry) {
+        entry = createPedestal(item);
+        root.add(entry.group);
+        placedMeshes.set(id, entry);
+      }
+      entry.group.position.set(x, 0, z);
+      if (id === popId) {
+        entry.popProgress = 0.01;
+        entry.group.scale.setScalar(0.01);
+      }
+    });
+  };
+
+  const update = (t, dt) => {
+    let idx = 0;
+    placedMeshes.forEach((entry) => {
+      idx += 1;
+      if (entry.popProgress < 1) {
+        entry.popProgress = Math.min(1, entry.popProgress + dt * 2.6);
+        const p = entry.popProgress;
+        const s = p < 0.7 ? (p / 0.7) * 1.2 : 1.2 - ((p - 0.7) / 0.3) * 0.2;
+        entry.group.scale.setScalar(Math.max(0.01, s));
+      }
+      entry.topObj.rotation.y = t * 1.5 + idx;
+      entry.topObj.position.y = 1.22 + Math.sin(t * 3 + idx) * 0.1;
+      const rs = 1 + Math.sin(t * 3.5 + idx) * 0.08;
+      entry.ring.scale.set(rs, rs, 1);
+    });
+  };
+
+  return { syncPlaced, update };
 }
