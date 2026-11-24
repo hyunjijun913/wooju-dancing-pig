@@ -49,6 +49,13 @@ export class AudioEngine {
     this.micRaf = null;
     this.autoRec = null;
 
+    // Sustained-speech magic voice gauge (3D Farm RPG)
+    this.gaugeStream = null;
+    this.gaugeSource = null;
+    this.gaugeAnalyser = null;
+    this.gaugeRaf = null;
+    this.gaugeToken = 0;
+
     // Full Mode 4 one-take presentation recorder
     this.rehearsalRec = null;
     this.rehearsalStream = null;
@@ -207,6 +214,7 @@ export class AudioEngine {
     }
     this.clearEchoTimer();
     this._teardownEchoMic(false, null);
+    this.stopVoiceGauge();
     if (this.storyAudio) this.storyAudio.pause();
     if (this.activeCustomAudio) {
       this.activeCustomAudio.onended = null;
@@ -685,6 +693,95 @@ export class AudioEngine {
         }, 350);
       },
     });
+  }
+
+  // --- Sustained-Speech Magic Voice Gauge (3D Farm RPG) ---
+  async startVoiceGauge({
+    onLevel = () => {},
+    onProgress = () => {},
+    onFilled = () => {},
+    onMicDenied = () => {},
+    targetSpeechSec = 1.0,
+  } = {}) {
+    this.stopVoiceGauge();
+    const gToken = ++this.gaugeToken;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      onMicDenied();
+      return false;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (gToken !== this.gaugeToken) {
+        stream.getTracks().forEach(t => t.stop());
+        return false;
+      }
+      this.gaugeStream = stream;
+      const ctx = this.getAudioCtx();
+      if (!ctx) {
+        onMicDenied();
+        return false;
+      }
+      this.gaugeSource = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      this.gaugeSource.connect(analyser);
+      this.gaugeAnalyser = analyser;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      let spokenSec = 0;
+      let filled = false;
+      let lastTs = performance.now();
+
+      const tick = (now) => {
+        if (!this.gaugeAnalyser || gToken !== this.gaugeToken) return;
+        const dt = Math.min(0.1, Math.max(0, (now - lastTs) / 1000));
+        lastTs = now;
+        this.gaugeAnalyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) {
+          const v = (data[i] - 128) / 128;
+          sum += v * v;
+        }
+        const rms = Math.sqrt(sum / data.length);
+        const level = Math.min(1, rms * 5.0);
+        onLevel(level);
+
+        // Require sustained speech energy (prevents single-frame scream bypass)
+        if (level > 0.14 && !filled) {
+          spokenSec += dt;
+          const pct = Math.min(100, Math.round((spokenSec / targetSpeechSec) * 100));
+          onProgress(pct);
+          if (spokenSec >= targetSpeechSec) {
+            filled = true;
+            this.playChimeSFX();
+            onFilled();
+          }
+        }
+        this.gaugeRaf = requestAnimationFrame(tick);
+      };
+      this.gaugeRaf = requestAnimationFrame(tick);
+      return true;
+    } catch (_) {
+      onMicDenied();
+      return false;
+    }
+  }
+
+  stopVoiceGauge() {
+    this.gaugeToken += 1;
+    if (this.gaugeRaf) {
+      cancelAnimationFrame(this.gaugeRaf);
+      this.gaugeRaf = null;
+    }
+    if (this.gaugeSource) {
+      try { this.gaugeSource.disconnect(); } catch (_) {}
+      this.gaugeSource = null;
+    }
+    this.gaugeAnalyser = null;
+    if (this.gaugeStream) {
+      this.gaugeStream.getTracks().forEach(t => t.stop());
+      this.gaugeStream = null;
+    }
   }
 
   // --- Mode 4 One-Take Full Rehearsal Recorder ---

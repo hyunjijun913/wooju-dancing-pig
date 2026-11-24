@@ -647,6 +647,244 @@ body.farm-fullscreen .farm-card {
 .farm-finale-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
 
 /* ===========================
+   v3: 3D Farm RPG Challenge, Magic Gauge, Wardrobe & Parade HUD
+   =========================== */
+.farm-parade-btn {
+  background: rgba(255, 255, 255, 0.92);
+  color: #78350F;
+  border: 2.5px solid #F59E0B;
+}
+.farm-parade-btn.parade-on {
+  background: linear-gradient(135deg, #FEF08A, #FACC15);
+  color: #78350F;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+}
+.ribbon-chip.mastered {
+  background: linear-gradient(135deg, #FEF08A, #FDE047);
+  border-color: #D97706;
+}
+.pocket-new-dot {
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  background: #EF4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.4);
+  animation: pulseReady 1.2s infinite;
+}
+
+.farm-dlg-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #FDE68A;
+  background: #FFFBEB;
+  color: #92400E;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.farm-tier-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  padding-right: 34px;
+}
+.farm-tier-tab {
+  flex: 1;
+  border: 2px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #475569;
+  border-radius: 14px;
+  padding: 7px 6px;
+  font-size: 12.5px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.12s, background 0.15s, border-color 0.15s;
+}
+.farm-tier-tab.active {
+  background: linear-gradient(135deg, #EEF2FF, #E0E7FF);
+  border-color: #6366F1;
+  color: #3730A3;
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.18);
+}
+.farm-tier-tab[data-tier-mode="memory"].active {
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  border-color: #D97706;
+  color: #78350F;
+}
+.farm-dlg-stars {
+  font-size: 12px;
+  font-weight: 900;
+  color: #B45309;
+  margin-bottom: 2px;
+}
+.farm-dlg-audio-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.farm-magic-gauge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #F1F5F9;
+  border: 2px solid #CBD5E1;
+  border-radius: 16px;
+  padding: 8px 12px;
+  transition: background 0.2s, border-color 0.2s;
+}
+.farm-magic-gauge.filled {
+  background: #DCFCE7;
+  border-color: #22C55E;
+}
+.magic-label {
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #334155;
+  white-space: nowrap;
+}
+.farm-magic-gauge.filled .magic-label { color: #15803D; }
+.magic-track {
+  flex: 1;
+  height: 12px;
+  background: rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 64px;
+}
+.magic-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #38BDF8, #6366F1, #FACC15);
+  border-radius: 999px;
+  transition: width 0.08s linear;
+}
+.farm-magic-gauge.filled .magic-fill {
+  background: linear-gradient(90deg, #22C55E, #4ADE80, #FACC15);
+}
+.magic-pct {
+  font-size: 12.5px;
+  font-weight: 900;
+  color: #4F46E5;
+  min-width: 34px;
+  text-align: right;
+}
+
+.farm-judge-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.farm-judge-btn {
+  min-height: 52px;
+  font-size: 14.5px;
+  padding: 10px 10px;
+}
+.btn-crown {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(217, 119, 6, 0.32);
+}
+.farm-judge-btn.pulse-ready {
+  animation: pulseReady 0.9s infinite;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.35), 0 8px 18px rgba(15, 23, 42, 0.2);
+}
+@keyframes pulseReady {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+/* Bag Codex + Wardrobe Tabs */
+.bag-tab-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.bag-tab {
+  border: 2px solid #E2E8F0;
+  background: #F8FAFC;
+  color: #475569;
+  border-radius: 14px;
+  padding: 10px 8px;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.bag-tab.active {
+  background: linear-gradient(135deg, #FEF08A, #FDE047);
+  border-color: #F59E0B;
+  color: #78350F;
+}
+.bag-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #64748B;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.bag-slot-stars { font-size: 11px; line-height: 1; }
+.bag-slot.mastered {
+  border-color: #F59E0B;
+  background: linear-gradient(180deg, #FEF9C3, #FDE68A);
+}
+
+.farm-gear-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.gear-card {
+  border: 2px dashed #CBD5E1;
+  background: #F8FAFC;
+  border-radius: 18px;
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+.gear-card.unlocked {
+  border-style: solid;
+  border-color: #818CF8;
+  background: #EEF2FF;
+  cursor: pointer;
+  opacity: 1;
+  transition: transform 0.14s;
+}
+.gear-card.unlocked:active { transform: scale(0.96); }
+.gear-card.equipped {
+  border-color: #F59E0B;
+  background: linear-gradient(135deg, #FEF9C3, #FDE68A);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.25);
+}
+.gear-ico { font-size: 36px; line-height: 1.1; }
+.gear-name { font-size: 14px; font-weight: 900; color: #1E293B; }
+.gear-status { font-size: 12px; font-weight: 800; color: #475569; }
+.gear-card.equipped .gear-status { color: #B45309; }
+
+@media (max-width: 520px) {
+  .farm-magic-gauge { flex-wrap: wrap; }
+  .magic-label { width: 100%; }
+  .farm-judge-btn { font-size: 13px; }
+}
+
+/* ===========================
    1~4단계: Main Learning Card
    =========================== */
 .stage-card {

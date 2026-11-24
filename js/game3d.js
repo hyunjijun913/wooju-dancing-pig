@@ -1,8 +1,22 @@
-// 0단계: Fullscreen 100% 3D Animal Crossing-style Mini Farm Adventure
-// Features: Fullscreen entry + auto opening dialogue, 100% 3D characters & world,
-// animated 3D dashed guiding path, and real item collection into Wooju's Inventory Bag!
-import { FARM_SPOTS, BASE_CARDS, resolveSpotInteraction } from './data.js';
-import { buildWooju3D, buildSpotCharacter3D, buildFarmWorld3D } from './models3d.js';
+// 0단계 (v3): Living 3D Farm RPG — Speak English to Grow Your Farm, Collect 3-Star Crowns,
+// Lead a 3D Animal Parade, and Unlock & Equip 3D Wooju Avatar Gear!
+import {
+  FARM_SPOTS,
+  BASE_CARDS,
+  WOOJU_GEAR,
+  FARM_STORAGE_KEY,
+  resolveSpotInteraction,
+  computeFarmProgress,
+  applySpotMastery,
+  getUnlockedGear,
+  countMasteredSpots,
+} from './data.js';
+import {
+  buildWooju3D,
+  buildSpotCharacter3D,
+  buildFarmWorld3D,
+  buildPartyRewards3D,
+} from './models3d.js';
 
 let THREE_MOD = null;
 async function loadThree() {
@@ -24,7 +38,7 @@ function createBadgeTexture(THREE, text, bg = '#FACC15', fg = '#1E293B') {
   ctx.strokeStyle = '#FFFFFF';
   ctx.stroke();
   ctx.fillStyle = fg;
-  ctx.font = 'bold 64px sans-serif';
+  ctx.font = 'bold 58px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, 64, 68);
@@ -36,6 +50,7 @@ function createBadgeTexture(THREE, text, bg = '#FACC15', fg = '#1E293B') {
 export class FarmGame3D {
   constructor({
     audioEngine,
+    getTotalStars = () => 0,
     onRewardStar = () => {},
     onConfetti = () => {},
     onToast = () => {},
@@ -44,6 +59,7 @@ export class FarmGame3D {
     onExitFullscreen = () => {},
   } = {}) {
     this.audio = audioEngine;
+    this.getTotalStars = getTotalStars;
     this.onRewardStar = onRewardStar;
     this.onConfetti = onConfetti;
     this.onToast = onToast;
@@ -59,24 +75,34 @@ export class FarmGame3D {
     this.scene = null;
     this.camera = null;
 
-    // Game progression & bag inventory
-    this.currentSpotIndex = 0; // 0..11 (12 = finished)
-    this.collectedSpotIds = new Set();
+    // v3 Persistent RPG state
+    this.mastery = {}; // { [spotId]: 0..3 }
+    this.equippedGear = {}; // { [gearId]: boolean }
+    this.paradeEnabled = true;
+    this.bagTab = 'collection'; // 'collection' | 'wardrobe'
+    this.hasNewGearBadge = false;
+
+    // Runtime dialogue & navigation state
+    this.currentSpotIndex = 0;
     this.isListening = false;
     this.activeDialogueSpot = null;
-    this.dialogueFinished = false;
+    this.dialogueMode = 'repeat'; // 'repeat' | 'hint' | 'memory'
+    this.dialogueListened = false;
+    this.voiceFilled = false;
     this.pendingSpotTrigger = null;
 
-    // Wooju 3D avatar movement
+    // Wooju 3D avatar movement & parade breadcrumb trail
     this.avatarPos = { x: 0, z: 15.2 };
     this.avatarAngle = Math.PI;
     this.walkTarget = null;
     this.joyVec = { x: 0, z: 0 };
     this.joyActive = false;
+    this.woojuTrail = [];
 
     // 3D refs
     this.THREE = null;
     this.wooju = null;
+    this.partyRewards = null;
     this.spotEntries = [];
     this.clouds = [];
     this.activeRing = null;
@@ -90,6 +116,32 @@ export class FarmGame3D {
 
     this._onResize = null;
     this._onPointerDown = null;
+    this._typeTimer = null;
+  }
+
+  _loadRpgState() {
+    try {
+      const raw = localStorage.getItem(FARM_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        this.mastery = parsed.mastery && typeof parsed.mastery === 'object' ? parsed.mastery : {};
+        this.equippedGear = parsed.equippedGear && typeof parsed.equippedGear === 'object' ? parsed.equippedGear : {};
+      }
+    } catch (_) {
+      this.mastery = {};
+      this.equippedGear = {};
+    }
+    const prog = computeFarmProgress(this.mastery);
+    this.currentSpotIndex = prog.nextSpotIndex;
+  }
+
+  _saveRpgState() {
+    try {
+      localStorage.setItem(FARM_STORAGE_KEY, JSON.stringify({
+        mastery: this.mastery,
+        equippedGear: this.equippedGear,
+      }));
+    } catch (_) {}
   }
 
   async mount(containerEl) {
@@ -98,9 +150,11 @@ export class FarmGame3D {
     this.mounted = true;
     document.body.classList.add('farm-fullscreen');
 
+    this._loadRpgState();
     this._renderShell();
     this._renderRibbon();
     this._updateBagBadge();
+    this._updateParadeBtn();
     this._bindJoystick();
 
     try {
@@ -131,10 +185,12 @@ export class FarmGame3D {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
+    clearInterval(this._typeTimer);
+    this._typeTimer = null;
     this.audio.stopAll();
     this.isListening = false;
     this.activeDialogueSpot = null;
-    this.dialogueFinished = false;
+    this.dialogueListened = false;
     this.pendingSpotTrigger = null;
     this.walkTarget = null;
     this.joyActive = false;
@@ -164,31 +220,53 @@ export class FarmGame3D {
     this.spotEntries = [];
     this.dashedTrail = [];
     this.clouds = [];
+    this.partyRewards = null;
     this.scene = null;
     this.camera = null;
   }
 
-  resetProgress() {
+  resetProgress(skipConfirm = false) {
+    if (!skipConfirm && typeof window !== 'undefined' && window.confirm) {
+      const ok = window.confirm('지금까지 모은 3D 농장 선물과 3성 왕관 기록을 처음부터 다시 시작할까요?');
+      if (!ok) return;
+    }
     this.audio.stopAll();
+    this.mastery = {};
+    this.equippedGear = {};
     this.currentSpotIndex = 0;
-    this.collectedSpotIds.clear();
+    this._saveRpgState();
+
     this.isListening = false;
     this.activeDialogueSpot = null;
-    this.dialogueFinished = false;
+    this.dialogueListened = false;
     this.pendingSpotTrigger = null;
     this.avatarPos = { x: 0, z: 15.2 };
+    this.woojuTrail = [];
     this.walkTarget = null;
+
     if (this.wooju) {
       this.wooju.group.position.set(this.avatarPos.x, 0, this.avatarPos.z);
+      this.wooju.setGear(this.equippedGear);
     }
+    if (this.partyRewards) this.partyRewards.syncMastery(this.mastery);
+
+    this.spotEntries.forEach((m) => {
+      m.curX = m.homeX;
+      m.curZ = m.homeZ;
+      m.group.position.x = m.homeX;
+      m.group.position.z = m.homeZ;
+      if (m.setMasteryVisual) m.setMasteryVisual(0);
+    });
+
     this._hideDialogue();
     this._hideFinale();
     this._closeBagModal();
     this._renderRibbon();
     this._updateBagBadge();
+    this._updateParadeBtn();
     this._updateSpotVisuals();
-    this.onToast('🗺️ 처음부터 다시 농장 탐험을 시작해요!');
-    // Automatically replay opening intro!
+    this.onToast('🗺️ 처음부터 다시 3D 농장 모험을 시작해요!');
+
     if (this.entered) {
       setTimeout(() => {
         if (this.mounted && this.currentSpotIndex === 0) this._openDialogue(0, false);
@@ -197,12 +275,18 @@ export class FarmGame3D {
   }
 
   _renderShell() {
+    const prog = computeFarmProgress(this.mastery);
+    const entrySub = prog.metCount > 0
+      ? `지금까지 선물 ${prog.metCount}/12개 · 👑 혼자 외우기 ${prog.masteredCount}마리 달성 중!`
+      : '동물 친구들의 영어를 따라 말하고 외우면<br/>3D 파티장 선물과 황금 왕관, 우주 장비가 생겨나요!';
+
     this.container.innerHTML = `
       <div class="farm-stage farm-stage-full" id="farmCanvasWrap">
         <!-- Floating Fullscreen Top HUD -->
         <div class="farm-float-top">
           <button class="farm-pill-btn farm-exit-btn" id="farmExitBtn">⬅️ 학습 메뉴</button>
           <div class="farm-ribbon" id="farmRibbon" aria-label="스토리 순서 띠"></div>
+          <button class="farm-pill-btn farm-parade-btn" id="farmParadeBtn" title="3성 동물 기차" style="display:none;">🐾 기차 ON</button>
           <button class="farm-pill-btn farm-reset-btn" id="farmResetBtn" title="처음부터">🔄</button>
         </div>
 
@@ -213,12 +297,12 @@ export class FarmGame3D {
           <span id="farmHoverText">💬 말 걸기!</span>
         </button>
 
-        <!-- Entry Splash Overlay (tapping once unlocks iPad Safari audio & auto-starts Opening #1~#3!) -->
+        <!-- Entry Splash Overlay -->
         <div class="farm-entry-overlay" id="farmEntryOverlay" style="${this.entered ? 'display:none;' : 'display:flex;'}">
           <div class="farm-entry-card">
-            <div class="farm-entry-emoji">🏡🐷✨</div>
-            <h2>우주의 3D 농장 탐험</h2>
-            <p>The Dancing Pig · 동물의숲처럼 걸어 다니며<br/>순서대로 동물 친구들을 만나 선물을 모아보세요!</p>
+            <div class="farm-entry-emoji">🏡🐷👑</div>
+            <h2>우주의 3D 농장 모험</h2>
+            <p>${entrySub}</p>
             <button class="big-btn btn-star farm-enter-btn" id="farmEnterBtn">🚀 농장 들어가기!</button>
             <button class="mini-btn" id="farmEntryExitBtn" style="margin-top:4px;">⬅️ 1~4단계 학습 메뉴로 가기</button>
           </div>
@@ -229,51 +313,92 @@ export class FarmGame3D {
           <div class="farm-joy-knob" id="farmJoyKnob"></div>
         </div>
 
-        <!-- Prominent Bottom-Right 🎒 Inventory Bag Button (Animal Crossing Pocket) -->
-        <button class="farm-pocket-fab" id="farmBagBtn" aria-label="내 가방 열기">
+        <!-- Prominent Bottom-Right 🎒 Collection & Wardrobe FAB -->
+        <button class="farm-pocket-fab" id="farmBagBtn" aria-label="도감과 옷장 열기">
+          <span class="pocket-new-dot" id="farmGearNewDot" style="display:none;">NEW!</span>
           <span class="pocket-ico">🎒</span>
-          <span class="pocket-label">내 가방 <b id="farmBagCount">0/12</b></span>
-          <span class="pocket-preview" id="farmBagPreview"></span>
+          <span class="pocket-label">도감·옷장 <b id="farmBagCount">0/12</b></span>
+          <span class="pocket-preview" id="farmBagPreview">👑 0마리</span>
         </button>
 
-        <!-- Animal Crossing-style Speech Bubble Dialogue Overlay -->
+        <!-- v3 RPG 3-Tier Speaking Challenge Dialogue -->
         <div class="farm-dialogue ac-bubble" id="farmDialogue" style="display:none;">
           <div class="ac-name-tag" id="farmDlgName">🐔 닭</div>
+          <button class="farm-dlg-close" id="farmDlgCloseBtn" aria-label="닫기">✕</button>
+
+          <!-- 3 Challenge Tier Tabs -->
+          <div class="farm-tier-tabs" id="farmTierTabs">
+            <button class="farm-tier-tab active" data-tier-mode="repeat">☀️ 따라하기 ⭐</button>
+            <button class="farm-tier-tab" data-tier-mode="hint">🌅 힌트·주고받기 ⭐⭐</button>
+            <button class="farm-tier-tab" data-tier-mode="memory">🌙 혼자 외우기 👑</button>
+          </div>
+
           <div class="farm-dlg-head">
             <img id="farmDlgPortrait" class="farm-dlg-portrait" alt="" />
             <div class="farm-dlg-meta">
+              <div class="farm-dlg-stars" id="farmDlgStars">☆☆☆</div>
               <div class="farm-dlg-en" id="farmDlgEn"></div>
               <div class="farm-dlg-ko" id="farmDlgKo"></div>
             </div>
-            <button class="mini-btn" id="farmDlgReplayBtn">🔊 다시 듣기</button>
+            <div class="farm-dlg-audio-btns">
+              <button class="mini-btn" id="farmDlgReplayBtn">🔊 듣기</button>
+              <button class="mini-btn" id="farmDlgChunkBtn" style="display:none;">✂️ 2단 콤보</button>
+            </div>
           </div>
+
           <div class="farm-dlg-icons" id="farmDlgIcons"></div>
-          <button class="big-btn btn-star farm-dlg-next" id="farmDlgActionBtn" disabled>🎧 원어민 이야기를 끝까지 들어요...</button>
+
+          <!-- Live Sustained-Speech Magic Gauge -->
+          <div class="farm-magic-gauge" id="farmMagicGauge">
+            <span class="magic-label" id="farmMagicLabel">🎙️ 영어로 말하면 마법이 차올라요!</span>
+            <div class="magic-track">
+              <div class="magic-fill" id="farmMagicFill"></div>
+            </div>
+            <span class="magic-pct" id="farmMagicPct">0%</span>
+          </div>
+
+          <!-- Hybrid Judge / Reward Buttons -->
+          <div class="farm-judge-row">
+            <button class="big-btn btn-star farm-judge-btn" id="farmJudgeNormalBtn">⭐ 따라 말했어요!</button>
+            <button class="big-btn btn-crown farm-judge-btn" id="farmJudgeCrownBtn">👑 혼자 다 외웠어요!</button>
+          </div>
         </div>
 
-        <!-- 🎒 Wooju's Inventory Bag Modal -->
+        <!-- 🎒 Collection Codex + 👕 Wooju 3D Wardrobe Modal -->
         <div class="farm-bag-modal" id="farmBagModal" style="display:none;">
           <div class="farm-bag-sheet">
             <div class="modal-head">
-              <h2>🎒 우주의 농장 가방 (<span id="farmBagModalCount">0/12</span>)</h2>
+              <h2>🎒 우주의 농장 도감 &amp; 옷장</h2>
               <button class="close-btn" id="farmBagCloseBtn">✕</button>
             </div>
-            <p style="margin:0 0 10px;font-size:13px;color:#64748B;font-weight:600;">
-              지금까지 모은 선물이에요! 선물을 톡! 누르면 그 친구의 영어 이야기를 다시 들려줘요.
-            </p>
-            <div class="farm-bag-grid" id="farmBagGrid"></div>
+            <div class="bag-tab-bar">
+              <button class="bag-tab active" data-bag-tab="collection" id="bagTabCollection">🎒 3성 도감 (<span id="farmBagModalCount">0/12</span>)</button>
+              <button class="bag-tab" data-bag-tab="wardrobe" id="bagTabWardrobe">👕 우주 옷장 (<span id="farmGearModalCount">0/5</span>)</button>
+            </div>
+            <div id="farmBagCollectionView">
+              <p class="bag-hint">
+                선물을 톡! 누르면 그 친구의 영어 이야기를 들려줘요. <b>👑 3성(혼자 외우기)</b>을 달성하면 동물 친구가 우주 뒤를 기차처럼 따라다녀요!
+              </p>
+              <div class="farm-bag-grid" id="farmBagGrid"></div>
+            </div>
+            <div id="farmBagWardrobeView" style="display:none;">
+              <p class="bag-hint">
+                별과 👑 혼자 외우기를 모으면 3D 우주 캐릭터에 직접 장착하는 멋진 장비가 열려요!
+              </p>
+              <div class="farm-gear-grid" id="farmGearGrid"></div>
+            </div>
           </div>
         </div>
 
         <!-- Finale Celebration Overlay -->
         <div class="farm-finale" id="farmFinale" style="display:none;">
           <div style="font-size:58px;">🐷💃🎉</div>
-          <h3>농장 탐험 대성공!!</h3>
-          <p>가방에 12개의 선물을 모두 모아서 브라운 아저씨를 활짝 웃게 해줬어요!</p>
+          <h3>12개 파티 선물 완성!!</h3>
+          <p>중앙 파티 테이블과 무대가 완성됐어요! 이제 동물 친구들에게 <b>👑 혼자 외우기(3성)</b>에 도전해서 황금 왕관 기차를 만들어 볼까요?</p>
           <div class="farm-finale-actions">
-            <button class="big-btn btn-echo" id="farmFinaleQuizBtn">🧩 방금 만난 순서 퀴즈!</button>
-            <button class="big-btn btn-listen" id="farmFinaleParrotBtn">🦜 2단계 앵무새로 말하기</button>
-            <button class="big-btn btn-slow" id="farmFinaleAgainBtn">🔄 한 번 더 탐험하기</button>
+            <button class="big-btn btn-star" id="farmFinaleRoamBtn">🐾 자유 산책 &amp; 3성 도전!</button>
+            <button class="big-btn btn-echo" id="farmFinaleQuizBtn">🧩 순서 퀴즈</button>
+            <button class="big-btn btn-listen" id="farmFinaleParrotBtn">🎤 4단계 발표회 통녹음</button>
           </div>
         </div>
       </div>
@@ -281,15 +406,32 @@ export class FarmGame3D {
 
     this.container.querySelector('#farmExitBtn').addEventListener('click', () => this.onExitFullscreen());
     this.container.querySelector('#farmEntryExitBtn').addEventListener('click', () => this.onExitFullscreen());
-    this.container.querySelector('#farmResetBtn').addEventListener('click', () => this.resetProgress());
+    this.container.querySelector('#farmResetBtn').addEventListener('click', () => this.resetProgress(false));
     this.container.querySelector('#farmBagBtn').addEventListener('click', () => this._openBagModal());
     this.container.querySelector('#farmBagCloseBtn').addEventListener('click', () => this._closeBagModal());
+    this.container.querySelector('#farmDlgCloseBtn').addEventListener('click', () => this._hideDialogue());
+
+    this.container.querySelector('#farmParadeBtn').addEventListener('click', () => {
+      this.paradeEnabled = !this.paradeEnabled;
+      this._updateParadeBtn();
+      this.onToast(this.paradeEnabled
+        ? '🐾 3성 동물 친구들이 우주 뒤를 기차처럼 따라와요!'
+        : '🏡 동물 친구들이 자기 자리로 돌아가 쉬어요!');
+    });
+
+    this.container.querySelectorAll('.bag-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.bagTab = btn.dataset.bagTab;
+        this._renderBagModalContent();
+      });
+    });
+
+    this.container.querySelector('#farmFinaleRoamBtn').addEventListener('click', () => this._hideFinale());
     this.container.querySelector('#farmFinaleQuizBtn').addEventListener('click', () => {
       this.onExitFullscreen();
       this.onOpenSequenceQuiz();
     });
     this.container.querySelector('#farmFinaleParrotBtn').addEventListener('click', () => this.onGoToParrotMode());
-    this.container.querySelector('#farmFinaleAgainBtn').addEventListener('click', () => this.resetProgress());
 
     this.container.querySelector('#farmEnterBtn').addEventListener('click', () => {
       this.audio.unlock();
@@ -298,20 +440,45 @@ export class FarmGame3D {
       if (overlay) overlay.style.display = 'none';
       if (this.currentSpotIndex === 0) {
         this._openDialogue(0, false);
+      } else {
+        this.onToast('🏡 우주의 농장에 돌아왔어요! 친구들과 3성 왕관에 도전해 볼까요!');
       }
     });
   }
 
+  _updateParadeBtn() {
+    const btn = this.container?.querySelector('#farmParadeBtn');
+    if (!btn) return;
+    const masters = countMasteredSpots(this.mastery);
+    if (masters > 0) {
+      btn.style.display = 'inline-flex';
+      btn.textContent = this.paradeEnabled ? `🐾 기차 ${masters}` : `🐾 기차 OFF`;
+      btn.classList.toggle('parade-on', this.paradeEnabled);
+    } else {
+      btn.style.display = 'none';
+    }
+  }
+
   _updateBagBadge() {
-    const countText = `${this.collectedSpotIds.size}/${FARM_SPOTS.length}`;
+    const prog = computeFarmProgress(this.mastery);
+    const unlockedGear = getUnlockedGear(this.mastery, this.getTotalStars());
+    const countText = `${prog.metCount}/${FARM_SPOTS.length}`;
     const countEl = this.container?.querySelector('#farmBagCount');
     const modalCountEl = this.container?.querySelector('#farmBagModalCount');
+    const gearCountEl = this.container?.querySelector('#farmGearModalCount');
     const previewEl = this.container?.querySelector('#farmBagPreview');
+    const newDot = this.container?.querySelector('#farmGearNewDot');
+
     if (countEl) countEl.textContent = countText;
     if (modalCountEl) modalCountEl.textContent = countText;
+    if (gearCountEl) gearCountEl.textContent = `${unlockedGear.length}/${WOOJU_GEAR.length}`;
     if (previewEl) {
-      const emojis = FARM_SPOTS.filter(s => this.collectedSpotIds.has(s.id)).map(s => s.itemEmoji);
-      previewEl.textContent = emojis.length > 0 ? emojis.slice(-4).join('') : '비어있어요';
+      previewEl.textContent = prog.masteredCount > 0
+        ? `👑 ${prog.masteredCount} · 👕 ${unlockedGear.length}`
+        : `⭐ ${prog.totalMasteryStars} · 👕 ${unlockedGear.length}`;
+    }
+    if (newDot) {
+      newDot.style.display = this.hasNewGearBadge ? 'inline-block' : 'none';
     }
   }
 
@@ -344,36 +511,98 @@ export class FarmGame3D {
     }, 680);
   }
 
-  _openBagModal() {
+  _openBagModal(initialTab = null) {
+    if (initialTab) this.bagTab = initialTab;
+    else if (this.hasNewGearBadge) this.bagTab = 'wardrobe';
+    this.hasNewGearBadge = false;
+    this._updateBagBadge();
+    this._renderBagModalContent();
     const modal = this.container?.querySelector('#farmBagModal');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  _renderBagModalContent() {
+    const colView = this.container?.querySelector('#farmBagCollectionView');
+    const warView = this.container?.querySelector('#farmBagWardrobeView');
+    const colTab = this.container?.querySelector('#bagTabCollection');
+    const warTab = this.container?.querySelector('#bagTabWardrobe');
+    if (!colView || !warView) return;
+
+    const isWardrobe = this.bagTab === 'wardrobe';
+    colView.style.display = isWardrobe ? 'none' : 'block';
+    warView.style.display = isWardrobe ? 'block' : 'none';
+    colTab?.classList.toggle('active', !isWardrobe);
+    warTab?.classList.toggle('active', isWardrobe);
+
     const grid = this.container?.querySelector('#farmBagGrid');
-    if (!modal || !grid) return;
+    if (grid && !isWardrobe) {
+      grid.innerHTML = FARM_SPOTS.map((spot, idx) => {
+        const tier = this.mastery[spot.id] || 0;
+        const got = tier >= 1;
+        const starStr = tier === 3 ? '👑👑👑' : (tier === 2 ? '⭐⭐☆' : (tier === 1 ? '⭐☆☆' : '☆☆☆'));
+        return `
+          <button class="bag-slot ${got ? 'got' : ''} ${tier >= 3 ? 'mastered' : ''}" data-bag-idx="${idx}" ${got ? '' : 'disabled'}>
+            <div class="bag-slot-stars">${starStr}</div>
+            <div class="bag-slot-ico">${got ? spot.itemEmoji : '❓'}</div>
+            <div class="bag-slot-name">${got ? spot.itemLabel : `${idx + 1}번 선물`}</div>
+            <div class="bag-slot-who">${got ? `${spot.emoji} ${spot.name}` : '아직 못 만났어요'}</div>
+          </button>
+        `;
+      }).join('');
 
-    grid.innerHTML = FARM_SPOTS.map((spot, idx) => {
-      const got = this.collectedSpotIds.has(spot.id);
-      return `
-        <button class="bag-slot ${got ? 'got' : ''}" data-bag-idx="${idx}" ${got ? '' : 'disabled'}>
-          <div class="bag-slot-ico">${got ? spot.itemEmoji : '❓'}</div>
-          <div class="bag-slot-name">${got ? spot.itemLabel : `${idx + 1}번 선물`}</div>
-          <div class="bag-slot-who">${got ? `${spot.emoji} ${spot.name}` : '아직 못 만났어요'}</div>
-        </button>
-      `;
-    }).join('');
-
-    grid.querySelectorAll('.bag-slot.got').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const idx = parseInt(btn.dataset.bagIdx, 10);
-        const spot = FARM_SPOTS[idx];
-        const card = BASE_CARDS.find(c => c.id === spot.cardIds[0]);
-        if (card) {
-          this.audio.unlock();
-          this.audio.playSegment(card.start, card.end);
-          this.onToast(`${spot.emoji} ${spot.name}: ${spot.itemEmoji} ${spot.itemLabel}!`);
-        }
+      grid.querySelectorAll('.bag-slot.got').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.bagIdx, 10);
+          const spot = FARM_SPOTS[idx];
+          const card = BASE_CARDS.find(c => c.id === spot.cardIds[0]);
+          if (card) {
+            this.audio.unlock();
+            this.audio.playSegment(card.start, card.end);
+            this.onToast(`${spot.emoji} ${spot.name}: ${spot.itemEmoji} ${spot.itemLabel}!`);
+          }
+        });
       });
-    });
+    }
 
-    modal.style.display = 'flex';
+    const gearGrid = this.container?.querySelector('#farmGearGrid');
+    if (gearGrid && isWardrobe) {
+      const totalStars = this.getTotalStars();
+      const masters = countMasteredSpots(this.mastery);
+      const unlockedSet = new Set(getUnlockedGear(this.mastery, totalStars));
+
+      gearGrid.innerHTML = WOOJU_GEAR.map((g) => {
+        const unlocked = unlockedSet.has(g.id);
+        const equipped = unlocked && Boolean(this.equippedGear[g.id]);
+        const curVal = g.reqType === 'stars' ? totalStars : masters;
+        const progText = unlocked
+          ? (equipped ? '✨ 장착 중!' : '👆 눌러서 장착!')
+          : `${g.desc} (${Math.min(curVal, g.reqCount)}/${g.reqCount})`;
+        return `
+          <button class="gear-card ${unlocked ? 'unlocked' : 'locked'} ${equipped ? 'equipped' : ''}" data-gear-id="${g.id}" ${unlocked ? '' : 'disabled'}>
+            <div class="gear-ico">${unlocked ? g.emoji : '🔒'}</div>
+            <div class="gear-name">${g.name}</div>
+            <div class="gear-status">${progText}</div>
+          </button>
+        `;
+      }).join('');
+
+      gearGrid.querySelectorAll('.gear-card.unlocked').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.gearId;
+          this.equippedGear[id] = !this.equippedGear[id];
+          this._saveRpgState();
+          if (this.wooju?.setGear) this.wooju.setGear(this.equippedGear);
+          this.audio.playChimeSFX();
+          const g = WOOJU_GEAR.find(x => x.id === id);
+          if (g) {
+            this.onToast(this.equippedGear[id]
+              ? `${g.emoji} ${g.name} 장착 완료! 우주 캐릭터를 보세요!`
+              : `${g.emoji} ${g.name}을 벗었어요!`);
+          }
+          this._renderBagModalContent();
+        });
+      });
+    }
   }
 
   _closeBagModal() {
@@ -385,13 +614,16 @@ export class FarmGame3D {
     const ribbon = this.container?.querySelector('#farmRibbon');
     if (!ribbon) return;
     ribbon.innerHTML = FARM_SPOTS.map((spot, idx) => {
-      const done = idx < this.currentSpotIndex;
+      const tier = this.mastery[spot.id] || 0;
+      const done = tier >= 1;
+      const mastered = tier >= 3;
       const active = idx === this.currentSpotIndex;
-      const cls = ['ribbon-chip', done ? 'done' : '', active ? 'active' : ''].join(' ');
+      const cls = ['ribbon-chip', done ? 'done' : '', mastered ? 'mastered' : '', active ? 'active' : ''].join(' ');
+      const badge = mastered ? '👑' : (done ? spot.itemEmoji : String(idx + 1));
       return `
         <button class="${cls}" data-spot-idx="${idx}" title="${idx + 1}. ${spot.name}">
           <span class="rb-emo">${spot.emoji}</span>
-          ${done ? `<span class="rb-item">${spot.itemEmoji}</span>` : `<span class="rb-num">${idx + 1}</span>`}
+          <span class="${done ? 'rb-item' : 'rb-num'}">${badge}</span>
         </button>
       `;
     }).join('');
@@ -413,11 +645,14 @@ export class FarmGame3D {
 
     const guide = this.container.querySelector('#farmGuidePill');
     if (guide) {
+      const masters = countMasteredSpots(this.mastery);
       if (this.currentSpotIndex < FARM_SPOTS.length) {
         const next = FARM_SPOTS[this.currentSpotIndex];
-        guide.textContent = `👉 점선 길을 따라 ${this.currentSpotIndex + 1}번 ${next.emoji} ${next.name}에게 가볼까요!`;
+        guide.textContent = `👉 점선 길을 따라 ${this.currentSpotIndex + 1}번 ${next.emoji} ${next.name}에게 가서 영어로 말해요!`;
+      } else if (masters < FARM_SPOTS.length) {
+        guide.textContent = `👑 혼자 외우기 ${masters}/12마리! 친구에게 말 걸어 황금 왕관 동물 기차를 모아보세요!`;
       } else {
-        guide.textContent = '🏆 12개 선물 완성! 가방을 열거나 농장을 자유롭게 산책해 보세요!';
+        guide.textContent = '🏆 12마리 모두 👑 황금 왕관 완성!! 우주는 최고의 영어 마법사!';
       }
     }
   }
@@ -495,7 +730,6 @@ export class FarmGame3D {
     this.renderer.domElement.className = 'farm-canvas';
     wrap.prepend(this.renderer.domElement);
 
-    // Warm golden-hour Animal Crossing lighting with soft real shadows
     this.scene.add(new THREE.HemisphereLight('#FFFDF5', '#68C456', 0.95));
     const dir = new THREE.DirectionalLight('#FFF5D6', 1.35);
     dir.position.set(16, 26, 18);
@@ -511,7 +745,6 @@ export class FarmGame3D {
     dir.shadow.bias = -0.0005;
     this.scene.add(dir);
 
-    // Subtle warm bounce rim light from opposite side
     const fill = new THREE.DirectionalLight('#FFE4B5', 0.35);
     fill.position.set(-14, 10, -12);
     this.scene.add(fill);
@@ -524,12 +757,17 @@ export class FarmGame3D {
     this.groundMesh = world.groundMesh;
     this.clouds = world.clouds;
 
-    // 2. 100% 3D Wooju Explorer Avatar
+    // 1b. v3 Living Party Feast & 3D Farm Rewards (syncs immediately with saved mastery!)
+    this.partyRewards = buildPartyRewards3D(THREE, this.scene);
+    this.partyRewards.syncMastery(this.mastery);
+
+    // 2. 100% 3D Wooju Explorer Avatar + Equipped 3D Gear
     this.wooju = buildWooju3D(THREE);
     this.wooju.group.position.set(this.avatarPos.x, 0, this.avatarPos.z);
+    this.wooju.setGear(this.equippedGear);
     this.scene.add(this.wooju.group);
 
-    // 3. 12 Sequential 100% 3D Living Villagers (stroll around home spot & turn to face Wooju!)
+    // 3. 12 Sequential 100% 3D Living Villagers
     this.spotEntries = [];
     FARM_SPOTS.forEach((spot, idx) => {
       const built = buildSpotCharacter3D(THREE, spot.id);
@@ -537,7 +775,6 @@ export class FarmGame3D {
       built.group.position.set(spot.pos.x, baseY, spot.pos.z);
       built.group.rotation.y = Math.atan2(-spot.pos.x, -spot.pos.z + 3.0);
 
-      // Generous invisible touch cylinder for easy 6yo tapping
       const hitMesh = new THREE.Mesh(
         new THREE.CylinderGeometry(1.75, 1.75, 3.4, 12),
         new THREE.MeshBasicMaterial({ visible: false })
@@ -546,14 +783,15 @@ export class FarmGame3D {
       hitMesh.userData = { spotIndex: idx };
       built.group.add(hitMesh);
 
-      // Completed checkmark floating badge
       const checkSprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({ map: createBadgeTexture(THREE, '✓', '#22C55E', '#FFFFFF'), transparent: true })
+        new THREE.SpriteMaterial({ map: createBadgeTexture(THREE, '★', '#22C55E', '#FFFFFF'), transparent: true })
       );
       checkSprite.scale.set(0.85, 0.85, 1);
       checkSprite.position.set(0.9, 2.55, 0);
       checkSprite.visible = false;
       built.group.add(checkSprite);
+
+      if (built.setMasteryVisual) built.setMasteryVisual(this.mastery[spot.id] || 0);
 
       this.scene.add(built.group);
       this.spotEntries.push({
@@ -573,7 +811,7 @@ export class FarmGame3D {
       });
     });
 
-    // 4. Active Golden Ring, Floating '!' & Animated 3D Dashed Guiding Path (따라가기 점선 길)
+    // 4. Active Golden Ring, Floating '!' & Animated 3D Dashed Guiding Path
     this.activeRing = new THREE.Mesh(
       new THREE.RingGeometry(1.35, 1.82, 32),
       new THREE.MeshBasicMaterial({ color: '#FACC15', side: THREE.DoubleSide, transparent: true, opacity: 0.92 })
@@ -656,12 +894,14 @@ export class FarmGame3D {
 
   _updateSpotVisuals() {
     if (!this.spotEntries.length) return;
-    this.spotEntries.forEach((m, idx) => {
-      const done = idx < this.currentSpotIndex;
-      m.checkSprite.visible = done;
+    this.spotEntries.forEach((m) => {
+      const tier = this.mastery[m.spot.id] || 0;
+      // Show green star badge for 1~2 stars (3 stars gets the gleaming 3D Golden Crown!)
+      m.checkSprite.visible = tier >= 1 && tier < 3;
       if (m.itemMesh) {
-        m.itemMesh.visible = !this.collectedSpotIds.has(m.spot.id);
+        m.itemMesh.visible = tier === 0;
       }
+      if (m.setMasteryVisual) m.setMasteryVisual(tier);
     });
 
     if (this.currentSpotIndex < FARM_SPOTS.length) {
@@ -712,15 +952,62 @@ export class FarmGame3D {
         clearInterval(this._typeTimer);
         this._typeTimer = null;
       }
-    }, 28);
+    }, 24);
+  }
+
+  _startMagicGaugeForDialogue(cards) {
+    const gaugeEl = this.container?.querySelector('#farmMagicGauge');
+    const labelEl = this.container?.querySelector('#farmMagicLabel');
+    const fillEl = this.container?.querySelector('#farmMagicFill');
+    const pctEl = this.container?.querySelector('#farmMagicPct');
+    const normalBtn = this.container?.querySelector('#farmJudgeNormalBtn');
+    const crownBtn = this.container?.querySelector('#farmJudgeCrownBtn');
+    if (!gaugeEl || !fillEl || !pctEl || !labelEl) return;
+
+    this.voiceFilled = false;
+    fillEl.style.width = '0%';
+    pctEl.textContent = '0%';
+    gaugeEl.classList.remove('filled');
+    normalBtn?.classList.remove('pulse-ready');
+    crownBtn?.classList.remove('pulse-ready');
+    labelEl.textContent = this.dialogueMode === 'memory'
+      ? '🌙 그림만 보고 영어로 크게 말해보세요!'
+      : '🎙️ 이제 우주 차례! 영어로 따라 말해요!';
+
+    // Scale required speech duration gently (0.7s ~ 1.4s) so 6yo isn't fatigued but can't 1-frame scream
+    const totalDur = cards.reduce((s, c) => s + Math.max(1.5, (c.end - c.start)), 0);
+    const targetSpeechSec = Math.max(0.7, Math.min(1.4, totalDur * 0.16));
+
+    this.audio.startVoiceGauge({
+      targetSpeechSec,
+      onProgress: (pct) => {
+        fillEl.style.width = `${pct}%`;
+        pctEl.textContent = `${pct}%`;
+      },
+      onFilled: () => {
+        this.voiceFilled = true;
+        gaugeEl.classList.add('filled');
+        labelEl.textContent = '✨ 마법 주문 충전 완료!! 아래 보상 버튼을 눌러요!';
+        if (this.dialogueMode === 'memory') crownBtn?.classList.add('pulse-ready');
+        else normalBtn?.classList.add('pulse-ready');
+      },
+      onMicDenied: () => {
+        labelEl.textContent = '🎤 크게 말하고 아래 보상 버튼을 눌러주세요!';
+        pctEl.textContent = '✨';
+      },
+    });
   }
 
   _openDialogue(spotIdx, isRevisit = false) {
     const spot = FARM_SPOTS[spotIdx];
     const cards = spot.cardIds.map(id => BASE_CARDS.find(c => c.id === id)).filter(Boolean);
+    const currentTier = this.mastery[spot.id] || 0;
+
     this.activeDialogueSpot = spotIdx;
-    this.isListening = true;
-    this.dialogueFinished = false;
+    this.isListening = false;
+    this.dialogueListened = false;
+    // Smart default challenge mode: 0★ -> repeat, 1★ -> hint, 2★+ -> memory!
+    this.dialogueMode = currentTier === 0 ? 'repeat' : (currentTier === 1 ? 'hint' : 'memory');
 
     const hoverEl = this.container?.querySelector('#farmHoverBubble');
     if (hoverEl) hoverEl.style.display = 'none';
@@ -728,71 +1015,231 @@ export class FarmGame3D {
     const dlg = this.container.querySelector('#farmDialogue');
     const portrait = this.container.querySelector('#farmDlgPortrait');
     const nameEl = this.container.querySelector('#farmDlgName');
+    const starsEl = this.container.querySelector('#farmDlgStars');
     const iconsEl = this.container.querySelector('#farmDlgIcons');
     const enEl = this.container.querySelector('#farmDlgEn');
     const koEl = this.container.querySelector('#farmDlgKo');
-    const actionBtn = this.container.querySelector('#farmDlgActionBtn');
     const replayBtn = this.container.querySelector('#farmDlgReplayBtn');
+    const chunkBtn = this.container.querySelector('#farmDlgChunkBtn');
+    const normalBtn = this.container.querySelector('#farmJudgeNormalBtn');
+    const crownBtn = this.container.querySelector('#farmJudgeCrownBtn');
 
     portrait.src = spot.portrait;
     nameEl.textContent = `${spot.emoji} ${spot.name} (${spotIdx + 1}/12)`;
-    actionBtn.disabled = true;
-    actionBtn.textContent = '🎧 원어민 이야기를 끝까지 들어요...';
-    dlg.style.display = 'flex';
+    starsEl.textContent = currentTier === 3 ? '👑👑👑 혼자 외우기 마스터!' : (currentTier === 2 ? '⭐⭐☆ (다음: 👑 왕관 도전!)' : (currentTier === 1 ? '⭐☆☆ (다음: ⭐⭐ 힌트 도전!)' : '☆☆☆ 첫 만남!'));
 
-    const playCards = () => {
+    const firstChunkedCard = cards.find(c => Array.isArray(c.chunks) && c.chunks.length >= 2);
+    if (chunkBtn) chunkBtn.style.display = firstChunkedCard ? 'inline-flex' : 'none';
+
+    const renderIcons = (card, hideLabels) => {
+      iconsEl.innerHTML = (card.icons || []).map(([em, lbl]) =>
+        lbl
+          ? `<span class="farm-icon-chip">${em}${hideLabels ? '' : ` <small>${lbl}</small>`}</span>`
+          : `<span class="farm-icon-arrow">${em}</span>`
+      ).join('');
+    };
+
+    const runChallengeMode = (modeKey) => {
+      this.dialogueMode = modeKey;
+      this.audio.stopAll();
+      this.isListening = false;
+
+      this.container.querySelectorAll('.farm-tier-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tierMode === modeKey);
+      });
+
+      if (modeKey === 'repeat') {
+        normalBtn.textContent = currentTier === 0 ? `⭐ 따라 말했어요! (${spot.itemEmoji} 받기)` : '⭐ 따라 말했어요!';
+        crownBtn.textContent = '👑 혼자 다 외웠어요!';
+        this.isListening = true;
+        normalBtn.disabled = currentTier === 0;
+        if (currentTier === 0) normalBtn.textContent = '🎧 먼저 원어민 말을 들어요...';
+        this.audio.playSegmentSequence(cards, {
+          onCardStart: (card) => {
+            renderIcons(card, false);
+            this._typewriterCaption(enEl, card.en);
+            koEl.textContent = card.ko || '';
+          },
+          onAllDone: () => {
+            this.isListening = false;
+            this.dialogueListened = true;
+            normalBtn.disabled = false;
+            normalBtn.textContent = currentTier === 0
+              ? `⭐ 따라 말했어요! (${spot.itemEmoji} 3D 선물 받기!)`
+              : '⭐ 따라 말했어요!';
+            this._startMagicGaugeForDialogue(cards);
+          },
+        });
+      } else if (modeKey === 'hint') {
+        normalBtn.disabled = false;
+        normalBtn.textContent = '⭐⭐ 힌트로 성공!';
+        crownBtn.textContent = '👑 혼자 다 외웠어요!';
+        const mainCard = firstChunkedCard || cards[0];
+        renderIcons(mainCard, true);
+        if (firstChunkedCard) {
+          enEl.textContent = `${firstChunkedCard.chunks[0].en}  👉  ???`;
+          koEl.textContent = '🤝 앞부분을 듣고 뒷부분을 우주가 이어 말해요!';
+          this.isListening = true;
+          this.audio.playSegment(firstChunkedCard.chunks[0].start, firstChunkedCard.chunks[0].end, {
+            rate: 0.95,
+            onDone: () => {
+              this.isListening = false;
+              this._startMagicGaugeForDialogue(cards);
+            },
+          });
+        } else {
+          enEl.textContent = '👂 첫 1초 힌트를 듣고 이어 말해요!';
+          koEl.textContent = '';
+          this.isListening = true;
+          this.audio.playSegment(mainCard.start, Math.min(mainCard.end, mainCard.start + 1.05), {
+            rate: 1.0,
+            onDone: () => {
+              this.isListening = false;
+              this._startMagicGaugeForDialogue(cards);
+            },
+          });
+        }
+      } else {
+        // 'memory' — 3-Star Golden Crown Challenge!
+        normalBtn.disabled = false;
+        normalBtn.textContent = '⭐ 힌트 보고 말했어요';
+        crownBtn.textContent = '👑 안 보고 혼자 외웠어요!!';
+        // Show icons from all cards in this spot without Korean labels
+        iconsEl.innerHTML = cards.map(c =>
+          (c.icons || []).map(([em]) => `<span class="farm-icon-chip">${em}</span>`).join('')
+        ).join('<span class="farm-icon-arrow">·</span>');
+        enEl.textContent = '🌙 그림만 보고 영어로 말해보세요!';
+        koEl.textContent = '성공하면 👑 황금 왕관을 쓰고 우주 뒤를 따라와요!';
+        this._startMagicGaugeForDialogue(cards);
+      }
+    };
+
+    this.container.querySelectorAll('.farm-tier-tab').forEach(btn => {
+      btn.onclick = () => runChallengeMode(btn.dataset.tierMode);
+    });
+
+    replayBtn.onclick = () => {
+      this.audio.stopVoiceGauge();
       this.isListening = true;
-      this.dialogueFinished = false;
-      actionBtn.disabled = true;
-      actionBtn.textContent = '🎧 원어민 이야기를 끝까지 들어요...';
       this.audio.playSegmentSequence(cards, {
         onCardStart: (card) => {
-          iconsEl.innerHTML = (card.icons || []).map(([em, lbl]) =>
-            lbl ? `<span class="farm-icon-chip">${em} <small>${lbl}</small></span>` : `<span class="farm-icon-arrow">${em}</span>`
-          ).join('');
-          this._typewriterCaption(enEl, card.en);
-          if (koEl) koEl.textContent = card.ko || '';
+          renderIcons(card, this.dialogueMode === 'memory');
+          if (this.dialogueMode !== 'memory') {
+            this._typewriterCaption(enEl, card.en);
+            koEl.textContent = card.ko || '';
+          }
         },
         onAllDone: () => {
           this.isListening = false;
-          this.dialogueFinished = true;
-          actionBtn.disabled = false;
-          if (isRevisit) {
-            actionBtn.textContent = '✅ 잘 들었어요! 산책 계속하기';
-          } else if (spotIdx === FARM_SPOTS.length - 1) {
-            actionBtn.textContent = '🎁 💃 댄스 선물 가방에 넣고 파티 완료!!';
-          } else {
-            actionBtn.textContent = `🎁 ${spot.itemEmoji} ${spot.itemLabel} 가방에 담기!`;
-          }
+          this._startMagicGaugeForDialogue(cards);
         },
       });
     };
 
-    replayBtn.onclick = () => playCards();
-    actionBtn.onclick = () => {
-      if (!this.dialogueFinished) return;
-      this._hideDialogue();
-      if (!isRevisit && spotIdx === this.currentSpotIndex) {
-        this.collectedSpotIds.add(spot.id);
-        this.currentSpotIndex += 1;
-        this.onRewardStar(1);
-        this.audio.playStarSFX();
-        this.onConfetti(38);
-        this._animateItemToBag(spot.itemEmoji);
-        this._updateBagBadge();
-        this._renderRibbon();
-        this._updateSpotVisuals();
+    if (chunkBtn && firstChunkedCard) {
+      chunkBtn.onclick = () => {
+        this.audio.stopVoiceGauge();
+        this.isListening = true;
+        renderIcons(firstChunkedCard, false);
+        enEl.textContent = `✂️ 1조각: ${firstChunkedCard.chunks[0].en}`;
+        koEl.textContent = firstChunkedCard.chunks[0].ko || '';
+        this.audio.playSegment(firstChunkedCard.chunks[0].start, firstChunkedCard.chunks[0].end, {
+          rate: 0.92,
+          onDone: () => {
+            setTimeout(() => {
+              if (this.activeDialogueSpot !== spotIdx) return;
+              enEl.textContent = `✂️ 2조각: ${firstChunkedCard.chunks[1].en}`;
+              koEl.textContent = firstChunkedCard.chunks[1].ko || '';
+              this.audio.playSegment(firstChunkedCard.chunks[1].start, firstChunkedCard.chunks[1].end, {
+                rate: 0.92,
+                onDone: () => {
+                  this.isListening = false;
+                  this._startMagicGaugeForDialogue(cards);
+                },
+              });
+            }, 900);
+          },
+        });
+      };
+    }
 
-        if (this.currentSpotIndex >= FARM_SPOTS.length) {
-          setTimeout(() => this._showFinale(), 550);
-        } else {
-          const next = FARM_SPOTS[this.currentSpotIndex];
-          this.onToast(`🎒 ${spot.itemEmoji} ${spot.itemLabel} 가방에 쏙! 점선 따라 ${next.emoji} ${next.name}에게 가요!`);
-        }
-      }
+    normalBtn.onclick = () => {
+      const tier = this.dialogueMode === 'hint' ? 2 : 1;
+      this._claimSpotReward(spotIdx, tier);
     };
 
-    playCards();
+    crownBtn.onclick = () => {
+      this._claimSpotReward(spotIdx, 3);
+    };
+
+    dlg.style.display = 'flex';
+    runChallengeMode(this.dialogueMode);
+  }
+
+  _claimSpotReward(spotIdx, targetTier) {
+    const spot = FARM_SPOTS[spotIdx];
+    const prevUnlocked = new Set(getUnlockedGear(this.mastery, this.getTotalStars()));
+    const result = applySpotMastery(this.mastery, spot.id, targetTier);
+
+    this.mastery = result.nextMastery;
+    const prog = computeFarmProgress(this.mastery);
+    this.currentSpotIndex = prog.nextSpotIndex;
+
+    this._hideDialogue();
+    this.onRewardStar(result.starDelta);
+
+    // Check if any new 3D Wooju Gear unlocked!
+    const nextUnlocked = getUnlockedGear(this.mastery, this.getTotalStars());
+    const newlyUnlockedGear = nextUnlocked.filter(id => !prevUnlocked.has(id));
+    if (newlyUnlockedGear.length > 0) {
+      newlyUnlockedGear.forEach(id => { this.equippedGear[id] = true; });
+      this.hasNewGearBadge = true;
+      if (this.wooju?.setGear) this.wooju.setGear(this.equippedGear);
+    }
+
+    this._saveRpgState();
+
+    // Trigger 3D living farm prop pop-in & animal crown/aura!
+    if (this.partyRewards) {
+      this.partyRewards.syncMastery(this.mastery, result.newlyMet ? spot.id : null);
+    }
+
+    if (result.newlyMastered) {
+      this.audio.playFanfareSFX();
+      this.onConfetti(75);
+      this._animateItemToBag('👑');
+    } else {
+      this.audio.playStarSFX();
+      this.onConfetti(42);
+      this._animateItemToBag(spot.itemEmoji);
+    }
+
+    this._updateBagBadge();
+    this._updateParadeBtn();
+    this._renderRibbon();
+    this._updateSpotVisuals();
+
+    // Celebrate new gear unlock or story milestone
+    if (newlyUnlockedGear.length > 0) {
+      const g = WOOJU_GEAR.find(x => x.id === newlyUnlockedGear[0]);
+      if (g) {
+        this.audio.playFanfareSFX();
+        this.onToast(`🎉 새 3D 장비 해금! ${g.emoji} ${g.name}을(를) 바로 장착했어요!`);
+      }
+    } else if (result.newlyMastered) {
+      this.onToast(`👑 ${spot.emoji} ${spot.name} 혼자 외우기 성공! 황금 왕관을 쓰고 우주 뒤를 따라와요!`);
+    } else if (result.newlyMet) {
+      if (prog.metCount >= FARM_SPOTS.length) {
+        setTimeout(() => this._showFinale(), 550);
+      } else {
+        const next = FARM_SPOTS[this.currentSpotIndex];
+        this.onToast(`✨ 3D 농장에 ${spot.itemEmoji} ${spot.itemLabel}이(가) 생겼어요! 다음은 ${next.emoji} ${next.name}!`);
+      }
+    } else if (result.upgraded) {
+      this.onToast(`⭐⭐ ${spot.emoji} ${spot.name} 레벨 업! 다음엔 👑 혼자 외우기에 도전해요!`);
+    } else {
+      this.onToast(`⭐ ${spot.emoji} ${spot.name} 복습 최고! 별 +1!`);
+    }
   }
 
   _hideDialogue() {
@@ -846,6 +1293,9 @@ export class FarmGame3D {
         if (c.position.x > 26) c.position.x = -26;
       });
 
+      // Animate v3 Living Farm 3D Party Rewards (pop-in, steam, floating notes, spotlight)
+      if (this.partyRewards) this.partyRewards.update(t, dt);
+
       // 1. Wooju 3D Avatar Movement & Walking Limb Animation
       let moving = false;
       const speed = 7.5;
@@ -879,7 +1329,7 @@ export class FarmGame3D {
           }
         }
 
-        // Proximity auto-trigger when walking right up to the active animal
+        // Proximity auto-trigger when walking right up to the active unmet animal
         if (moving && !this.pendingSpotTrigger && this.currentSpotIndex < FARM_SPOTS.length) {
           const activeEntry = this.spotEntries[this.currentSpotIndex];
           if (activeEntry && Math.hypot(this.avatarPos.x - activeEntry.curX, this.avatarPos.z - activeEntry.curZ) < 2.4) {
@@ -889,25 +1339,43 @@ export class FarmGame3D {
         }
       }
 
+      // Record breadcrumb trail for 3-Star Animal Parade!
+      if (this.woojuTrail.length === 0) {
+        this.woojuTrail.push({ x: this.avatarPos.x, z: this.avatarPos.z });
+      } else {
+        const head = this.woojuTrail[0];
+        if (Math.hypot(this.avatarPos.x - head.x, this.avatarPos.z - head.z) > 0.26) {
+          this.woojuTrail.unshift({ x: this.avatarPos.x, z: this.avatarPos.z });
+          if (this.woojuTrail.length > 260) this.woojuTrail.pop();
+        }
+      }
+
       if (this.wooju) {
         this.wooju.group.position.x = this.avatarPos.x;
         this.wooju.group.position.z = this.avatarPos.z;
         this.wooju.group.rotation.y = this.avatarAngle;
         if (this.wooju.setAnim) this.wooju.setAnim(moving ? 'walk' : 'idle');
         if (this.wooju.updateMixer) this.wooju.updateMixer(dt);
+        if (this.wooju.updateCosmetics) this.wooju.updateCosmetics(t, moving);
       }
 
-      // 2. Living Villager AI: Locked villagers FLEE from Wooju; active/done villagers stroll & turn to face Wooju!
+      // 2. Living Villager AI:
+      //    - 3-Star Mastered Animals -> Follow Wooju in a cute Animal Parade!
+      //    - Locked Villagers -> Playfully flee from Wooju
+      //    - Active/Done Villagers -> Stroll & turn to face Wooju
       let nearestIdx = -1;
       let nearestDist = 5.6;
+      let paradeSlot = 0;
 
       this.spotEntries.forEach((m, idx) => {
+        const tier = this.mastery[m.spot.id] || 0;
         const dxFromWooju = m.curX - this.avatarPos.x;
         const dzFromWooju = m.curZ - this.avatarPos.z;
         const distToWooju = Math.hypot(dxFromWooju, dzFromWooju);
         const isLocked = idx > this.currentSpotIndex;
         const isSpeaking = this.activeDialogueSpot === idx;
         const isNearWooju = this.entered && distToWooju < (isLocked ? 5.6 : 4.8);
+        const isParadeFollower = this.paradeEnabled && tier >= 3 && !isSpeaking;
         const isDancingPig = idx === FARM_SPOTS.length - 1 && (this.currentSpotIndex >= FARM_SPOTS.length || isSpeaking);
         m.isFleeing = false;
 
@@ -916,8 +1384,30 @@ export class FarmGame3D {
           nearestIdx = idx;
         }
 
-        if (isLocked && isNearWooju && this.activeDialogueSpot === null) {
-          // Run away from Wooju faster than Wooju walks so Wooju literally cannot approach locked characters!
+        if (isParadeFollower) {
+          paradeSlot += 1;
+          const trailIdx = Math.min(this.woojuTrail.length - 1, paradeSlot * 8);
+          const pt = this.woojuTrail[trailIdx] || this.avatarPos;
+          const pdx = pt.x - m.curX;
+          const pdz = pt.z - m.curZ;
+          const pd = Math.hypot(pdx, pdz);
+          if (pd > 0.35) {
+            const followSpeed = Math.min(7.8, 3.2 + pd * 1.4);
+            m.curX += (pdx / pd) * followSpeed * dt;
+            m.curZ += (pdz / pd) * followSpeed * dt;
+            m.group.position.x = m.curX;
+            m.group.position.z = m.curZ;
+            m.group.position.y = 0; // Walk on ground in parade!
+            const yaw = Math.atan2(pdx, pdz);
+            let diff = yaw - m.group.rotation.y;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            m.group.rotation.y += diff * 0.16;
+            m.isMoving = true;
+          } else {
+            m.isMoving = false;
+          }
+        } else if (isLocked && isNearWooju && this.activeDialogueSpot === null) {
           m.isFleeing = true;
           m.isMoving = true;
           m.wanderTarget = null;
@@ -949,6 +1439,7 @@ export class FarmGame3D {
           m.curZ = nz;
           m.group.position.x = m.curX;
           m.group.position.z = m.curZ;
+          m.group.position.y = m.baseY;
           const fleeYaw = Math.atan2(dirX, dirZ);
           let diff = fleeYaw - m.group.rotation.y;
           while (diff > Math.PI) diff -= Math.PI * 2;
@@ -982,6 +1473,7 @@ export class FarmGame3D {
               m.curZ += (wdz / wd) * wSpeed * dt;
               m.group.position.x = m.curX;
               m.group.position.z = m.curZ;
+              m.group.position.y = m.baseY;
               const walkYaw = Math.atan2(wdx, wdz);
               let diff = walkYaw - m.group.rotation.y;
               while (diff > Math.PI) diff -= Math.PI * 2;
@@ -996,15 +1488,16 @@ export class FarmGame3D {
           }
         }
 
-        // Drive real GLB skeletal animations (run / dance / talk / walk / idle)!
+        // Drive real GLB skeletal animations
         let animState = 'idle';
         if (m.isFleeing) animState = 'run';
-        else if (isDancingPig) animState = 'dance';
+        else if (isDancingPig && !m.isMoving) animState = 'dance';
         else if (isSpeaking && this.isListening) animState = 'talk';
         else if (m.isMoving) animState = 'walk';
 
         if (m.setAnim) m.setAnim(animState);
         if (m.updateMixer) m.updateMixer(dt);
+        if (m.updateMasteryVisual) m.updateMasteryVisual(t);
 
         if (m.itemMesh && m.itemMesh.visible) {
           m.itemMesh.rotation.y = t * 1.8 + idx;
@@ -1012,7 +1505,7 @@ export class FarmGame3D {
         }
       });
 
-      // 3. Track Active Villager's Live Position for Golden Ring, '!' & Animated Dashed Path!
+      // 3. Track Active Villager's Live Position for Golden Ring, '!' & Animated Dashed Path
       if (this.currentSpotIndex < FARM_SPOTS.length && this.spotEntries[this.currentSpotIndex]) {
         const activeEntry = this.spotEntries[this.currentSpotIndex];
         if (this.activeRing && this.activeRing.visible) {
@@ -1058,7 +1551,7 @@ export class FarmGame3D {
         this.tapRing.material.opacity = this.tapRingLife * 0.7;
       }
 
-      // 4. Camera: Low, immersive Animal Crossing horizon view (~23 deg) so you feel INSIDE the village!
+      // 4. Camera: Low, immersive Animal Crossing horizon view
       const aspect = this.camera.aspect || 1;
       const portraitBoost = aspect < 1 ? 1.18 : 1.0;
 
@@ -1091,18 +1584,20 @@ export class FarmGame3D {
 
       this.renderer.render(this.scene, this.camera);
 
-      // 5. Project Floating Speech Bubble right above the nearest villager's 3D head!
+      // 5. Project Floating Speech Bubble right above the nearest villager's 3D head
       if (hoverEl && hoverText) {
         if (nearestIdx >= 0 && this.entered && this.activeDialogueSpot === null) {
           const m = this.spotEntries[nearestIdx];
-          projVec.set(m.curX, m.baseY + 2.75, m.curZ);
+          const tier = this.mastery[m.spot.id] || 0;
+          projVec.set(m.curX, (this.paradeEnabled && tier >= 3 ? 0 : m.baseY) + 2.75, m.curZ);
           projVec.project(this.camera);
           const rect = this.renderer.domElement.getBoundingClientRect();
           const sx = (projVec.x * 0.5 + 0.5) * rect.width;
           const sy = (-projVec.y * 0.5 + 0.5) * rect.height;
           hoverSpotIdx = nearestIdx;
           if (nearestIdx <= this.currentSpotIndex) {
-            hoverText.textContent = `💬 ${m.spot.emoji} ${m.spot.name}에게 말 걸기!`;
+            const tierBadge = tier >= 3 ? '👑' : (tier === 2 ? '⭐⭐' : (tier === 1 ? '⭐' : '💬'));
+            hoverText.textContent = `${tierBadge} ${m.spot.emoji} ${m.spot.name}에게 말 걸기!`;
           } else {
             const cur = FARM_SPOTS[this.currentSpotIndex];
             hoverText.textContent = `💨 도망간다! 먼저 ${cur.emoji} ${cur.name} 만나요!`;

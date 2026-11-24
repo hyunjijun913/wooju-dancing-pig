@@ -1017,3 +1017,55 @@ export function buildListenQuestion(cardPool = BASE_CARDS, rng = Math.random) {
   const choices = shuffleWithRng(picked, rng);
   return { targetCard, choices };
 }
+
+// --- v3: 3D Farm RPG Mastery, Collection & Wooju 3D Avatar Gear ---
+export const FARM_STORAGE_KEY = 'wooju_farm_rpg_v3';
+
+export const WOOJU_GEAR = [
+  { id: 'star_hat',    name: '별빛 꼬깔 모자', emoji: '🎩', reqType: 'stars',   reqCount: 4,  desc: '별 4개 모으기' },
+  { id: 'hero_cape',   name: '히어로 망토',    emoji: '🦸', reqType: 'stars',   reqCount: 10, desc: '별 10개 모으기' },
+  { id: 'gold_crown',  name: '황금 왕관',      emoji: '👑', reqType: 'masters', reqCount: 3,  desc: '혼자 외우기 3마리' },
+  { id: 'jetpack',     name: '로켓 제트팩',    emoji: '🚀', reqType: 'masters', reqCount: 6,  desc: '혼자 외우기 6마리' },
+  { id: 'rainbow_mic', name: '무지개 마이크',  emoji: '🎤', reqType: 'masters', reqCount: 12, desc: '12마리 모두 외우기!' },
+];
+
+export function countMasteredSpots(masteryMap = {}) {
+  return FARM_SPOTS.filter(s => (masteryMap[s.id] || 0) >= 3).length;
+}
+
+export function getUnlockedGear(masteryMap = {}, totalStars = 0) {
+  const masters = countMasteredSpots(masteryMap);
+  return WOOJU_GEAR.filter(g => (
+    g.reqType === 'stars' ? totalStars >= g.reqCount : masters >= g.reqCount
+  )).map(g => g.id);
+}
+
+export function computeFarmProgress(masteryMap = {}) {
+  let metCount = 0;
+  let masteredCount = 0;
+  let totalMasteryStars = 0;
+  let nextSpotIndex = FARM_SPOTS.length;
+
+  FARM_SPOTS.forEach((spot, idx) => {
+    const tier = Math.max(0, Math.min(3, masteryMap[spot.id] || 0));
+    if (tier >= 1) metCount += 1;
+    else if (nextSpotIndex === FARM_SPOTS.length) nextSpotIndex = idx;
+    if (tier >= 3) masteredCount += 1;
+    totalMasteryStars += tier;
+  });
+
+  return { metCount, masteredCount, totalMasteryStars, nextSpotIndex };
+}
+
+export function applySpotMastery(masteryMap = {}, spotId, targetTier = 1) {
+  const clamped = Math.max(1, Math.min(3, targetTier));
+  const prev = Math.max(0, Math.min(3, masteryMap[spotId] || 0));
+  const nextVal = Math.max(prev, clamped);
+  const nextMastery = { ...masteryMap, [spotId]: nextVal };
+  const upgraded = nextVal > prev;
+  const newlyMet = prev === 0 && nextVal >= 1;
+  const newlyMastered = prev < 3 && nextVal === 3;
+  // Reward stars generously: +2 on new 3-star mastery, +1 on new tier or repeat practice
+  const starDelta = newlyMastered ? Math.max(2, nextVal - prev + 1) : (upgraded ? (nextVal - prev) : 1);
+  return { nextMastery, prevTier: prev, nextTier: nextVal, upgraded, newlyMet, newlyMastered, starDelta };
+}

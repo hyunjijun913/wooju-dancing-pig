@@ -193,7 +193,41 @@ function createACPathTexture(THREE) {
 }
 
 /**
+ * Helper to create a gleaming 3D Golden Crown mesh (reused for Wooju & 3-Star Mastered Animals)
+ */
+function createGoldCrownMesh(THREE, scale = 1.0) {
+  const crown = new THREE.Group();
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: '#FACC15',
+    emissive: '#B45309',
+    emissiveIntensity: 0.25,
+    roughness: 0.25,
+    metalness: 0.72,
+  });
+  const gemMat = new THREE.MeshStandardMaterial({
+    color: '#F43F5E',
+    emissive: '#E11D48',
+    emissiveIntensity: 0.4,
+    roughness: 0.2,
+  });
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.27, 0.18, 12), goldMat);
+  crown.add(band);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.24, 6), goldMat);
+    spike.position.set(Math.cos(a) * 0.25, 0.18, Math.sin(a) * 0.25);
+    crown.add(spike);
+  }
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.08), gemMat);
+  gem.position.set(0, 0.02, 0.31);
+  crown.add(gem);
+  crown.scale.setScalar(scale);
+  return crown;
+}
+
+/**
  * Loads Wooju's 3D Animated Character Model (Kenney Mini-Character + Skeletal Animations)
+ * Plus 5 unlockable 3D gear cosmetics!
  */
 export function buildWooju3D(THREE) {
   const group = new THREE.Group();
@@ -207,10 +241,133 @@ export function buildWooju3D(THREE) {
     ctrl.setAnim('idle');
   }).catch(() => {});
 
+  // --- Unlockable 3D Avatar Cosmetics ---
+  const gearMeshes = {};
+
+  // 1. Star Hat (별빛 꼬깔 모자)
+  const starHat = new THREE.Group();
+  const hatCone = new THREE.Mesh(
+    new THREE.ConeGeometry(0.42, 0.85, 16),
+    new THREE.MeshStandardMaterial({ color: '#4F46E5', roughness: 0.45 })
+  );
+  hatCone.position.y = 0.42;
+  const hatBrim = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.56, 0.56, 0.07, 18),
+    new THREE.MeshStandardMaterial({ color: '#6366F1', roughness: 0.5 })
+  );
+  const hatStar = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.16),
+    new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#F59E0B', emissiveIntensity: 0.55 })
+  );
+  hatStar.position.y = 0.88;
+  starHat.add(hatCone, hatBrim, hatStar);
+  starHat.position.set(0, 2.15, 0);
+  starHat.visible = false;
+  group.add(starHat);
+  gearMeshes.star_hat = starHat;
+
+  // 2. Hero Cape (히어로 망토)
+  const heroCape = new THREE.Group();
+  const capeMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.85, 1.15, 0.08),
+    new THREE.MeshStandardMaterial({ color: '#EF4444', roughness: 0.55 })
+  );
+  capeMesh.position.set(0, -0.52, -0.05);
+  heroCape.add(capeMesh);
+  heroCape.position.set(0, 1.55, -0.34);
+  heroCape.rotation.x = 0.25;
+  heroCape.visible = false;
+  group.add(heroCape);
+  gearMeshes.hero_cape = heroCape;
+
+  // 3. Gold Crown (황금 왕관)
+  const goldCrown = createGoldCrownMesh(THREE, 1.08);
+  goldCrown.position.set(0, 2.28, 0);
+  goldCrown.visible = false;
+  group.add(goldCrown);
+  gearMeshes.gold_crown = goldCrown;
+
+  // 4. Rocket Jetpack (로켓 제트팩 + 불꽃!)
+  const jetpack = new THREE.Group();
+  const tankMat = new THREE.MeshStandardMaterial({ color: '#E2E8F0', metalness: 0.6, roughness: 0.28 });
+  const capMat = new THREE.MeshStandardMaterial({ color: '#F97316', roughness: 0.35 });
+  const flameMat = new THREE.MeshBasicMaterial({ color: '#FACC15', transparent: true, opacity: 0.9 });
+  const flames = [];
+  [-0.22, 0.22].forEach((tx) => {
+    const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.72, 12), tankMat);
+    tank.position.set(tx, 0, 0);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.22, 12), capMat);
+    cap.position.set(tx, 0.46, 0);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.55, 8), flameMat);
+    flame.rotation.x = Math.PI;
+    flame.position.set(tx, -0.58, 0);
+    jetpack.add(tank, cap, flame);
+    flames.push(flame);
+  });
+  jetpack.position.set(0, 1.25, -0.44);
+  jetpack.visible = false;
+  group.add(jetpack);
+  gearMeshes.jetpack = jetpack;
+
+  // 5. Rainbow Mic + Sparkle Halo (무지개 마이크)
+  const rainbowMic = new THREE.Group();
+  const micHandle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.055, 0.045, 0.45, 10),
+    new THREE.MeshStandardMaterial({ color: '#FACC15', metalness: 0.7, roughness: 0.25 })
+  );
+  const micHead = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 12, 10),
+    new THREE.MeshStandardMaterial({ color: '#EC4899', emissive: '#EC4899', emissiveIntensity: 0.45 })
+  );
+  micHead.position.y = 0.26;
+  const haloRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.75, 0.95, 24),
+    new THREE.MeshBasicMaterial({ color: '#38BDF8', side: THREE.DoubleSide, transparent: true, opacity: 0.7 })
+  );
+  haloRing.rotation.x = -Math.PI / 2;
+  haloRing.position.set(-0.62, -1.08, -0.22);
+  rainbowMic.add(micHandle, micHead, haloRing);
+  rainbowMic.position.set(0.62, 1.15, 0.22);
+  rainbowMic.rotation.z = -0.35;
+  rainbowMic.visible = false;
+  group.add(rainbowMic);
+  gearMeshes.rainbow_mic = rainbowMic;
+
+  const setGear = (equippedMap = {}) => {
+    Object.entries(gearMeshes).forEach(([id, mesh]) => {
+      mesh.visible = Boolean(equippedMap[id]);
+    });
+    // If both star_hat and gold_crown are equipped, lift crown slightly above hat
+    if (gearMeshes.gold_crown.visible) {
+      gearMeshes.gold_crown.position.y = gearMeshes.star_hat.visible ? 3.12 : 2.28;
+    }
+  };
+
+  const updateCosmetics = (t, moving) => {
+    if (starHat.visible) hatStar.rotation.y = t * 2.4;
+    if (heroCape.visible) {
+      heroCape.rotation.x = (moving ? 0.52 : 0.22) + Math.sin(t * (moving ? 10 : 3)) * 0.1;
+    }
+    if (goldCrown.visible) goldCrown.rotation.y = t * 1.1;
+    if (jetpack.visible) {
+      flames.forEach((f, i) => {
+        const s = moving ? (0.95 + Math.sin(t * 24 + i * 2) * 0.35) : (0.35 + Math.sin(t * 8 + i) * 0.12);
+        f.scale.set(1, s, 1);
+      });
+    }
+    if (rainbowMic.visible) {
+      const hue = (t * 0.35) % 1;
+      haloRing.material.color.setHSL(hue, 0.9, 0.6);
+      micHead.material.emissive.setHSL(hue, 0.9, 0.5);
+    }
+  };
+
   return {
     group,
     setAnim: ctrl.setAnim,
     updateMixer: ctrl.updateMixer,
+    setGear,
+    updateCosmetics,
   };
 }
 
@@ -316,12 +473,47 @@ export function buildSpotCharacter3D(THREE, spotId) {
     }).catch(() => {});
   }
 
+  // 2-Star Golden Sparkle Aura & 3-Star Golden Crown!
+  const auraMesh = new THREE.Mesh(
+    new THREE.RingGeometry(0.95, 1.25, 24),
+    new THREE.MeshBasicMaterial({ color: '#FDE047', side: THREE.DoubleSide, transparent: true, opacity: 0.72 })
+  );
+  auraMesh.rotation.x = -Math.PI / 2;
+  auraMesh.position.y = 0.06;
+  auraMesh.visible = false;
+  group.add(auraMesh);
+
+  const crownMesh = createGoldCrownMesh(THREE, 0.92);
+  crownMesh.position.set(0, 2.45, 0);
+  crownMesh.visible = false;
+  group.add(crownMesh);
+
+  const setMasteryVisual = (tier = 0) => {
+    auraMesh.visible = tier >= 2;
+    crownMesh.visible = tier >= 3;
+  };
+
+  const updateMasteryVisual = (t) => {
+    if (crownMesh.visible) {
+      crownMesh.rotation.y = t * 1.6;
+      crownMesh.position.y = 2.42 + Math.sin(t * 3.5) * 0.08;
+    }
+    if (auraMesh.visible) {
+      const s = 1 + Math.sin(t * 3) * 0.08;
+      auraMesh.scale.set(s, s, 1);
+    }
+  };
+
   return {
     group,
     bodyRoot,
     itemMesh,
+    crownMesh,
+    auraMesh,
     setAnim: ctrl.setAnim,
     updateMixer: ctrl.updateMixer,
+    setMasteryVisual,
+    updateMasteryVisual,
   };
 }
 
@@ -481,4 +673,228 @@ export function buildFarmWorld3D(THREE, scene) {
   });
 
   return { groundMesh, clouds };
+}
+
+/**
+ * v3 Living Farm Rewards: 12 real 3D objects that permanently materialize around the central
+ * party banquet & dance stage as Wooju speaks each animal's English story lines!
+ */
+export function buildPartyRewards3D(THREE, scene) {
+  const root = new THREE.Group();
+  scene.add(root);
+
+  const entries = new Map();
+  const steamPuffs = [];
+  const musicNotes = [];
+  let spotlightCone = null;
+  let trophyStar = null;
+
+  const registerReward = (spotId, group) => {
+    group.visible = false;
+    root.add(group);
+    entries.set(spotId, { group, popProgress: 1, active: false });
+  };
+
+  const attachGLB = (parent, url, h, x = 0, y = 0, z = 0, rotY = 0) => {
+    loadGLTF(url).then((gltf) => {
+      const inst = instantiateGLTF(THREE, gltf, h, y);
+      inst.holder.position.x += x;
+      inst.holder.position.z += z;
+      inst.holder.rotation.y = rotY;
+      parent.add(inst.holder);
+    }).catch(() => {});
+  };
+
+  // Banquet table center right next to the central dance stage (4.9, 0, 2.2)
+  const TX = 4.9;
+  const TZ = 2.2;
+  const TABLE_Y = 0.96;
+
+  // 1. farmer -> Festive Wooden Party Banquet Table!
+  const farmerGrp = new THREE.Group();
+  const tableTop = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.75, 1.75, 0.14, 24),
+    new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.72 })
+  );
+  tableTop.position.set(TX, TABLE_Y, TZ);
+  tableTop.castShadow = true;
+  tableTop.receiveShadow = true;
+  const tableCloth = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.48, 1.54, 0.04, 24),
+    new THREE.MeshStandardMaterial({ color: '#FEF3C7', roughness: 0.85 })
+  );
+  tableCloth.position.set(TX, TABLE_Y + 0.08, TZ);
+  const tableLeg = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.45, TABLE_Y, 14),
+    new THREE.MeshStandardMaterial({ color: '#92400E', roughness: 0.8 })
+  );
+  tableLeg.position.set(TX, TABLE_Y / 2, TZ);
+  farmerGrp.add(tableTop, tableCloth, tableLeg);
+  registerReward('farmer', farmerGrp);
+
+  // 2. frog -> Sparkling Stone Fountain on opposite side of stage (-4.9, 0, 2.2)
+  const frogGrp = new THREE.Group();
+  attachGLB(frogGrp, 'assets/models/fantasy-town/fountain-round-detail.glb', 2.4, -4.9, 0, 2.2, 0);
+  registerReward('frog', frogGrp);
+
+  // 3. owl -> Glowing Golden Party Lanterns flanking the banquet table
+  const owlGrp = new THREE.Group();
+  attachGLB(owlGrp, 'assets/models/fantasy-town/lantern.glb', 2.3, TX - 2.1, 0, TZ + 1.4, 0);
+  attachGLB(owlGrp, 'assets/models/fantasy-town/lantern.glb', 2.3, TX + 2.1, 0, TZ - 1.2, 0);
+  registerReward('owl', owlGrp);
+
+  // 4. chicken -> Real 3D Egg on the banquet table
+  const chickenGrp = new THREE.Group();
+  attachGLB(chickenGrp, 'assets/models/food/egg.glb', 0.62, TX - 0.85, TABLE_Y + 0.1, TZ + 0.45, 0.2);
+  registerReward('chicken', chickenGrp);
+
+  // 5. rabbit -> Real 3D Big Carrot on the banquet table
+  const rabbitGrp = new THREE.Group();
+  attachGLB(rabbitGrp, 'assets/models/food/carrot.glb', 0.82, TX - 0.55, TABLE_Y + 0.1, TZ - 0.65, 0.7);
+  registerReward('rabbit', rabbitGrp);
+
+  // 6. cow -> Real 3D Milk Bottle on the banquet table
+  const cowGrp = new THREE.Group();
+  attachGLB(cowGrp, 'assets/models/food/soda-bottle.glb', 0.85, TX + 0.75, TABLE_Y + 0.1, TZ - 0.55, 0);
+  registerReward('cow', cowGrp);
+
+  // 7. horse_pony -> Real 3D Golden Corn on the banquet table
+  const horseGrp = new THREE.Group();
+  attachGLB(horseGrp, 'assets/models/food/corn.glb', 0.8, TX + 0.85, TABLE_Y + 0.1, TZ + 0.55, -0.4);
+  registerReward('horse_pony', horseGrp);
+
+  // 8. cat_mouse -> Real 3D Fish Dish on the banquet table
+  const catGrp = new THREE.Group();
+  attachGLB(catGrp, 'assets/models/food/fish.glb', 0.78, TX, TABLE_Y + 0.1, TZ + 0.95, 0.3);
+  registerReward('cat_mouse', catGrp);
+
+  // 9. duck -> Real 3D Steaming Stew Pot right in the center of the banquet table!
+  const duckGrp = new THREE.Group();
+  attachGLB(duckGrp, 'assets/models/food/pot-stew.glb', 0.95, TX, TABLE_Y + 0.1, TZ - 0.05, 0);
+  const puffMat = new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0.65 });
+  for (let i = 0; i < 4; i++) {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), puffMat);
+    puff.position.set(TX + (i % 2 === 0 ? -0.14 : 0.14), TABLE_Y + 1.15 + i * 0.35, TZ - 0.05);
+    duckGrp.add(puff);
+    steamPuffs.push({ mesh: puff, phase: i * 1.5 });
+  }
+  registerReward('duck', duckGrp);
+
+  // 10. dog_goat -> Clean Sparkling Barn Flower Ring around the central stage!
+  const dogGrp = new THREE.Group();
+  const fUrls = [
+    'assets/models/nature/flower_redA.glb',
+    'assets/models/nature/flower_yellowA.glb',
+    'assets/models/nature/flower_purpleA.glb',
+  ];
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2;
+    attachGLB(dogGrp, fUrls[i % 3], 0.85, Math.cos(ang) * 4.25, 0, Math.sin(ang) * 4.25, i);
+  }
+  registerReward('dog_goat', dogGrp);
+
+  // 11. donkey_sheep -> Floating 3D Musical Notes above the dance stage!
+  const donkeyGrp = new THREE.Group();
+  const noteColors = ['#EC4899', '#FACC15', '#38BDF8', '#A855F7', '#4ADE80'];
+  for (let i = 0; i < 5; i++) {
+    const ng = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({
+      color: noteColors[i],
+      emissive: noteColors[i],
+      emissiveIntensity: 0.45,
+      roughness: 0.3,
+    });
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), mat);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.62, 8), mat);
+    stem.position.set(0.15, 0.3, 0);
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.1, 0.06), mat);
+    flag.position.set(0.26, 0.56, 0);
+    ng.add(head, stem, flag);
+    const a = (i / 5) * Math.PI * 2;
+    ng.position.set(Math.cos(a) * 2.5, 2.8 + (i % 2) * 0.5, Math.sin(a) * 2.5);
+    donkeyGrp.add(ng);
+    musicNotes.push({ mesh: ng, baseAngle: a, baseY: 2.7 + (i % 3) * 0.35, idx: i });
+  }
+  registerReward('donkey_sheep', donkeyGrp);
+
+  // 12. pig_finale -> Giant Rainbow Stage Spotlight + Spinning Golden Star Trophy + Banners!
+  const pigGrp = new THREE.Group();
+  spotlightCone = new THREE.Mesh(
+    new THREE.ConeGeometry(3.4, 7.2, 24, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: '#FDE047',
+      transparent: true,
+      opacity: 0.18,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  spotlightCone.position.set(0, 4.0, 0);
+  pigGrp.add(spotlightCone);
+
+  trophyStar = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.55),
+    new THREE.MeshStandardMaterial({
+      color: '#FACC15',
+      emissive: '#F59E0B',
+      emissiveIntensity: 0.65,
+      metalness: 0.6,
+      roughness: 0.2,
+    })
+  );
+  trophyStar.position.set(0, 4.3, 0);
+  pigGrp.add(trophyStar);
+  attachGLB(pigGrp, 'assets/models/fantasy-town/banner-red.glb', 3.1, -4.1, 0, -1.8, 0.4);
+  attachGLB(pigGrp, 'assets/models/fantasy-town/banner-red.glb', 3.1, 4.1, 0, -1.8, -0.4);
+  registerReward('pig_finale', pigGrp);
+
+  const syncMastery = (masteryMap = {}, popSpotId = null) => {
+    entries.forEach((entry, spotId) => {
+      const shouldShow = (masteryMap[spotId] || 0) >= 1;
+      const wasActive = entry.active;
+      entry.active = shouldShow;
+      entry.group.visible = shouldShow;
+      if (shouldShow && (!wasActive || spotId === popSpotId)) {
+        entry.popProgress = 0.01;
+        entry.group.scale.setScalar(0.01);
+      } else if (shouldShow && entry.popProgress >= 1) {
+        entry.group.scale.setScalar(1);
+      }
+    });
+  };
+
+  const update = (t, dt) => {
+    entries.forEach((entry) => {
+      if (entry.active && entry.popProgress < 1) {
+        entry.popProgress = Math.min(1, entry.popProgress + dt * 2.4);
+        // Overshoot bounce easing so newly earned 3D rewards pop into the farm!
+        const p = entry.popProgress;
+        const s = p < 0.7 ? (p / 0.7) * 1.15 : 1.15 - ((p - 0.7) / 0.3) * 0.15;
+        entry.group.scale.setScalar(Math.max(0.01, s));
+      }
+    });
+    steamPuffs.forEach(({ mesh, phase }) => {
+      const cycle = ((t * 0.7 + phase) % 1.4) / 1.4;
+      mesh.position.y = TABLE_Y + 0.95 + cycle * 1.5;
+      mesh.scale.setScalar(0.7 + cycle * 0.9);
+      mesh.material.opacity = (1 - cycle) * 0.65;
+    });
+    musicNotes.forEach(({ mesh, baseAngle, baseY, idx }) => {
+      const a = baseAngle + t * 0.55;
+      mesh.position.x = Math.cos(a) * 2.6;
+      mesh.position.z = Math.sin(a) * 2.6;
+      mesh.position.y = baseY + Math.sin(t * 2.8 + idx) * 0.35;
+      mesh.rotation.y = t * 1.4;
+    });
+    if (trophyStar && trophyStar.parent?.visible) {
+      trophyStar.rotation.y = t * 1.8;
+      trophyStar.position.y = 4.3 + Math.sin(t * 3) * 0.2;
+    }
+    if (spotlightCone && spotlightCone.parent?.visible) {
+      const hue = (t * 0.18) % 1;
+      spotlightCone.material.color.setHSL(hue, 0.9, 0.65);
+    }
+  };
+
+  return { syncMastery, update };
 }

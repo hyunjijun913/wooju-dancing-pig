@@ -196,6 +196,7 @@ const quizController = new QuizController(document.getElementById('quizModal'), 
 
 const farmGame = new FarmGame3D({
   audioEngine,
+  getTotalStars: () => totalStars,
   onRewardStar: addStars,
   onConfetti: launchConfetti,
   onToast: showToast,
