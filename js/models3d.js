@@ -1094,6 +1094,8 @@ export function buildVillageBuildings3D(THREE, scene) {
   let activeFx = null; // { id, x, z, elapsed, duration }
 
   const register = (id, group, focusPos) => {
+    // Position group at its exact world location so scale/rise animations happen IN PLACE!
+    group.position.set(focusPos.x, 0, focusPos.z);
     group.visible = false;
     root.add(group);
     entries.set(id, { group, focusPos, buildProgress: 1, active: false });
@@ -1109,97 +1111,146 @@ export function buildVillageBuildings3D(THREE, scene) {
     }).catch(() => {});
   };
 
-  // 1. garden_arch (3 speaks) -> Lush entrance flower garden
+  // Helper: cute floating 3D signpost badge above landmarks so Wooju immediately spots every building!
+  const addLandmarkBadge = (parent, emoji, y = 4.6) => {
+    const sp = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, emoji, '#FEF9C3'), transparent: true })
+    );
+    sp.scale.set(1.25, 1.25, 1);
+    sp.position.set(0, y, 0);
+    parent.add(sp);
+  };
+
+  // 1. garden_arch (3 speaks) -> Unmistakable 3D Floral Archway right over the entrance path!
   const g1 = new THREE.Group();
+  const archWoodMat = new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.65 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: '#22C55E', roughness: 0.6 });
+  // Twin wooden pillars flanking the entrance path
+  [-2.3, 2.3].forEach((px) => {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 3.6, 12), archWoodMat);
+    post.position.set(px, 1.8, 0);
+    post.castShadow = true;
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.42, 0.65, 12), new THREE.MeshStandardMaterial({ color: '#EA580C', roughness: 0.6 }));
+    pot.position.set(px, 0.32, 0.55);
+    const bush = new THREE.Mesh(new THREE.SphereGeometry(0.62, 12, 10), leafMat);
+    bush.position.set(px, 0.9, 0.55);
+    g1.add(post, pot, bush);
+  });
+  // Lush green archway spanning across the path
+  const archCurve = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.32, 10, 28, Math.PI), leafMat);
+  archCurve.position.set(0, 3.4, 0);
+  archCurve.castShadow = true;
+  g1.add(archCurve);
+  // Colorful 3D blossoms all along the arch!
+  const blossomCols = ['#F43F5E', '#FACC15', '#EC4899', '#A855F7', '#38BDF8', '#FB923C'];
+  for (let i = 0; i <= 8; i++) {
+    const a = (i / 8) * Math.PI;
+    const fl = new THREE.Mesh(
+      new THREE.SphereGeometry(0.28, 10, 8),
+      new THREE.MeshStandardMaterial({ color: blossomCols[i % blossomCols.length], emissive: blossomCols[i % blossomCols.length], emissiveIntensity: 0.25 })
+    );
+    fl.position.set(Math.cos(a) * 2.3, 3.4 + Math.sin(a) * 2.3, 0.22);
+    g1.add(fl);
+  }
+  // Extra 3D flower clusters flanking the path
   const fUrls = [
     'assets/models/nature/flower_redA.glb',
     'assets/models/nature/flower_yellowA.glb',
     'assets/models/nature/flower_purpleA.glb',
   ];
-  [[-2.5, 13.5], [-2.5, 11.5], [-2.5, 9.5], [2.5, 11.5], [2.5, 9.5], [2.5, 7.5]].forEach(([fx, fz], i) => {
-    attachGLB(g1, fUrls[i % 3], 0.95, fx, 0, fz, i);
+  [[-2.8, 1.6], [2.8, 1.6], [-2.8, -1.6], [2.8, -1.6]].forEach(([fx, fz], i) => {
+    attachGLB(g1, fUrls[i % 3], 1.15, fx, 0, fz, i);
   });
-  register('garden_arch', g1, { x: 0, z: 11.0 });
+  addLandmarkBadge(g1, '🌷', 6.4);
+  register('garden_arch', g1, { x: 0, z: 8.8 });
 
   // 2. magic_well (6 speaks) -> Wishing Well
   const g2 = new THREE.Group();
-  attachGLB(g2, 'assets/models/quaternius/Well.glb', 3.0, -8.5, 0, -14.8, 0.2);
+  attachGLB(g2, 'assets/models/quaternius/Well.glb', 3.2, 0, 0, 0, 0.2);
+  addLandmarkBadge(g2, '🪣', 4.0);
   register('magic_well', g2, { x: -8.5, z: -14.8 });
 
   // 3. green_stall (10 speaks) -> Green Fruit Market Stall
   const g3 = new THREE.Group();
-  attachGLB(g3, 'assets/models/fantasy-town/stall-green.glb', 3.4, -15.2, 0, -2.5, Math.PI * 0.45);
-  attachGLB(g3, 'assets/models/food/apple.glb', 0.65, -14.5, 1.05, -2.3, 0);
+  attachGLB(g3, 'assets/models/fantasy-town/stall-green.glb', 3.6, 0, 0, 0, Math.PI * 0.45);
+  attachGLB(g3, 'assets/models/food/apple.glb', 0.7, 0.7, 1.05, 0.2, 0);
+  addLandmarkBadge(g3, '🍏', 4.3);
   register('green_stall', g3, { x: -15.2, z: -2.5 });
 
   // 4. red_stall (15 speaks) -> Red Snack Stall + Farm Cart
   const g4 = new THREE.Group();
-  attachGLB(g4, 'assets/models/fantasy-town/stall-red.glb', 3.4, 15.6, 0, -1.2, -Math.PI * 0.45);
-  attachGLB(g4, 'assets/models/fantasy-town/cart.glb', 2.2, 1.5, 0, -15.8, 0.3);
+  attachGLB(g4, 'assets/models/fantasy-town/stall-red.glb', 3.6, 0, 0, 0, -Math.PI * 0.45);
+  attachGLB(g4, 'assets/models/fantasy-town/cart.glb', 2.2, -1.8, 0, 2.2, 0.3);
+  addLandmarkBadge(g4, '🍿', 4.3);
   register('red_stall', g4, { x: 15.6, z: -1.2 });
 
   // 5. fountain (20 speaks) -> Sparkling Plaza Fountain
   const g5 = new THREE.Group();
-  attachGLB(g5, 'assets/models/fantasy-town/fountain-round-detail.glb', 2.8, 7.8, 0, 13.8, 0);
+  attachGLB(g5, 'assets/models/fantasy-town/fountain-round-detail.glb', 3.0, 0, 0, 0, 0);
+  addLandmarkBadge(g5, '⛲', 3.9);
   register('fountain', g5, { x: 7.8, z: 13.8 });
 
   // 6. wooju_house (26 speaks) -> Wooju's Cozy Cottage
   const g6 = new THREE.Group();
-  attachGLB(g6, 'assets/models/quaternius/House_1.glb', 6.0, -17.2, 0, -8.2, Math.PI * 0.35);
+  attachGLB(g6, 'assets/models/quaternius/House_1.glb', 6.2, 0, 0, 0, Math.PI * 0.35);
+  addLandmarkBadge(g6, '🏡', 6.8);
   register('wooju_house', g6, { x: -17.2, z: -8.2 });
 
   // 7. friend_villa (32 speaks) -> Animal Friends Villa
   const g7 = new THREE.Group();
-  attachGLB(g7, 'assets/models/quaternius/House_2.glb', 6.0, 17.5, 0, -5.8, -Math.PI * 0.35);
+  attachGLB(g7, 'assets/models/quaternius/House_2.glb', 6.2, 0, 0, 0, -Math.PI * 0.35);
+  addLandmarkBadge(g7, '🏠', 6.8);
   register('friend_villa', g7, { x: 17.5, z: -5.8 });
 
   // 8. gold_windmill (40 speaks) -> Golden Windmill
   const g8 = new THREE.Group();
-  attachGLB(g8, 'assets/models/fantasy-town/windmill.glb', 8.5, 5.8, 0, -17.8, -0.25);
+  attachGLB(g8, 'assets/models/fantasy-town/windmill.glb', 8.6, 0, 0, 0, -0.25);
+  addLandmarkBadge(g8, '🌬️', 9.0);
   register('gold_windmill', g8, { x: 5.8, z: -17.8 });
 
   // 9. star_gazebo (50 speaks) -> Starlight Gazebo Pavilion
   const g9 = new THREE.Group();
-  attachGLB(g9, 'assets/models/quaternius/Gazebo.glb', 5.6, 0, 0, -5.4, 0);
+  attachGLB(g9, 'assets/models/quaternius/Gazebo.glb', 5.8, 0, 0, 0, 0);
+  addLandmarkBadge(g9, '🏛️', 6.4);
   register('star_gazebo', g9, { x: 0, z: -5.4 });
 
   // 10. royal_barn (62 speaks) -> Royal Golden Barn Cathedral + Red Banners
   const g10 = new THREE.Group();
-  attachGLB(g10, 'assets/models/quaternius/Stable.glb', 6.5, -3.2, 0, -18.2, 0);
-  attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.0, -6.2, 0, -16.0, 0.2);
-  attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.0, 0.0, 0, -16.0, -0.2);
+  attachGLB(g10, 'assets/models/quaternius/Stable.glb', 6.6, 0, 0, 0, 0);
+  attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.0, -3.0, 0, 2.2, 0.2);
+  attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.0, 3.0, 0, 2.2, -0.2);
+  addLandmarkBadge(g10, '🏰', 7.2);
   register('royal_barn', g10, { x: -3.2, z: -18.2 });
 
   // 11. rocket_pad (75 speaks) -> Giant 3D Wooju Space Rocket Launchpad!
   const g11 = new THREE.Group();
-  const RX = -13.5, RZ = 12.2;
   const pad = new THREE.Mesh(
     new THREE.CylinderGeometry(2.4, 2.7, 0.4, 24),
     new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.6 })
   );
-  pad.position.set(RX, 0.2, RZ);
+  pad.position.set(0, 0.2, 0);
   const body = new THREE.Mesh(
     new THREE.CylinderGeometry(0.95, 1.15, 4.6, 18),
     new THREE.MeshStandardMaterial({ color: '#F8FAFC', metalness: 0.3, roughness: 0.3 })
   );
-  body.position.set(RX, 3.0, RZ);
+  body.position.set(0, 3.0, 0);
   const nose = new THREE.Mesh(
     new THREE.ConeGeometry(0.96, 1.8, 18),
     new THREE.MeshStandardMaterial({ color: '#EF4444', roughness: 0.35 })
   );
-  nose.position.set(RX, 6.2, RZ);
+  nose.position.set(0, 6.2, 0);
   const win = new THREE.Mesh(
     new THREE.SphereGeometry(0.42, 14, 12),
     new THREE.MeshStandardMaterial({ color: '#38BDF8', emissive: '#0284C7', emissiveIntensity: 0.5 })
   );
-  win.position.set(RX + 0.72, 3.6, RZ + 0.55);
+  win.position.set(0.72, 3.6, 0.55);
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
     const fin = new THREE.Mesh(
       new THREE.BoxGeometry(0.18, 1.5, 1.1),
       new THREE.MeshStandardMaterial({ color: '#F97316', roughness: 0.4 })
     );
-    fin.position.set(RX + Math.cos(a) * 1.15, 1.4, RZ + Math.sin(a) * 1.15);
+    fin.position.set(Math.cos(a) * 1.15, 1.4, Math.sin(a) * 1.15);
     fin.rotation.y = -a + Math.PI / 2;
     g11.add(fin);
   }
@@ -1208,9 +1259,10 @@ export function buildVillageBuildings3D(THREE, scene) {
     new THREE.MeshBasicMaterial({ color: '#FACC15', transparent: true, opacity: 0.85 })
   );
   rocketFlame.rotation.x = Math.PI;
-  rocketFlame.position.set(RX, 0.7, RZ);
+  rocketFlame.position.set(0, 0.7, 0);
   g11.add(pad, body, nose, win, rocketFlame);
-  register('rocket_pad', g11, { x: RX, z: RZ });
+  addLandmarkBadge(g11, '🚀', 7.9);
+  register('rocket_pad', g11, { x: -13.5, z: 12.2 });
 
   // 12. rainbow_arch (100 speaks) -> Legendary Giant 3D Rainbow Arch over the entire farm!
   const g12 = new THREE.Group();
@@ -1220,7 +1272,7 @@ export function buildVillageBuildings3D(THREE, scene) {
       new THREE.TorusGeometry(13.5 - i * 0.42, 0.22, 10, 48, Math.PI),
       new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.82 })
     );
-    arc.position.set(0, 0.2, -3.5);
+    arc.position.set(0, 0.2, 0);
     g12.add(arc);
   });
   register('rainbow_arch', g12, { x: 0, z: -3.5 });
