@@ -1567,6 +1567,14 @@ export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
       let entry = placedMeshes.get(id);
       if (!entry) {
         entry = buildGroundedTreasure3D(THREE, item);
+        const hitMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.05, 1.05, 2.2, 10),
+          new THREE.MeshBasicMaterial({ visible: false })
+        );
+        hitMesh.position.y = 1.1;
+        hitMesh.userData = { placedTreasureId: id };
+        entry.group.add(hitMesh);
+        entry.hitMesh = hitMesh;
         root.add(entry.group);
         placedMeshes.set(id, entry);
       }
@@ -1577,6 +1585,8 @@ export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
       }
     });
   };
+
+  const getHitMeshes = () => [...placedMeshes.values()].map(e => e.hitMesh).filter(Boolean);
 
   const update = (t, dt) => {
     let idx = 0;
@@ -1597,7 +1607,7 @@ export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
     });
   };
 
-  return { syncPlaced, update };
+  return { syncPlaced, update, getHitMeshes };
 }
 
 // --- v8: Animal Crossing-style 3D My-Home Room (Wallpapers, Floors, 40 3D Furniture & 3 Room Sizes) ---
@@ -1887,6 +1897,14 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
       let entry = placedMap.get(id);
       if (!entry) {
         entry = buildFurnitureMesh3D(THREE, item);
+        const hitMesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.15, 1.15, 2.4, 10),
+          new THREE.MeshBasicMaterial({ visible: false })
+        );
+        hitMesh.position.y = 1.2;
+        hitMesh.userData = { placedFurnId: id };
+        entry.group.add(hitMesh);
+        entry.hitMesh = hitMesh;
         furnRoot.add(entry.group);
         placedMap.set(id, entry);
       }
@@ -1898,6 +1916,8 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
       }
     });
   };
+
+  const getHitMeshes = () => [...placedMap.values()].map(e => e.hitMesh).filter(Boolean);
 
   const update = (t, dt) => {
     let i = 0;
@@ -1922,5 +1942,6 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
     syncFurniture,
     update,
     getHalfSize: () => currentHalfSize,
+    getHitMeshes,
   };
 }

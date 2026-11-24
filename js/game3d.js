@@ -111,6 +111,7 @@ export class FarmGame3D {
     this.savedOutdoorPos = { x: 0, z: 15.2 };
     this.homeTab = 'furniture'; // 'furniture' | 'wallpaper' | 'floor'
     this.placingFurnitureId = null;
+    this.selectedPlacedItem = null; // { kind: 'treasure' | 'furniture', id }
     this.lastRevealedKind = 'treasure';
     this.attendance = { days: [], lastClaimDate: null, streak: 0 };
     this.daily = normalizeDailyState(null, getLocalDateKey());
@@ -402,6 +403,13 @@ export class FarmGame3D {
           <button class="mini-btn" id="farmPlaceHereBtn">📍 내 발 앞에 놓기</button>
           <button class="mini-btn del" id="farmPlaceCancelBtn">✕ 취소</button>
         </div>
+        <div class="farm-place-bar" id="farmInspectBar" style="display:none;">
+          <span id="farmInspectText">🥚 황금 달걀</span>
+          <button class="mini-btn" id="farmInspectMoveBtn">📍 옮기기</button>
+          <button class="mini-btn" id="farmInspectRotBtn" style="display:none;">🔄 돌리기</button>
+          <button class="mini-btn del" id="farmInspectPickupBtn">🎒 주워담기</button>
+          <button class="mini-btn" id="farmInspectCloseBtn">✕</button>
+        </div>
 
         <!-- Floating Speech Bubble projected right above a nearby 3D villager -->
         <button class="farm-hover-bubble" id="farmHoverBubble" style="display:none;">
@@ -608,6 +616,31 @@ export class FarmGame3D {
       this._commitTreasurePlacement(this.placingTreasureId, fx, fz);
     });
     this.container.querySelector('#farmPlaceCancelBtn').addEventListener('click', () => this._exitPlaceMode());
+    this.container.querySelector('#farmInspectCloseBtn').addEventListener('click', () => this._hideInspectBar());
+    this.container.querySelector('#farmInspectMoveBtn').addEventListener('click', () => {
+      const sel = this.selectedPlacedItem;
+      this._hideInspectBar();
+      if (!sel) return;
+      if (sel.kind === 'furniture') this._enterFurniturePlaceMode(sel.id);
+      else this._enterPlaceMode(sel.id);
+    });
+    this.container.querySelector('#farmInspectRotBtn').addEventListener('click', () => {
+      const sel = this.selectedPlacedItem;
+      if (!sel || sel.kind !== 'furniture') return;
+      const entry = this.homeState.placedFurniture.find(p => p.id === sel.id);
+      if (!entry) return;
+      entry.rot = ((entry.rot || 0) + Math.PI / 2) % (Math.PI * 2);
+      this._saveRpgState();
+      if (this.myHome3D) this.myHome3D.syncFurniture(this.homeState.placedFurniture);
+      this.audio.playChimeSFX();
+    });
+    this.container.querySelector('#farmInspectPickupBtn').addEventListener('click', () => {
+      const sel = this.selectedPlacedItem;
+      this._hideInspectBar();
+      if (!sel) return;
+      if (sel.kind === 'furniture') this._pickupFurniture(sel.id);
+      else this._pickupTreasure(sel.id);
+    });
 
     this.container.querySelector('#farmParadeBtn').addEventListener('click', () => {
       this.paradeEnabled = !this.paradeEnabled;
@@ -853,7 +886,9 @@ export class FarmGame3D {
                 <div class="bag-slot-ico">${got ? tr.emoji : '🎁'}</div>
                 <div class="bag-slot-name">${got ? tr.name : '숨겨진 보물'}</div>
                 ${got
-                  ? `<button class="bag-place-btn ${isPlaced ? 'placed' : ''}" data-place-tr="${tr.id}">${isPlaced ? '📍 옮기기' : '🏡 농장에 놓기'}</button>`
+                  ? (isPlaced
+                      ? `<div class="bag-btn-row"><button class="bag-place-btn placed" data-place-tr="${tr.id}">📍 옮기기</button><button class="bag-place-btn pickup" data-pickup-tr="${tr.id}">🎒 주워담기</button></div>`
+                      : `<button class="bag-place-btn" data-place-tr="${tr.id}">🏡 농장에 놓기</button>`)
                   : `<div class="bag-slot-who">상자를 열어보세요</div>`}
               </div>
             `;
@@ -865,6 +900,12 @@ export class FarmGame3D {
           const id = btn.dataset.placeTr;
           this._closeBagModal();
           this._enterPlaceMode(id);
+        });
+      });
+      contentEl.querySelectorAll('[data-pickup-tr]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this._pickupTreasure(btn.dataset.pickupTr);
+          this._renderBagModalContent();
         });
       });
       return;
@@ -1030,6 +1071,51 @@ export class FarmGame3D {
     this.placingFurnitureId = null;
     const bar = this.container?.querySelector('#farmPlaceBar');
     if (bar) bar.style.display = 'none';
+  }
+
+  _showInspectBar(kind, id) {
+    const item = kind === 'furniture'
+      ? ROOM_FURNITURE.find(f => f.id === id)
+      : TREASURE_ITEMS.find(t => t.id === id);
+    if (!item) return;
+    this.selectedPlacedItem = { kind, id };
+    const bar = this.container?.querySelector('#farmInspectBar');
+    const txt = this.container?.querySelector('#farmInspectText');
+    const rotBtn = this.container?.querySelector('#farmInspectRotBtn');
+    if (txt) txt.textContent = `${item.emoji} ${item.name}`;
+    if (rotBtn) rotBtn.style.display = kind === 'furniture' ? 'inline-block' : 'none';
+    if (bar) bar.style.display = 'flex';
+  }
+
+  _hideInspectBar() {
+    this.selectedPlacedItem = null;
+    const bar = this.container?.querySelector('#farmInspectBar');
+    if (bar) bar.style.display = 'none';
+  }
+
+  _pickupTreasure(id) {
+    const item = TREASURE_ITEMS.find(t => t.id === id);
+    this.placedTreasures = this.placedTreasures.filter(p => p.id !== id);
+    this._saveRpgState();
+    if (this.placedTreasures3D) this.placedTreasures3D.syncPlaced(this.placedTreasures);
+    this.audio.playChimeSFX();
+    if (item) {
+      this._animateItemToBag(item.emoji);
+      this.onToast(`🎒 ${item.emoji} ${item.name}을(를) 다시 가방에 주워담았어요!`);
+    }
+  }
+
+  _pickupFurniture(id) {
+    const item = ROOM_FURNITURE.find(f => f.id === id);
+    this.homeState.placedFurniture = this.homeState.placedFurniture.filter(p => p.id !== id);
+    this._saveRpgState();
+    if (this.myHome3D) this.myHome3D.syncFurniture(this.homeState.placedFurniture);
+    this._updateBagBadge();
+    this.audio.playChimeSFX();
+    if (item) {
+      this._animateItemToBag(item.emoji);
+      this.onToast(`🎒 ${item.emoji} ${item.name}을(를) 다시 가방에 주워담았어요!`);
+    }
   }
 
   _getOwnedFurnitureIds() {
@@ -1198,7 +1284,9 @@ export class FarmGame3D {
                 <div class="bag-slot-ico">${got ? f.emoji : '🔒'}</div>
                 <div class="bag-slot-name">${got ? f.name : '숨겨진 가구'}</div>
                 ${got
-                  ? `<button class="bag-place-btn ${placed ? 'placed' : ''}" data-place-furn="${f.id}">${placed ? '📍 옮기기' : '🛋️ 방에 놓기'}</button>`
+                  ? (placed
+                      ? `<div class="bag-btn-row"><button class="bag-place-btn placed" data-place-furn="${f.id}">📍 옮기기</button><button class="bag-place-btn pickup" data-pickup-furn="${f.id}">🎒 주워담기</button></div>`
+                      : `<button class="bag-place-btn" data-place-furn="${f.id}">🛋️ 방에 놓기</button>`)
                   : `<div class="bag-slot-who">보물상자에서 획득</div>`}
               </div>
             `;
@@ -1210,6 +1298,12 @@ export class FarmGame3D {
           const id = btn.dataset.placeFurn;
           this._closeHomeModal();
           this._enterFurniturePlaceMode(id);
+        });
+      });
+      body.querySelectorAll('[data-pickup-furn]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this._pickupFurniture(btn.dataset.pickupFurn);
+          this._renderHomeModal();
         });
       });
       return;
@@ -1751,8 +1845,16 @@ export class FarmGame3D {
       );
       this.raycaster.setFromCamera(ndc, this.camera);
 
-      // Indoor 🏡 My-Home floor tap (furniture placement or indoor walking)
+      // Indoor 🏡 My-Home floor tap (furniture placement, inspect/pickup, or indoor walking)
       if (this.inHome && this.myHome3D) {
+        if (!this.placingFurnitureId && this.myHome3D.getHitMeshes) {
+          const furnHits = this.raycaster.intersectObjects(this.myHome3D.getHitMeshes(), false);
+          if (furnHits.length > 0) {
+            this._showInspectBar('furniture', furnHits[0].object.userData.placedFurnId);
+            return;
+          }
+        }
+        this._hideInspectBar();
         const floorHits = this.raycaster.intersectObject(this.myHome3D.floorMesh, false);
         if (floorHits.length > 0) {
           const pt = floorHits[0].point;
@@ -1777,6 +1879,16 @@ export class FarmGame3D {
         }
         return;
       }
+
+      // Tap any placed outdoor 3D treasure to Move or Pick Up back into Bag!
+      if (this.placedTreasures3D?.getHitMeshes) {
+        const trHits = this.raycaster.intersectObjects(this.placedTreasures3D.getHitMeshes(), false);
+        if (trHits.length > 0) {
+          this._showInspectBar('treasure', trHits[0].object.userData.placedTreasureId);
+          return;
+        }
+      }
+      this._hideInspectBar();
 
       const spotTargets = this.spotEntries.map(m => m.hitMesh);
       const spotHits = this.raycaster.intersectObjects(spotTargets, false);

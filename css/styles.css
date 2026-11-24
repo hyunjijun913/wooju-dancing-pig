@@ -1284,6 +1284,14 @@ body.farm-fullscreen .farm-card {
 .bag-place-btn.placed {
   background: #16A34A;
 }
+.bag-btn-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 3px;
+}
+.bag-place-btn.pickup {
+  background: #EF4444;
+}
 
 /* ===========================
    v8: My-Home 3D Interior Toggle & Room Decorator Sheet
