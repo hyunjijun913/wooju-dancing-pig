@@ -62,6 +62,13 @@ export class AudioEngine {
     this.speechRec = null;
     this.speechActive = false;
 
+    // Cozy Animal Crossing-style procedural marimba BGM & auto-ducking (v9)
+    this.bgmEnabled = false;
+    this.bgmTimer = null;
+    this.bgmStep = 0;
+    this.bgmDucked = false;
+    this.lastStepSfxAt = 0;
+
     // Full Mode 4 one-take presentation recorder
     this.rehearsalRec = null;
     this.rehearsalStream = null;
@@ -225,6 +232,7 @@ export class AudioEngine {
     this._teardownEchoMic(false, null);
     this.stopVoiceGauge();
     this.stopSpeechMatch();
+    this.setBgmDucked(false);
     if (this.storyAudio) this.storyAudio.pause();
     if (this.activeCustomAudio) {
       this.activeCustomAudio.onended = null;
@@ -901,6 +909,134 @@ export class AudioEngine {
       rec.onend = null;
       try { rec.stop(); } catch (_) {}
     }
+  }
+
+  // --- v9: Cozy Animal Crossing Marimba BGM + Auto-Ducking + Footstep/Door/Pop SFX ---
+  setBgmDucked(ducked) {
+    this.bgmDucked = Boolean(ducked);
+  }
+
+  startBgm() {
+    this.unlock();
+    if (this.bgmEnabled && this.bgmTimer) return;
+    this.bgmEnabled = true;
+    // Cheerful, warm C-major pentatonic cozy village melody
+    const melody = [
+      523.25, 659.25, 783.99, 659.25, 880.00, 783.99, 659.25, 0,
+      587.33, 659.25, 783.99, 587.33, 523.25, 0,      392.00, 0,
+      523.25, 659.25, 880.00, 1046.5, 880.00, 783.99, 659.25, 587.33,
+      523.25, 659.25, 587.33, 392.00, 523.25, 0,      0,      0,
+    ];
+    const bass = [261.63, 0, 196.00, 0, 220.00, 0, 196.00, 0];
+
+    this.bgmTimer = setInterval(() => {
+      if (!this.bgmEnabled) return;
+      const ctx = this.getAudioCtx();
+      if (!ctx || ctx.state !== 'running') return;
+      // Mute BGM cleanly while native story or speech recognition is active
+      if (this.bgmDucked || this.speechActive || (this.storyAudio && !this.storyAudio.paused)) return;
+
+      const idx = this.bgmStep % melody.length;
+      const freq = melody[idx];
+      const bFreq = bass[this.bgmStep % bass.length];
+      this.bgmStep += 1;
+
+      const playTone = (f, type, vol, dur) => {
+        if (!f) return;
+        try {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(f, ctx.currentTime);
+          gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + dur + 0.02);
+        } catch (_) {}
+      };
+
+      playTone(freq, 'triangle', 0.055, 0.34);
+      if (idx % 2 === 0 && bFreq) playTone(bFreq, 'sine', 0.035, 0.42);
+    }, 340);
+  }
+
+  stopBgm() {
+    this.bgmEnabled = false;
+    if (this.bgmTimer) {
+      clearInterval(this.bgmTimer);
+      this.bgmTimer = null;
+    }
+  }
+
+  toggleBgm() {
+    if (this.bgmEnabled) {
+      this.stopBgm();
+      return false;
+    }
+    this.startBgm();
+    return true;
+  }
+
+  playStepSFX(indoor = false) {
+    const now = performance.now();
+    if (now - this.lastStepSfxAt < 240) return;
+    this.lastStepSfxAt = now;
+    try {
+      const ctx = this.getAudioCtx();
+      if (!ctx || ctx.state !== 'running') return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      const baseFreq = indoor ? 220 : 155;
+      osc.frequency.setValueAtTime(baseFreq + Math.random() * 25, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(65, ctx.currentTime + 0.055);
+      gain.gain.setValueAtTime(0.045, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.065);
+    } catch (_) {}
+  }
+
+  playDoorSFX() {
+    try {
+      const ctx = this.getAudioCtx();
+      if (!ctx) return;
+      [392.0, 523.25, 659.25].forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, ctx.currentTime + i * 0.07);
+        gain.gain.setValueAtTime(0.11, ctx.currentTime + i * 0.07);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.07 + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.07);
+        osc.stop(ctx.currentTime + i * 0.07 + 0.24);
+      });
+    } catch (_) {}
+  }
+
+  playPopSFX() {
+    try {
+      const ctx = this.getAudioCtx();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(320, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(980, ctx.currentTime + 0.09);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.11);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.12);
+    } catch (_) {}
   }
 
   // --- Mode 4 One-Take Full Rehearsal Recorder ---

@@ -2022,3 +2022,193 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
     getHitMeshes,
   };
 }
+
+// --- v9 (#2): Dynamic Day / Sunset / Starry Night (+ Fireflies & Stars) / Cherry Blossom Petals ---
+export function buildAtmosphere3D(THREE, parentGroup) {
+  const root = new THREE.Group();
+  parentGroup.add(root);
+
+  // Night Stars Dome
+  const starsGroup = new THREE.Group();
+  const starMat = new THREE.MeshBasicMaterial({ color: '#FEF08A' });
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2 + (i % 5) * 0.13;
+    const rad = 26 + (i % 4) * 5;
+    const y = 14 + (i % 7) * 2.4;
+    const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.22 + (i % 3) * 0.08), starMat);
+    st.position.set(Math.cos(a) * rad, y, Math.sin(a) * rad);
+    starsGroup.add(st);
+  }
+  starsGroup.visible = false;
+  root.add(starsGroup);
+
+  // Glowing Night Fireflies + Stage Lantern Glow Bulbs
+  const firefliesGroup = new THREE.Group();
+  const ffList = [];
+  const ffMat = new THREE.MeshBasicMaterial({ color: '#FDE047' });
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2;
+    const r = 5 + (i % 5) * 2.4;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), ffMat);
+    m.position.set(Math.cos(a) * r, 1.4 + (i % 3) * 0.9, Math.sin(a) * r);
+    firefliesGroup.add(m);
+    ffList.push({ mesh: m, a, r, baseY: 1.2 + (i % 4) * 0.65, idx: i });
+  }
+  // Warm glowing orbs inside the 4 stage lanterns at night!
+  [[-3.2, -2.4], [3.2, -2.4], [-3.2, 2.4], [3.2, 2.4]].forEach(([lx, lz]) => {
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.32, 10, 8),
+      new THREE.MeshBasicMaterial({ color: '#FDE047', transparent: true, opacity: 0.9 })
+    );
+    bulb.position.set(lx, 2.15, lz);
+    firefliesGroup.add(bulb);
+  });
+  firefliesGroup.visible = false;
+  root.add(firefliesGroup);
+
+  // Drifting Pink Cherry Blossom Petals
+  const petalsGroup = new THREE.Group();
+  const petalList = [];
+  const petalMat = new THREE.MeshBasicMaterial({ color: '#FBCFE8', side: THREE.DoubleSide });
+  for (let i = 0; i < 36; i++) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.18), petalMat);
+    const px = ((i * 73) % 34) - 17;
+    const pz = ((i * 47) % 34) - 17;
+    const py = 1 + (i % 10) * 1.4;
+    p.position.set(px, py, pz);
+    petalsGroup.add(p);
+    petalList.push({ mesh: p, speed: 0.7 + (i % 4) * 0.28, drift: 0.6 + (i % 3) * 0.35, idx: i });
+  }
+  petalsGroup.visible = false;
+  root.add(petalsGroup);
+
+  let mode = 'day'; // 'day' | 'sunset' | 'night' | 'blossom'
+
+  const PRESETS = {
+    day:     { sky: '#9BD8FF', fog: '#BFE8FF', hemiSky: '#FFFDF5', hemiGnd: '#68C456', hemiInt: 0.95, sunCol: '#FFF5D6', sunInt: 1.35 },
+    sunset:  { sky: '#FDBA74', fog: '#FED7AA', hemiSky: '#FFEDD5', hemiGnd: '#D97706', hemiInt: 0.85, sunCol: '#FB923C', sunInt: 1.45 },
+    night:   { sky: '#1E1B4B', fog: '#312E81', hemiSky: '#818CF8', hemiGnd: '#1E293B', hemiInt: 0.65, sunCol: '#C7D2FE', sunInt: 0.75 },
+    blossom: { sky: '#FBCFE8', fog: '#FCE7F3', hemiSky: '#FFF1F2', hemiGnd: '#86EFAC', hemiInt: 0.98, sunCol: '#FFF5D6', sunInt: 1.3 },
+  };
+
+  const applyMode = (newMode, { scene, hemiLight, dirLight, inHome = false } = {}) => {
+    mode = PRESETS[newMode] ? newMode : 'day';
+    const p = PRESETS[mode];
+    starsGroup.visible = mode === 'night';
+    firefliesGroup.visible = mode === 'night';
+    petalsGroup.visible = mode === 'blossom';
+    if (!inHome && scene) {
+      scene.background = new THREE.Color(p.sky);
+      scene.fog = new THREE.Fog(p.fog, 34, 88);
+    }
+    if (hemiLight) {
+      hemiLight.color.set(p.hemiSky);
+      hemiLight.groundColor.set(p.hemiGnd);
+      hemiLight.intensity = p.hemiInt;
+    }
+    if (dirLight) {
+      dirLight.color.set(p.sunCol);
+      dirLight.intensity = p.sunInt;
+    }
+  };
+
+  const update = (t, dt) => {
+    if (firefliesGroup.visible) {
+      ffList.forEach(({ mesh, a, r, baseY, idx }) => {
+        const ang = a + t * 0.18 * (idx % 2 === 0 ? 1 : -1);
+        mesh.position.set(Math.cos(ang) * r, baseY + Math.sin(t * 2.4 + idx) * 0.45, Math.sin(ang) * r);
+      });
+    }
+    if (petalsGroup.visible) {
+      petalList.forEach(({ mesh, speed, drift, idx }) => {
+        mesh.position.y -= dt * speed;
+        mesh.position.x += Math.sin(t * 1.4 + idx) * dt * drift;
+        mesh.rotation.x += dt * 1.6;
+        mesh.rotation.z += dt * 1.2;
+        if (mesh.position.y < 0.2) mesh.position.y = 13.5;
+      });
+    }
+  };
+
+  return { applyMode, update, getMode: () => mode };
+}
+
+// --- v9 (#3): Floating Golden Present Balloon Surprise Event (Animal Crossing style!) ---
+export function buildGoldenBalloon3D(THREE, parentGroup) {
+  const group = new THREE.Group();
+  group.visible = false;
+
+  const balloon = new THREE.Mesh(
+    new THREE.SphereGeometry(0.95, 16, 14),
+    new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#D97706', emissiveIntensity: 0.35, roughness: 0.25, metalness: 0.45 })
+  );
+  balloon.scale.set(1, 1.18, 1);
+  balloon.position.y = 1.6;
+
+  const string = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 1.2, 6),
+    new THREE.MeshBasicMaterial({ color: '#FFFFFF' })
+  );
+  string.position.y = 0.55;
+
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(0.85, 0.85, 0.85),
+    new THREE.MeshStandardMaterial({ color: '#EF4444', roughness: 0.4 })
+  );
+  box.position.y = -0.2;
+  const ribbon = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.18, 0.9),
+    new THREE.MeshStandardMaterial({ color: '#FDE047', roughness: 0.3 })
+  );
+  ribbon.position.y = -0.2;
+
+  // Generous invisible touch target so 6yo can easily pop it!
+  const hitMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(1.9, 10, 8),
+    new THREE.MeshBasicMaterial({ visible: false })
+  );
+  hitMesh.position.y = 0.9;
+  hitMesh.userData = { isGoldenBalloon: true };
+
+  group.add(balloon, string, box, ribbon, hitMesh);
+  parentGroup.add(group);
+
+  let active = false;
+  let cooldown = 18; // First balloon appears ~18s after entering!
+  let dir = 1;
+
+  const spawn = () => {
+    active = true;
+    dir = Math.random() > 0.5 ? 1 : -1;
+    const z = -6 + Math.random() * 14;
+    group.position.set(-18 * dir, 4.6, z);
+    group.visible = true;
+  };
+
+  const pop = () => {
+    active = false;
+    group.visible = false;
+    cooldown = 32;
+  };
+
+  const update = (t, dt, canSpawn) => {
+    if (!active) {
+      if (canSpawn) {
+        cooldown -= dt;
+        if (cooldown <= 0) spawn();
+      }
+      return false;
+    }
+    group.position.x += dir * dt * 2.15;
+    group.position.y = 4.6 + Math.sin(t * 2.6) * 0.45;
+    group.rotation.y = Math.sin(t * 1.5) * 0.2;
+    if (Math.abs(group.position.x) > 20) {
+      active = false;
+      group.visible = false;
+      cooldown = 26;
+    }
+    return true;
+  };
+
+  return { group, hitMesh, pop, update, isActive: () => active };
+}

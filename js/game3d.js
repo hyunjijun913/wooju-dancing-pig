@@ -3,6 +3,7 @@
 import {
   FARM_SPOTS,
   BASE_CARDS,
+  REHEARSAL_OUTRO,
   VILLAGE_BUILDINGS,
   TREASURE_ITEMS,
   ROOM_WALLPAPERS,
@@ -29,7 +30,8 @@ import {
   evaluateDailyQuests,
   claimDailyAttendance,
   tokenizeWords,
-  matchSpokenWords,
+  evaluateSpeechQuality,
+  buildListenQuestion,
 } from './data.js';
 import {
   buildWooju3D,
@@ -39,6 +41,8 @@ import {
   buildVillageBuildings3D,
   buildPlacedTreasures3D,
   buildMyHome3D,
+  buildAtmosphere3D,
+  buildGoldenBalloon3D,
 } from './models3d.js';
 import { WORD_TIMINGS } from './wordTimings.js';
 
@@ -122,6 +126,14 @@ export class FarmGame3D {
     this.lastRevealedTreasureId = null;
     this.placingTreasureId = null;
     this.cameraFocusOverride = null; // { x, z, until }
+    this.weatherMode = 'day'; // 'day' | 'sunset' | 'night' | 'blossom'
+    this.inLiveStage = false;
+    this.liveStageIdx = 0;
+    this.audienceCheerUntil = 0;
+    this.hemiLight = null;
+    this.dirLight = null;
+    this.atmosphere3D = null;
+    this.goldenBalloon3D = null;
 
     // Runtime dialogue & navigation state
     this.currentSpotIndex = 0;
@@ -273,6 +285,7 @@ export class FarmGame3D {
       this.rafId = null;
     }
     this._clearWordTimers();
+    this.audio.stopBgm();
     this.audio.stopAll();
     this.isListening = false;
     this.activeDialogueSpot = null;
@@ -399,6 +412,11 @@ export class FarmGame3D {
 
         <div class="farm-guide-pill" id="farmGuidePill">👆 노란 점선 길을 따라 반짝이는 친구에게 가보세요!</div>
         <div class="farm-goal-pill" id="farmGoalPill">🗣️ 0회 · 다음 건물: 🌷 꽃길 정원 (3회)</div>
+        <div class="farm-mini-hud-row" id="farmMiniHudRow">
+          <button class="farm-mini-hud-btn" id="farmBgmBtn" title="배경음악">🎵 BGM</button>
+          <button class="farm-mini-hud-btn" id="farmWeatherBtn" title="낮/노을/밤/꽃비">☀️ 낮</button>
+          <button class="farm-mini-hud-btn farm-stage-btn" id="farmLiveStageBtn" title="3D 중앙 무대 발표회">🎪 무대</button>
+        </div>
         <div class="home-level-pill" id="homeLevelPill" style="display:none;">🏡 1단계 아담한 우주 방</div>
         <div class="farm-cinematic-banner" id="farmCinematicBanner" style="display:none;">🏗️ 뚝딱뚝딱 새 건물 짓는 중!!</div>
         <div class="farm-place-bar" id="farmPlaceBar" style="display:none;">
@@ -478,12 +496,42 @@ export class FarmGame3D {
             </div>
             <span class="magic-pct" id="farmMagicPct">0%</span>
           </div>
+          <div class="speech-quality-bar" id="farmQualityBar" style="display:none;"></div>
 
           <!-- Hybrid Judge / Reward Buttons (3-way: Repeat/Hint, Solo 3★, Perfect Treasure!) -->
           <div class="farm-judge-row farm-judge-row-3">
             <button class="big-btn btn-star farm-judge-btn" id="farmJudgeNormalBtn">⭐ 따라 말했어요!</button>
             <button class="big-btn btn-crown farm-judge-btn" id="farmJudgeCrownBtn">👑 혼자 외웠어요!</button>
             <button class="big-btn btn-perfect farm-judge-btn" id="farmJudgePerfectBtn">💎 토씨 안 틀림!!</button>
+          </div>
+        </div>
+
+        <!-- 🎪 v9 (#4): 3D Central Stage Live Presentation Overlay -->
+        <div class="farm-live-stage" id="farmLiveStage" style="display:none;">
+          <div class="live-stage-head">
+            <span class="live-stage-badge" id="liveStageBadge">🎪 3D 무대 발표회 · 1 / 26</span>
+            <div style="display:flex;gap:6px;">
+              <button class="mini-btn" id="liveStageHintBtn">👂 1초 힌트</button>
+              <button class="mini-btn del" id="liveStageExitBtn">✕ 무대 내려오기</button>
+            </div>
+          </div>
+          <div class="farm-dlg-icons" id="liveStageIcons"></div>
+          <div class="farm-dlg-en" id="liveStageWords"></div>
+          <div class="speech-quality-bar" id="liveStageQuality"></div>
+          <div class="farm-judge-row">
+            <button class="big-btn btn-slow farm-judge-btn" id="liveStagePrevBtn">⬅️ 이전</button>
+            <button class="big-btn btn-star farm-judge-btn" id="liveStageNextBtn">👏 박수 받고 다음 문장! ➡️</button>
+          </div>
+        </div>
+
+        <!-- 🎈 v9 (#3): Golden Balloon Surprise Quiz Modal -->
+        <div class="farm-chest-modal" id="farmBalloonModal" style="display:none;">
+          <div class="farm-chest-card">
+            <div class="chest-title">🎈 황금 풍선 깜짝 퀴즈!!</div>
+            <p style="margin:0;font-size:13.5px;font-weight:800;color:#92400E;">원어민 소리를 듣고 어떤 동물 친구 이야기인지 맞춰보세요!</p>
+            <button class="big-btn btn-listen" id="balloonReplayBtn" style="width:100%;">🔊 다시 듣기</button>
+            <div class="balloon-quiz-choices" id="balloonChoices"></div>
+            <button class="mini-btn" id="balloonCloseBtn" style="margin-top:4px;">✕ 닫기</button>
           </div>
         </div>
 
@@ -572,6 +620,29 @@ export class FarmGame3D {
     this.container.querySelector('#farmBagCloseBtn').addEventListener('click', () => this._closeBagModal());
     this.container.querySelector('#farmHomeBtn').addEventListener('click', () => this._toggleMyHome());
     this.container.querySelector('#farmHomeCloseBtn').addEventListener('click', () => this._closeHomeModal());
+    this.container.querySelector('#farmBgmBtn').addEventListener('click', () => {
+      const on = this.audio.toggleBgm();
+      const btn = this.container.querySelector('#farmBgmBtn');
+      if (btn) {
+        btn.classList.toggle('on', on);
+        btn.textContent = on ? '🎵 BGM ON' : '🎵 BGM';
+      }
+      this.onToast(on ? '🎵 포근한 농장 배경음악이 켜졌어요!' : '🔇 배경음악을 껐어요!');
+    });
+    this.container.querySelector('#farmWeatherBtn').addEventListener('click', () => this._cycleWeather());
+    this.container.querySelector('#farmLiveStageBtn').addEventListener('click', () => this._startLiveStage());
+    this.container.querySelector('#liveStageExitBtn').addEventListener('click', () => this._exitLiveStage());
+    this.container.querySelector('#liveStagePrevBtn').addEventListener('click', () => {
+      if (this.liveStageIdx > 0) {
+        this.liveStageIdx -= 1;
+        this._renderLiveStageCard();
+      }
+    });
+    this.container.querySelector('#liveStageNextBtn').addEventListener('click', () => this._advanceLiveStage());
+    this.container.querySelector('#balloonCloseBtn').addEventListener('click', () => {
+      const m = this.container?.querySelector('#farmBalloonModal');
+      if (m) m.style.display = 'none';
+    });
     this.container.querySelectorAll('[data-home-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.homeTab = btn.dataset.homeTab;
@@ -774,6 +845,182 @@ export class FarmGame3D {
       bagBtn.classList.add('bag-bounce');
       setTimeout(() => bagBtn.classList.remove('bag-bounce'), 420);
     }, 680);
+  }
+
+  _cycleWeather() {
+    const order = ['day', 'sunset', 'night', 'blossom'];
+    const labels = { day: '☀️ 낮', sunset: '🌅 노을', night: '🌙 별밤', blossom: '🌸 꽃비' };
+    const toasts = {
+      day: '☀️ 상쾌한 아침 농장이에요!',
+      sunset: '🌅 따뜻한 노을이 지고 있어요!',
+      night: '🌙 별밤이 되어 반딧불이와 랜턴이 켜졌어요!',
+      blossom: '🌸 분홍 벚꽃잎이 흩날려요!',
+    };
+    const nextIdx = (order.indexOf(this.weatherMode) + 1) % order.length;
+    this.weatherMode = order[nextIdx];
+    const btn = this.container?.querySelector('#farmWeatherBtn');
+    if (btn) btn.textContent = labels[this.weatherMode];
+    if (this.atmosphere3D) {
+      this.atmosphere3D.applyMode(this.weatherMode, {
+        scene: this.scene,
+        hemiLight: this.hemiLight,
+        dirLight: this.dirLight,
+        inHome: this.inHome,
+      });
+    }
+    this.audio.playChimeSFX();
+    this.onToast(toasts[this.weatherMode]);
+  }
+
+  _openBalloonQuiz() {
+    this.audio.playPopSFX();
+    this.onConfetti(55);
+    const q = buildListenQuestion(BASE_CARDS.filter(c => c.id >= 4 && c.id <= 22));
+    const modal = this.container?.querySelector('#farmBalloonModal');
+    const replayBtn = this.container?.querySelector('#balloonReplayBtn');
+    const choicesEl = this.container?.querySelector('#balloonChoices');
+    if (!modal || !choicesEl) return;
+
+    const playTarget = () => {
+      this.audio.unlock();
+      this.audio.playSegment(q.targetCard.start, q.targetCard.end);
+    };
+    if (replayBtn) replayBtn.onclick = playTarget;
+
+    choicesEl.innerHTML = q.choices.map((card) => {
+      const spot = FARM_SPOTS.find(s => s.cardIds.includes(card.id)) || FARM_SPOTS[0];
+      return `
+        <button class="balloon-choice-btn" data-bc-id="${card.id}">
+          <span class="bc-emo">${spot.emoji}</span>
+          <span class="bc-lbl">${spot.name}</span>
+        </button>
+      `;
+    }).join('');
+
+    choicesEl.querySelectorAll('.balloon-choice-btn').forEach(btn => {
+      btn.onclick = () => {
+        const pickedId = parseInt(btn.dataset.bcId, 10);
+        if (pickedId === q.targetCard.id) {
+          modal.style.display = 'none';
+          this.onRewardStar(2);
+          this.onToast('🎈 정답!! 황금 풍선 보물상자 도착!!');
+          this._openChestModal('🎈 황금 풍선 깜짝 보물상자!', { preferHigherRarity: true });
+        } else {
+          this.onToast('👂 아깝다! 소리를 한 번 더 듣고 맞춰볼까요?');
+          playTarget();
+        }
+      };
+    });
+
+    modal.style.display = 'flex';
+    playTarget();
+  }
+
+  _startLiveStage() {
+    if (this.inHome) this._exitMyHome();
+    this._hideDialogue();
+    this._hideFinale();
+    this._closeBagModal();
+    this._exitPlaceMode();
+    this._hideInspectBar();
+    this.inLiveStage = true;
+    this.liveStageIdx = 0;
+    this.audio.setBgmDucked(true);
+    this.walkTarget = null;
+    this.avatarPos = { x: 0, z: 0 };
+    this.avatarAngle = 0;
+
+    const panel = this.container?.querySelector('#farmLiveStage');
+    if (panel) panel.style.display = 'flex';
+    this.audio.playFanfareSFX();
+    this.onConfetti(70);
+    this.onToast('🎪 3D 중앙 무대 발표회 시작!! 12마리 동물 관객 앞에서 멋지게 발표해요!');
+    this._renderLiveStageCard();
+  }
+
+  _renderLiveStageCard() {
+    const deck = [...BASE_CARDS, REHEARSAL_OUTRO];
+    const card = deck[this.liveStageIdx];
+    if (!card) return;
+
+    const badge = this.container?.querySelector('#liveStageBadge');
+    const iconsEl = this.container?.querySelector('#liveStageIcons');
+    const wordsEl = this.container?.querySelector('#liveStageWords');
+    const qualEl = this.container?.querySelector('#liveStageQuality');
+    const hintBtn = this.container?.querySelector('#liveStageHintBtn');
+    const nextBtn = this.container?.querySelector('#liveStageNextBtn');
+
+    if (badge) badge.textContent = `🎪 3D 무대 발표회 · ${this.liveStageIdx + 1} / ${deck.length}`;
+    if (iconsEl) {
+      iconsEl.innerHTML = (card.icons || []).map(([em]) => `<span class="farm-icon-chip">${em}</span>`).join('');
+    }
+    if (nextBtn) {
+      nextBtn.textContent = this.liveStageIdx === deck.length - 1
+        ? '🏆 발표회 대성공!! 박수 받기!'
+        : '👏 박수 받고 다음 문장! ➡️';
+    }
+
+    this.audio.stopSpeechMatch();
+    let matched = new Set();
+    this._renderWordChips(wordsEl, card.en, { matchedIndices: matched, hiddenMode: true });
+    if (qualEl) {
+      qualEl.innerHTML = `<span class="sq-pill">🎤 영어로 발표하면 단어가 반짝 열려요!</span>`;
+    }
+
+    if (hintBtn) {
+      hintBtn.onclick = () => {
+        if (typeof card.start === 'number') this.audio.playHint1s(card, { mode: 3 });
+        else this.audio.speakSingleWord(card.en);
+      };
+    }
+
+    this.audio.startSpeechMatch({
+      onTranscript: (transcript) => {
+        if (!this.inLiveStage) return;
+        const q = evaluateSpeechQuality(card.en, transcript, matched);
+        matched = q.matchedIndices;
+        this._renderWordChips(wordsEl, card.en, { matchedIndices: matched, hiddenMode: true });
+        if (qualEl) {
+          qualEl.innerHTML = `
+            <span class="sq-pill ${q.accuracyPct >= 80 ? 'good' : 'warn'}">🎯 정확도 ${q.accuracyPct}%</span>
+            <span class="sq-pill ${q.orderPct >= 80 ? 'good' : 'warn'}">🔗 순서 ${q.orderPct}%</span>
+            ${q.isPerfect ? `<span class="sq-pill good">💎 완벽 발표!!</span>` : ''}
+          `;
+        }
+      },
+    });
+  }
+
+  _advanceLiveStage() {
+    const deck = [...BASE_CARDS, REHEARSAL_OUTRO];
+    this.audienceCheerUntil = performance.now() + 1400;
+    this.audio.playApplauseSFX();
+    this.onConfetti(50);
+
+    if (this.liveStageIdx >= deck.length - 1) {
+      this._exitLiveStage();
+      this.onRewardStar(10);
+      this.audio.playFanfareSFX();
+      this.onConfetti(120);
+      this.onToast('🏆 우와!! 3D 무대 발표회 끝까지 대성공!! 별 +10 & 황금 보물상자!!');
+      setTimeout(() => {
+        if (this.mounted) this._openChestModal('🏆 3D 무대 발표회 대성공 황금 보물상자!', { preferHigherRarity: true });
+      }, 450);
+      return;
+    }
+
+    this.liveStageIdx += 1;
+    this._renderLiveStageCard();
+  }
+
+  _exitLiveStage() {
+    this.inLiveStage = false;
+    this.audio.stopSpeechMatch();
+    this.audio.setBgmDucked(false);
+    const panel = this.container?.querySelector('#farmLiveStage');
+    if (panel) panel.style.display = 'none';
+    this.avatarPos = { x: 0, z: 6.2 };
+    if (this.wooju) this.wooju.group.position.y = 0;
   }
 
   _openBagModal(initialTab = null) {
@@ -1150,7 +1397,7 @@ export class FarmGame3D {
     this.pendingSpotTrigger = null;
     this.avatarPos = { x: 0, z: 1.4 };
     this.avatarAngle = Math.PI;
-    this.audio.playChimeSFX();
+    this.audio.playDoorSFX();
 
     const ownedFurnCount = this._getOwnedFurnitureIds().length;
     const homeLv = getHomeLevel(ownedFurnCount);
@@ -1200,13 +1447,22 @@ export class FarmGame3D {
     this.walkTarget = null;
     this.avatarPos = { ...this.savedOutdoorPos };
     this.avatarAngle = 0;
-    this.audio.playChimeSFX();
+    this.audio.playDoorSFX();
 
     if (this.outdoorGroup) this.outdoorGroup.visible = true;
     if (this.myHome3D) this.myHome3D.group.visible = false;
     if (this.scene) {
-      this.scene.background = new this.THREE.Color('#9BD8FF');
-      this.scene.fog = new this.THREE.Fog('#BFE8FF', 34, 88);
+      if (this.atmosphere3D) {
+        this.atmosphere3D.applyMode(this.weatherMode, {
+          scene: this.scene,
+          hemiLight: this.hemiLight,
+          dirLight: this.dirLight,
+          inHome: false,
+        });
+      } else {
+        this.scene.background = new this.THREE.Color('#9BD8FF');
+        this.scene.fog = new this.THREE.Fog('#BFE8FF', 34, 88);
+      }
     }
 
     const homeBtn = this.container?.querySelector('#farmHomeBtn');
@@ -1708,8 +1964,10 @@ export class FarmGame3D {
     this.renderer.domElement.className = 'farm-canvas';
     wrap.prepend(this.renderer.domElement);
 
-    this.scene.add(new THREE.HemisphereLight('#FFFDF5', '#68C456', 0.95));
+    this.hemiLight = new THREE.HemisphereLight('#FFFDF5', '#68C456', 0.95);
+    this.scene.add(this.hemiLight);
     const dir = new THREE.DirectionalLight('#FFF5D6', 1.35);
+    this.dirLight = dir;
     dir.position.set(16, 26, 18);
     dir.castShadow = true;
     dir.shadow.mapSize.width = 1024;
@@ -1746,6 +2004,8 @@ export class FarmGame3D {
     this.villageBuildings.syncBuildings(getUnlockedBuildings(this.speakCount));
     this.placedTreasures3D = buildPlacedTreasures3D(THREE, this.outdoorGroup, TREASURE_ITEMS);
     this.placedTreasures3D.syncPlaced(this.placedTreasures);
+    this.atmosphere3D = buildAtmosphere3D(THREE, this.outdoorGroup);
+    this.goldenBalloon3D = buildGoldenBalloon3D(THREE, this.outdoorGroup);
 
     // 1c. v8: Cozy 3D My-Home Room (hidden until Wooju enters 🏡 내 집!)
     this.myHome3D = buildMyHome3D(THREE, this.scene, {
@@ -1902,6 +2162,16 @@ export class FarmGame3D {
           this._commitTreasurePlacement(this.placingTreasureId, gHits[0].point.x, gHits[0].point.z);
         }
         return;
+      }
+
+      // Tap the floating Golden Present Balloon in the sky!
+      if (this.goldenBalloon3D?.isActive()) {
+        const bHits = this.raycaster.intersectObject(this.goldenBalloon3D.hitMesh, false);
+        if (bHits.length > 0) {
+          this.goldenBalloon3D.pop();
+          this._openBalloonQuiz();
+          return;
+        }
       }
 
       // Tap Wooju's 3D House or Welcome Mat -> walk to the front door and enter!
@@ -2162,7 +2432,7 @@ export class FarmGame3D {
     const sttStarted = this.audio.startSpeechMatch({
       onTranscript: (transcript) => {
         if (this.activeDialogueSpot !== spotIdx || autoPerfectFired) return;
-        const res = matchSpokenWords(fullText, transcript, matchedIndices);
+        const res = evaluateSpeechQuality(fullText, transcript, matchedIndices);
         const prevSize = matchedIndices.size;
         matchedIndices = res.matchedIndices;
 
@@ -2170,22 +2440,34 @@ export class FarmGame3D {
           this._renderWordChips(enEl, fullText, { matchedIndices, hiddenMode, timings: fullTimings });
         }
 
-        const pct = Math.min(100, Math.round(res.ratio * 100));
+        const pct = res.accuracyPct;
         fillEl.style.width = `${pct}%`;
         pctEl.textContent = `${res.matchedCount}/${res.totalCount}`;
-        labelEl.textContent = `✨ 단어 불 켜기: ${res.matchedCount}/${res.totalCount}개 맞췄어요!`;
+        labelEl.textContent = `✨ 단어 불 켜기: ${res.matchedCount}/${res.totalCount}개 (순서 ${res.orderPct}%)`;
+
+        const qualBar = this.container?.querySelector('#farmQualityBar');
+        if (qualBar) {
+          qualBar.style.display = 'flex';
+          const missedHint = res.missedTokens.length > 0 && res.missedTokens.length <= 4
+            ? `<span class="sq-pill warn">👆 남은 단어: ${res.missedTokens.slice(0, 3).map(t => t.raw).join(', ')}</span>`
+            : '';
+          qualBar.innerHTML = `
+            <span class="sq-pill ${res.accuracyPct >= 80 ? 'good' : 'warn'}">🎯 정확도 ${res.accuracyPct}%</span>
+            <span class="sq-pill ${res.orderPct >= 75 ? 'good' : 'warn'}">🔗 순서 ${res.orderPct}%</span>
+            ${missedHint}
+          `;
+        }
 
         if (res.isPerfect) {
           autoPerfectFired = true;
           this.voiceFilled = true;
           this.audio.stopSpeechMatch();
-          // Light up all remaining words golden for celebration!
           const allIdx = new Set(res.targetTokens.map(t => t.index));
           this._renderWordChips(enEl, fullText, { matchedIndices: allIdx, hiddenMode: false, timings: fullTimings });
           gaugeEl.classList.add('filled');
           fillEl.style.width = '100%';
           pctEl.textContent = '💎100%';
-          labelEl.textContent = '💎 우와!! 토씨 하나 안 틀렸어요!! 퍼펙트!!';
+          labelEl.textContent = '💎 우와!! 순서도 발음도 완벽해요!! 퍼펙트!!';
           perfectBtn?.classList.add('pulse-ready');
           this.audio.playChimeSFX();
           this._autoPerfectTimer = setTimeout(() => {
@@ -2523,6 +2805,7 @@ export class FarmGame3D {
 
   _hideDialogue() {
     this._clearWordTimers();
+    this.audio.stopBgm();
     this.audio.stopAll();
     this.isListening = false;
     this.activeDialogueSpot = null;
@@ -2571,19 +2854,24 @@ export class FarmGame3D {
         if (c.position.x > 26) c.position.x = -26;
       });
 
-      // Animate v3/v4/v7/v8 Living Farm or My-Home 3D Furniture
+      // Animate v3/v4/v7/v8/v9 Living Farm, Atmosphere, Golden Balloon or My-Home 3D Furniture
       if (this.inHome) {
         if (this.myHome3D) this.myHome3D.update(t, dt);
       } else {
         if (this.partyRewards) this.partyRewards.update(t, dt);
         if (this.villageBuildings) this.villageBuildings.update(t, dt);
         if (this.placedTreasures3D) this.placedTreasures3D.update(t, dt);
+        if (this.atmosphere3D) this.atmosphere3D.update(t, dt);
+        if (this.goldenBalloon3D) {
+          const canSpawn = this.entered && this.activeDialogueSpot === null && !this.inLiveStage;
+          this.goldenBalloon3D.update(t, dt, canSpawn);
+        }
       }
 
       // 1. Wooju 3D Avatar Movement & Walking Limb Animation
       let moving = false;
       const speed = this.inHome ? 5.6 : 7.5;
-      if (this.entered && this.activeDialogueSpot === null) {
+      if (this.entered && this.activeDialogueSpot === null && !this.inLiveStage) {
         if (Math.hypot(this.joyVec.x, this.joyVec.z) > 0.08) {
           const nx = this.avatarPos.x + this.joyVec.x * speed * dt;
           const nz = this.avatarPos.z + this.joyVec.z * speed * dt;
@@ -2665,9 +2953,11 @@ export class FarmGame3D {
 
       if (this.wooju) {
         this.wooju.group.position.x = this.avatarPos.x;
+        this.wooju.group.position.y = this.inLiveStage ? 0.42 : 0;
         this.wooju.group.position.z = this.avatarPos.z;
         this.wooju.group.rotation.y = this.avatarAngle;
-        if (this.wooju.setAnim) this.wooju.setAnim(moving ? 'walk' : 'idle');
+        if (moving) this.audio.playStepSFX(this.inHome);
+        if (this.wooju.setAnim) this.wooju.setAnim(this.inLiveStage ? 'dance' : (moving ? 'walk' : 'idle'));
         if (this.wooju.updateMixer) this.wooju.updateMixer(dt);
         if (this.wooju.updateCosmetics) this.wooju.updateCosmetics(t, moving);
       }
@@ -2695,6 +2985,25 @@ export class FarmGame3D {
         if (isNearWooju && this.activeDialogueSpot === null && distToWooju < nearestDist) {
           nearestDist = distToWooju;
           nearestIdx = idx;
+        }
+
+        if (this.inLiveStage) {
+          // 12 animals gather in a cheering semicircle audience facing Wooju on the central stage!
+          const ang = ((idx / 11) - 0.5) * Math.PI * 1.15;
+          const audX = Math.sin(ang) * 6.0;
+          const audZ = Math.cos(ang) * 6.0;
+          m.curX += (audX - m.curX) * 0.1;
+          m.curZ += (audZ - m.curZ) * 0.1;
+          m.group.position.x = m.curX;
+          m.group.position.z = m.curZ;
+          const cheering = performance.now() < this.audienceCheerUntil;
+          m.group.position.y = cheering ? Math.abs(Math.sin(t * 12 + idx)) * 0.65 : 0;
+          m.group.rotation.y = Math.atan2(-m.curX, -m.curZ);
+          m.isMoving = false;
+          if (m.setAnim) m.setAnim(cheering ? 'dance' : 'idle');
+          if (m.updateMixer) m.updateMixer(dt);
+          if (m.updateMasteryVisual) m.updateMasteryVisual(t);
+          return;
         }
 
         if (isParadeFollower) {
@@ -2884,6 +3193,15 @@ export class FarmGame3D {
         this.camera.position.y += (ty - this.camera.position.y) * 0.1;
         this.camera.position.z += (tz - this.camera.position.z) * 0.1;
         this.camera.lookAt(this.avatarPos.x * 0.25, 1.1, this.avatarPos.z * 0.25);
+      } else if (this.inLiveStage) {
+        // Dramatic 3D Live Stage Presentation Camera looking over cheering audience at Wooju!
+        const tx = 0;
+        const ty = 4.6 * portraitBoost;
+        const tz = 11.8 * portraitBoost;
+        this.camera.position.x += (tx - this.camera.position.x) * 0.08;
+        this.camera.position.y += (ty - this.camera.position.y) * 0.08;
+        this.camera.position.z += (tz - this.camera.position.z) * 0.08;
+        this.camera.lookAt(0, 1.5, 0);
       } else {
         let focusX = this.avatarPos.x;
         let focusZ = this.avatarPos.z;

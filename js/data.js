@@ -1551,3 +1551,54 @@ export function matchSpokenWords(targetText, spokenTranscript, prevMatched = new
 
   return { targetTokens, matchedIndices, matchedCount, totalCount, ratio, isPerfect };
 }
+
+/**
+ * v9: Evaluates HOW WELL Wooju spoke & memorized the sentence (not just bag-of-words):
+ * 1) accuracyPct: % of target words matched
+ * 2) orderPct: % of matched words spoken in the right sequential sentence order (LIS)
+ * 3) missedTokens: exact words skipped/mumbled so Wooju can tap & practice them
+ * 4) grade: 'perfect' | 'great' | 'practice'
+ */
+export function evaluateSpeechQuality(targetText, spokenTranscript, prevMatched = new Set()) {
+  const base = matchSpokenWords(targetText, spokenTranscript, prevMatched);
+  const { targetTokens, matchedIndices, matchedCount, totalCount, ratio } = base;
+
+  // Compute monotonic sequential order score from spoken stream
+  const spokenNorms = tokenizeWords(spokenTranscript).map(t => t.norm);
+  const matchedOrderPositions = [];
+  let searchFrom = 0;
+  for (const t of targetTokens) {
+    if (!matchedIndices.has(t.index)) continue;
+    let foundAt = -1;
+    for (let j = searchFrom; j < spokenNorms.length; j++) {
+      if (isKidWordMatch(t.norm, spokenNorms[j])) {
+        foundAt = j;
+        break;
+      }
+    }
+    if (foundAt >= 0) {
+      matchedOrderPositions.push(t.index);
+      searchFrom = foundAt + 1;
+    }
+  }
+
+  const accuracyPct = Math.round(ratio * 100);
+  // If words were accumulated across retries (prevMatched), never penalize order below 70% when all matched
+  const rawOrderRatio = matchedCount > 0 ? matchedOrderPositions.length / matchedCount : 0;
+  const orderPct = matchedCount === 0
+    ? 0
+    : Math.round(Math.max(rawOrderRatio, prevMatched.size > 0 ? Math.min(1, ratio) : rawOrderRatio) * 100);
+
+  const missedTokens = targetTokens.filter(t => !matchedIndices.has(t.index));
+  const isStrictPerfect = base.isPerfect && (totalCount <= 3 || orderPct >= 75);
+  const grade = isStrictPerfect ? 'perfect' : (accuracyPct >= 65 ? 'great' : 'practice');
+
+  return {
+    ...base,
+    isPerfect: isStrictPerfect,
+    accuracyPct,
+    orderPct,
+    missedTokens,
+    grade,
+  };
+}
