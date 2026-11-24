@@ -40,6 +40,7 @@ import {
   buildPlacedTreasures3D,
   buildMyHome3D,
 } from './models3d.js';
+import { WORD_TIMINGS } from './wordTimings.js';
 
 let THREE_MOD = null;
 async function loadThree() {
@@ -1866,25 +1867,42 @@ export class FarmGame3D {
     this._autoPerfectTimer = null;
   }
 
-  _renderWordChips(el, targetText, { matchedIndices = new Set(), hiddenMode = false, activeIdx = -1 } = {}) {
+  _buildWordTimingsForCards(cards) {
+    const out = [];
+    for (const card of cards) {
+      const tokens = tokenizeWords(card.en);
+      const cardTimings = WORD_TIMINGS[card.id] || [];
+      tokens.forEach((t, i) => {
+        out.push(cardTimings[i] || null);
+      });
+    }
+    return out;
+  }
+
+  _renderWordChips(el, targetText, { matchedIndices = new Set(), hiddenMode = false, activeIdx = -1, timings = [] } = {}) {
     if (!el) return;
     const tokens = tokenizeWords(targetText);
-    el.innerHTML = `<div class="word-chip-wrap">${tokens.map((t) => {
+    el.innerHTML = `<div class="word-chip-wrap">${tokens.map((t, i) => {
       const lit = matchedIndices.has(t.index);
       const active = t.index === activeIdx;
       const hidden = hiddenMode && !lit;
       const cls = ['word-chip', lit ? 'word-lit' : '', active ? 'word-active' : '', hidden ? 'word-hidden' : ''].join(' ');
       const label = hidden ? '•'.repeat(Math.min(5, Math.max(2, t.norm.length))) : t.raw;
-      return `<button type="button" class="${cls}" data-word-idx="${t.index}" data-word-raw="${t.raw.replace(/"/g, '&quot;')}">${label}</button>`;
+      const pair = timings[i];
+      const dataTiming = Array.isArray(pair) ? `data-s="${pair[0]}" data-e="${pair[1]}"` : '';
+      return `<button type="button" class="${cls}" data-word-idx="${t.index}" data-word-raw="${t.raw.replace(/"/g, '&quot;')}" ${dataTiming}>${label}</button>`;
     }).join('')}</div>`;
 
     el.querySelectorAll('.word-chip').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const raw = btn.dataset.wordRaw || '';
+        const s = parseFloat(btn.dataset.s);
+        const end = parseFloat(btn.dataset.e);
+        const timing = Number.isFinite(s) && Number.isFinite(end) ? [s, end] : null;
         btn.classList.add('word-pointed');
         setTimeout(() => btn.classList.remove('word-pointed'), 420);
-        this.audio.speakSingleWord(raw);
+        this.audio.speakSingleWord(raw, timing);
       });
     });
   }
@@ -1893,16 +1911,36 @@ export class FarmGame3D {
     clearInterval(this._wordSweepTimer);
     const tokens = tokenizeWords(card.en);
     if (!tokens.length) return;
+    const timings = WORD_TIMINGS[card.id] || [];
+    this._renderWordChips(el, card.en, { activeIdx: 0, timings });
+
+    if (timings.length === tokens.length && this.audio?.storyAudio) {
+      // Exact millisecond-synced karaoke sweep following native story.m4a!
+      this._wordSweepTimer = setInterval(() => {
+        const curT = this.audio.storyAudio.currentTime;
+        let active = -1;
+        for (let i = 0; i < timings.length; i++) {
+          if (curT >= timings[i][0] - 0.05 && curT <= timings[i][1] + 0.05) {
+            active = i;
+            break;
+          }
+        }
+        el.querySelectorAll('.word-chip').forEach((btn, i) => {
+          btn.classList.toggle('word-active', i === active);
+        });
+      }, 45);
+      return;
+    }
+
     const durMs = Math.max(1200, ((card.end || 3) - (card.start || 0)) * 1000);
     const stepMs = Math.max(140, Math.round(durMs / tokens.length));
     let cur = 0;
-    this._renderWordChips(el, card.en, { activeIdx: 0 });
     this._wordSweepTimer = setInterval(() => {
       cur += 1;
       if (cur >= tokens.length) {
         clearInterval(this._wordSweepTimer);
         this._wordSweepTimer = null;
-        this._renderWordChips(el, card.en, { activeIdx: -1 });
+        this._renderWordChips(el, card.en, { activeIdx: -1, timings });
         return;
       }
       el.querySelectorAll('.word-chip').forEach((btn, i) => {
@@ -1932,11 +1970,12 @@ export class FarmGame3D {
     perfectBtn?.classList.remove('pulse-ready');
 
     const fullText = cards.map(c => c.en).join(' ');
+    const fullTimings = this._buildWordTimingsForCards(cards);
     const hiddenMode = this.dialogueMode === 'memory';
     let matchedIndices = new Set();
     let autoPerfectFired = false;
 
-    this._renderWordChips(enEl, fullText, { matchedIndices, hiddenMode });
+    this._renderWordChips(enEl, fullText, { matchedIndices, hiddenMode, timings: fullTimings });
 
     const startFallbackVoiceGauge = () => {
       labelEl.textContent = hiddenMode
@@ -1972,7 +2011,7 @@ export class FarmGame3D {
         matchedIndices = res.matchedIndices;
 
         if (matchedIndices.size !== prevSize) {
-          this._renderWordChips(enEl, fullText, { matchedIndices, hiddenMode });
+          this._renderWordChips(enEl, fullText, { matchedIndices, hiddenMode, timings: fullTimings });
         }
 
         const pct = Math.min(100, Math.round(res.ratio * 100));
@@ -1986,7 +2025,7 @@ export class FarmGame3D {
           this.audio.stopSpeechMatch();
           // Light up all remaining words golden for celebration!
           const allIdx = new Set(res.targetTokens.map(t => t.index));
-          this._renderWordChips(enEl, fullText, { matchedIndices: allIdx, hiddenMode: false });
+          this._renderWordChips(enEl, fullText, { matchedIndices: allIdx, hiddenMode: false, timings: fullTimings });
           gaugeEl.classList.add('filled');
           fillEl.style.width = '100%';
           pctEl.textContent = '💎100%';
@@ -2094,7 +2133,9 @@ export class FarmGame3D {
         const mainCard = firstChunkedCard || cards[0];
         renderIcons(mainCard, true);
         if (firstChunkedCard) {
-          this._renderWordChips(enEl, firstChunkedCard.chunks[0].en);
+          const ch0Len = tokenizeWords(firstChunkedCard.chunks[0].en).length;
+          const ch0Timings = (WORD_TIMINGS[firstChunkedCard.id] || []).slice(0, ch0Len);
+          this._renderWordChips(enEl, firstChunkedCard.chunks[0].en, { timings: ch0Timings });
           koEl.textContent = '🤝 앞부분을 듣고 뒷부분을 우주가 이어 말해요!';
           this.isListening = true;
           this.audio.playSegment(firstChunkedCard.chunks[0].start, firstChunkedCard.chunks[0].end, {
@@ -2105,7 +2146,7 @@ export class FarmGame3D {
             },
           });
         } else {
-          this._renderWordChips(enEl, mainCard.en, { hiddenMode: true });
+          this._renderWordChips(enEl, mainCard.en, { hiddenMode: true, timings: WORD_TIMINGS[mainCard.id] || [] });
           koEl.textContent = '👂 첫 1초 힌트를 듣고 이어 말해요!';
           this.isListening = true;
           this.audio.playSegment(mainCard.start, Math.min(mainCard.end, mainCard.start + 1.05), {
@@ -2158,14 +2199,16 @@ export class FarmGame3D {
         this.audio.stopSpeechMatch();
         this.isListening = true;
         renderIcons(firstChunkedCard, false);
-        this._renderWordChips(enEl, firstChunkedCard.chunks[0].en);
+        const ch0Len = tokenizeWords(firstChunkedCard.chunks[0].en).length;
+        const allChTimings = WORD_TIMINGS[firstChunkedCard.id] || [];
+        this._renderWordChips(enEl, firstChunkedCard.chunks[0].en, { timings: allChTimings.slice(0, ch0Len) });
         koEl.textContent = `✂️ 1조각: ${firstChunkedCard.chunks[0].ko || ''}`;
         this.audio.playSegment(firstChunkedCard.chunks[0].start, firstChunkedCard.chunks[0].end, {
           rate: 0.92,
           onDone: () => {
             setTimeout(() => {
               if (this.activeDialogueSpot !== spotIdx) return;
-              this._renderWordChips(enEl, firstChunkedCard.chunks[1].en);
+              this._renderWordChips(enEl, firstChunkedCard.chunks[1].en, { timings: allChTimings.slice(ch0Len) });
               koEl.textContent = `✂️ 2조각: ${firstChunkedCard.chunks[1].ko || ''}`;
               this.audio.playSegment(firstChunkedCard.chunks[1].start, firstChunkedCard.chunks[1].end, {
                 rate: 0.92,

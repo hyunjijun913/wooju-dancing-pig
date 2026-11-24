@@ -789,8 +789,23 @@ export class AudioEngine {
     }
   }
 
-  // --- v6: Point-to-Hear Single Word & Live SpeechRecognition Word Matcher ---
-  speakSingleWord(word) {
+  // --- v6/v8.2: Native story.m4a Word Slice & Point-to-Hear Single Word ---
+  playWordSlice(startSec, endSec, { rate = 0.92 } = {}) {
+    if (!this.storyAudio || typeof startSec !== 'number' || typeof endSec !== 'number') return false;
+    this.unlock();
+    if (this.segmentTimer) {
+      clearInterval(this.segmentTimer);
+      this.segmentTimer = null;
+    }
+    const token = this.playToken;
+    this.playSegment(startSec, endSec, { rate, token });
+    return true;
+  }
+
+  speakSingleWord(word, timing = null) {
+    if (Array.isArray(timing) && timing.length === 2) {
+      if (this.playWordSlice(timing[0], timing[1])) return;
+    }
     if (typeof window === 'undefined' || !window.speechSynthesis) return;
     const clean = String(word || '').replace(/[^a-zA-Z0-9'\- ]/g, '').trim();
     if (!clean) return;
