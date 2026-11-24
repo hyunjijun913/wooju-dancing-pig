@@ -1982,19 +1982,18 @@ export function buildVillageBuildings3D(THREE, scene) {
   return { syncBuildings, update, getFocusPos };
 }
 
-// --- v7/v8.3: Natural Animal Crossing-Style Grounded 3D Outdoor Decorations (NO clunky pedestals!) ---
+// --- v7/v8.3/v12.1: Exact-Match Animal Crossing Grounded 3D Outdoor Decorations ---
+// Only map real 3D GLB models that visually match the bag icon 1:1!
 const TREASURE_GLB_MAP = {
-  tr_gold_egg:    { url: 'assets/models/food/egg.glb',                 h: 0.72, style: 'picnic' },
-  tr_big_carrot:  { url: 'assets/models/food/carrot.glb',              h: 0.92, style: 'picnic' },
-  tr_apple_pie:   { url: 'assets/models/food/apple.glb',               h: 0.78, style: 'picnic' },
-  tr_galaxy_milk: { url: 'assets/models/food/soda-bottle.glb',         h: 0.92, style: 'picnic' },
-  tr_dia_corn:    { url: 'assets/models/food/corn.glb',                h: 0.92, style: 'picnic' },
-  tr_magic_stew:  { url: 'assets/models/food/pot-stew.glb',            h: 1.05, style: 'picnic' },
-  tr_legend_fish: { url: 'assets/models/food/fish.glb',                h: 0.95, style: 'picnic' },
-  tr_star_mush:   { url: 'assets/models/nature/mushroom_redGroup.glb', h: 1.05, style: 'ground' },
-  tr_crystal_flw: { url: 'assets/models/nature/flower_purpleA.glb',    h: 1.05, style: 'ground' },
-  tr_sunflower:   { url: 'assets/models/nature/flower_yellowA.glb',    h: 1.15, style: 'ground' },
-  tr_tulip_pot:   { url: 'assets/models/nature/flower_redA.glb',       h: 1.05, style: 'pot'    },
+  tr_gold_egg:    { url: 'assets/models/food/egg.glb',                 h: 0.78, style: 'picnic' },
+  tr_big_carrot:  { url: 'assets/models/food/carrot.glb',              h: 0.95, style: 'picnic' },
+  tr_dia_corn:    { url: 'assets/models/food/corn.glb',                h: 0.95, style: 'picnic' },
+  tr_magic_stew:  { url: 'assets/models/food/pot-stew.glb',            h: 1.08, style: 'picnic' },
+  tr_legend_fish: { url: 'assets/models/food/fish.glb',                h: 0.98, style: 'picnic' },
+  tr_star_mush:   { url: 'assets/models/nature/mushroom_redGroup.glb', h: 1.1,  style: 'ground' },
+  tr_crystal_flw: { url: 'assets/models/nature/flower_purpleA.glb',    h: 1.1,  style: 'ground' },
+  tr_sunflower:   { url: 'assets/models/nature/flower_yellowA.glb',    h: 1.18, style: 'ground' },
+  tr_tulip_pot:   { url: 'assets/models/nature/flower_redA.glb',       h: 1.1,  style: 'pot'    },
 };
 
 function createTreasureMedallionTex(THREE, emoji, bgHex) {
@@ -2018,17 +2017,37 @@ function createTreasureMedallionTex(THREE, emoji, bgHex) {
   return tex;
 }
 
+// Crisp die-cut toy sticker texture (no clunky circle/easel — exact bag icon standing naturally on grass!)
+function createDieCutStickerTex(THREE, emoji) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 256, 256);
+  ctx.font = '164px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Soft white toy-sticker outline so it pops cleanly against green grass
+  ctx.lineWidth = 22;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+  ctx.strokeText(emoji, 128, 138);
+  ctx.fillText(emoji, 128, 138);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function buildGroundedTreasure3D(THREE, item) {
   const g = new THREE.Group();
   let animTarget = null;
   let animKind = 'none';
 
-  // 1. Real Artist GLB Models resting naturally on grass, flower pot, or cozy picnic cloth!
+  // 1. Exact 1:1 matching Artist GLB Models resting naturally on grass, pot, or cozy picnic cloth!
   const glbSpec = TREASURE_GLB_MAP[item.id];
   if (glbSpec) {
     let itemY = 0;
     if (glbSpec.style === 'picnic') {
-      // Cute cozy checkered picnic cloth flat on the grass!
       const cloth = new THREE.Mesh(
         new THREE.BoxGeometry(1.55, 0.04, 1.55),
         new THREE.MeshStandardMaterial({ color: '#FEF3C7', roughness: 0.9 })
@@ -2059,7 +2078,7 @@ function buildGroundedTreasure3D(THREE, item) {
     return { group: g, animTarget, animKind, popProgress: 0.01 };
   }
 
-  // 2. Hand-crafted Animal Crossing-style 3D outdoor landmarks & garden ornaments!
+  // 2. Exact-match sculpted 3D landmarks (ONLY when geometry truly matches the bag item!)
   if (item.id === 'tr_sakura_tree') {
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 1.8, 10), new THREE.MeshStandardMaterial({ color: '#78350F', roughness: 0.85 }));
     trunk.position.y = 0.9;
@@ -2082,13 +2101,23 @@ function buildGroundedTreasure3D(THREE, item) {
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.55, 0.1), new THREE.MeshStandardMaterial({ color: '#92400E' }));
     door.position.set(0, 0.3, 0.72);
     g.add(stem, cap, door);
-  } else if (item.id === 'tr_ufo_model' || item.id === 'tr_solar_system' || item.id === 'tr_saturn_ring' || item.id === 'tr_meteor') {
+  } else if (item.id === 'tr_ufo_model') {
     const hover = new THREE.Group();
     const saucer = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.55, 0.32, 18), new THREE.MeshStandardMaterial({ color: '#CBD5E1', metalness: 0.65, roughness: 0.25 }));
     const dome = new THREE.Mesh(new THREE.SphereGeometry(0.52, 14, 10), new THREE.MeshStandardMaterial({ color: '#38BDF8', emissive: '#0284C7', emissiveIntensity: 0.45 }));
     dome.position.y = 0.22;
     hover.add(saucer, dome);
     hover.position.y = 1.35;
+    g.add(hover);
+    animTarget = hover;
+    animKind = 'hover';
+  } else if (item.id === 'tr_saturn_ring') {
+    const hover = new THREE.Group();
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(0.58, 16, 14), new THREE.MeshStandardMaterial({ color: '#FDBA74', roughness: 0.45 }));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.98, 0.12, 8, 28), new THREE.MeshStandardMaterial({ color: '#FEF08A', roughness: 0.35 }));
+    ring.rotation.x = Math.PI * 0.42;
+    hover.add(planet, ring);
+    hover.position.y = 1.25;
     g.add(hover);
     animTarget = hover;
     animKind = 'hover';
@@ -2106,14 +2135,7 @@ function buildGroundedTreasure3D(THREE, item) {
       rf.position.set(tx, 2.0, tz);
       g.add(tw, rf);
     });
-  } else if (item.id === 'tr_treasure_map') {
-    const chest = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.72, 0.78), new THREE.MeshStandardMaterial({ color: '#92400E', roughness: 0.65 }));
-    chest.position.y = 0.36;
-    chest.castShadow = true;
-    const band = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.14, 0.82), new THREE.MeshStandardMaterial({ color: '#FACC15', metalness: 0.6, roughness: 0.3 }));
-    band.position.y = 0.52;
-    g.add(chest, band);
-  } else if (item.id === 'tr_carousel' || item.id === 'tr_cotton_candy') {
+  } else if (item.id === 'tr_carousel') {
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.05, 0.25, 16), new THREE.MeshStandardMaterial({ color: '#F472B6', roughness: 0.5 }));
     base.position.y = 0.125;
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.7, 10), new THREE.MeshStandardMaterial({ color: '#FACC15', metalness: 0.5 }));
@@ -2123,41 +2145,30 @@ function buildGroundedTreasure3D(THREE, item) {
     g.add(base, pole, top);
     animTarget = g;
     animKind = 'spin';
-  } else if (item.rarity === 'legendary') {
-    // Low natural garden stone + gleaming golden star statue!
-    const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.78, 0.22, 16), new THREE.MeshStandardMaterial({ color: '#E2E8F0', roughness: 0.85 }));
-    stone.position.y = 0.11;
-    stone.receiveShadow = true;
-    const star = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.55),
-      new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#F59E0B', emissiveIntensity: 0.45, metalness: 0.7, roughness: 0.2 })
-    );
-    star.position.y = 0.95;
-    star.castShadow = true;
-    g.add(stone, star);
-    animTarget = star;
-    animKind = 'hover';
   } else {
-    // Cozy Animal Crossing wooden garden easel / art frame standing right on the grass (NO chunky stump!)
-    const woodMat = new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.75 });
-    const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.25, 8), woodMat);
-    legL.position.set(-0.36, 0.6, 0);
-    legL.rotation.z = -0.14;
-    const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.25, 8), woodMat);
-    legR.position.set(0.36, 0.6, 0);
-    legR.rotation.z = 0.14;
-    const legB = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8), woodMat);
-    legB.position.set(0, 0.56, -0.35);
-    legB.rotation.x = -0.35;
-    const board = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.05, 0.08), new THREE.MeshStandardMaterial({ color: '#FFFDF7', roughness: 0.7 }));
-    board.position.set(0, 0.95, 0.05);
-    board.castShadow = true;
-    const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, item.emoji, '#FEF9C3'), transparent: true })
+    // 3. Exact Bag-Match Cute Grounded Toy Standee (crisp die-cut icon + soft ground shadow — 100% identical to bag!)
+    const shadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.75, 20),
+      new THREE.MeshBasicMaterial({ color: '#15803D', transparent: true, opacity: 0.22 })
     );
-    sprite.scale.set(0.95, 0.95, 1);
-    sprite.position.set(0, 0.95, 0.14);
-    g.add(legL, legR, legB, board, sprite);
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.03;
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: createDieCutStickerTex(THREE, item.emoji), transparent: true })
+    );
+    const sz = item.rarity === 'legendary' ? 2.0 : (item.rarity === 'epic' ? 1.8 : 1.55);
+    sprite.scale.set(sz, sz, 1);
+    sprite.position.set(0, sz * 0.48, 0);
+    g.add(shadow, sprite);
+    if (item.rarity === 'legendary' || item.rarity === 'epic') {
+      const sparkleRing = new THREE.Mesh(
+        new THREE.RingGeometry(0.72, 0.88, 24),
+        new THREE.MeshBasicMaterial({ color: item.rarity === 'legendary' ? '#FACC15' : '#C084FC', side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
+      );
+      sparkleRing.rotation.x = -Math.PI / 2;
+      sparkleRing.position.y = 0.04;
+      g.add(sparkleRing);
+    }
   }
 
   return { group: g, animTarget, animKind, popProgress: 0.01 };

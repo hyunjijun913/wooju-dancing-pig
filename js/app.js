@@ -187,6 +187,20 @@ const audioEngine = new AudioEngine(storyAudio, {
 // Unlock iOS Safari AudioContext & HTMLAudioElement on first user touch
 document.addEventListener('pointerdown', () => audioEngine.unlock(), { once: true });
 
+// Prevent iPad/iOS Safari accidental double-tap zoom & pinch-zoom lockup
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+let _lastTouchEndTs = 0;
+document.addEventListener('touchend', (e) => {
+  const tag = e.target?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  const now = Date.now();
+  if (now - _lastTouchEndTs <= 320) {
+    e.preventDefault();
+  }
+  _lastTouchEndTs = now;
+}, { passive: false });
+
 const quizController = new QuizController(document.getElementById('quizModal'), {
   audioEngine,
   onRewardStar: addStars,
