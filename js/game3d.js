@@ -145,7 +145,7 @@ export class FarmGame3D {
     this.pendingSpotTrigger = null;
 
     // Wooju 3D avatar movement & parade breadcrumb trail
-    this.avatarPos = { x: 0, z: 15.2 };
+    this.avatarPos = { x: 0, z: 22.0 };
     this.avatarAngle = Math.PI;
     this.walkTarget = null;
     this.joyVec = { x: 0, z: 0 };
@@ -1644,8 +1644,8 @@ export class FarmGame3D {
 
   _commitTreasurePlacement(treasureId, rawX, rawZ) {
     const r = Math.hypot(rawX, rawZ);
-    const x = r > 15.8 ? (rawX / r) * 15.8 : rawX;
-    const z = r > 15.8 ? (rawZ / r) * 15.8 : rawZ;
+    const x = r > 25.8 ? (rawX / r) * 25.8 : rawX;
+    const z = r > 25.8 ? (rawZ / r) * 25.8 : rawZ;
     const idx = this.placedTreasures.findIndex(p => p.id === treasureId);
     if (idx >= 0) this.placedTreasures[idx] = { id: treasureId, x, z };
     else this.placedTreasures.push({ id: treasureId, x, z });
@@ -1948,10 +1948,10 @@ export class FarmGame3D {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#9BD8FF');
-    this.scene.fog = new THREE.Fog('#BFE8FF', 34, 88);
+    this.scene.fog = new THREE.Fog('#BFE8FF', 52, 128);
 
-    this.camera = new THREE.PerspectiveCamera(46, w / h, 0.1, 140);
-    this.camera.position.set(this.avatarPos.x, 5.8, this.avatarPos.z + 11.5);
+    this.camera = new THREE.PerspectiveCamera(46, w / h, 0.1, 180);
+    this.camera.position.set(this.avatarPos.x, 6.2, this.avatarPos.z + 12.5);
     this.camera.lookAt(this.avatarPos.x, 1.7, this.avatarPos.z - 1.2);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'default' });
@@ -1960,25 +1960,25 @@ export class FarmGame3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.06;
+    this.renderer.toneMappingExposure = 1.08;
     this.renderer.domElement.className = 'farm-canvas';
     wrap.prepend(this.renderer.domElement);
 
-    this.hemiLight = new THREE.HemisphereLight('#FFFDF5', '#68C456', 0.95);
+    this.hemiLight = new THREE.HemisphereLight('#FFFDF5', '#68C456', 0.98);
     this.scene.add(this.hemiLight);
-    const dir = new THREE.DirectionalLight('#FFF5D6', 1.35);
+    const dir = new THREE.DirectionalLight('#FFF5D6', 1.4);
     this.dirLight = dir;
-    dir.position.set(16, 26, 18);
+    dir.position.set(22, 34, 24);
     dir.castShadow = true;
-    dir.shadow.mapSize.width = 1024;
-    dir.shadow.mapSize.height = 1024;
+    dir.shadow.mapSize.width = 2048;
+    dir.shadow.mapSize.height = 2048;
     dir.shadow.camera.near = 2;
-    dir.shadow.camera.far = 75;
-    dir.shadow.camera.left = -24;
-    dir.shadow.camera.right = 24;
-    dir.shadow.camera.top = 24;
-    dir.shadow.camera.bottom = -24;
-    dir.shadow.bias = -0.0005;
+    dir.shadow.camera.far = 110;
+    dir.shadow.camera.left = -36;
+    dir.shadow.camera.right = 36;
+    dir.shadow.camera.top = 36;
+    dir.shadow.camera.bottom = -36;
+    dir.shadow.bias = -0.0004;
     this.scene.add(dir);
 
     const fill = new THREE.DirectionalLight('#FFE4B5', 0.35);
@@ -2220,7 +2220,7 @@ export class FarmGame3D {
           return;
         }
         const r = Math.hypot(pt.x, pt.z);
-        const clamped = r > 16.0 ? { x: (pt.x / r) * 16.0, z: (pt.z / r) * 16.0 } : { x: pt.x, z: pt.z };
+        const clamped = r > 26.0 ? { x: (pt.x / r) * 26.0, z: (pt.z / r) * 26.0 } : { x: pt.x, z: pt.z };
         this.walkTarget = clamped;
         this.pendingSpotTrigger = null;
         this._spawnTapRing(clamped.x, clamped.z);
@@ -2870,7 +2870,7 @@ export class FarmGame3D {
 
       // 1. Wooju 3D Avatar Movement & Walking Limb Animation
       let moving = false;
-      const speed = this.inHome ? 5.6 : 7.5;
+      const speed = this.inHome ? 5.6 : 9.2;
       if (this.entered && this.activeDialogueSpot === null && !this.inLiveStage) {
         if (Math.hypot(this.joyVec.x, this.joyVec.z) > 0.08) {
           const nx = this.avatarPos.x + this.joyVec.x * speed * dt;
@@ -2879,7 +2879,7 @@ export class FarmGame3D {
             const half = this.myHome3D.getHalfSize();
             this.avatarPos.x = Math.max(-half, Math.min(half, nx));
             this.avatarPos.z = Math.max(-half, Math.min(half, nz));
-          } else if (Math.hypot(nx, nz) <= 16.2) {
+          } else if (Math.hypot(nx, nz) <= 26.2) {
             this.avatarPos.x = nx;
             this.avatarPos.z = nz;
           }
@@ -3042,7 +3042,7 @@ export class FarmGame3D {
           let nz = m.curZ + dirZ * fleeSpeed * dt;
 
           const nr = Math.hypot(nx, nz);
-          if (nr > 15.6) {
+          if (nr > 25.0) {
             const tangX = -m.curZ / Math.max(0.01, Math.hypot(m.curX, m.curZ));
             const tangZ = m.curX / Math.max(0.01, Math.hypot(m.curX, m.curZ));
             const dot = tangX * dirX + tangZ * dirZ;
@@ -3052,9 +3052,9 @@ export class FarmGame3D {
             nx = m.curX + dirX * fleeSpeed * dt;
             nz = m.curZ + dirZ * fleeSpeed * dt;
             const cr = Math.hypot(nx, nz);
-            if (cr > 15.6) {
-              nx = (nx / cr) * 15.6;
-              nz = (nz / cr) * 15.6;
+            if (cr > 25.0) {
+              nx = (nx / cr) * 25.0;
+              nz = (nz / cr) * 25.0;
             }
           }
           m.curX = nx;
@@ -3178,9 +3178,9 @@ export class FarmGame3D {
       const portraitBoost = aspect < 1 ? 1.18 : 1.0;
 
       if (!this.entered) {
-        const angle = t * 0.16;
-        const r = 21 * portraitBoost;
-        this.camera.position.set(Math.sin(angle) * r, 8.2 * portraitBoost, Math.cos(angle) * r);
+        const angle = t * 0.14;
+        const r = 31 * portraitBoost;
+        this.camera.position.set(Math.sin(angle) * r, 11.2 * portraitBoost, Math.cos(angle) * r);
         this.camera.lookAt(0, 1.8, 0);
       } else if (this.inHome) {
         // Cozy Animal Crossing isometric corner-room view!

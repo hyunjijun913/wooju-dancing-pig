@@ -158,38 +158,72 @@ function makeCanvasTex(THREE, size, drawFn, repeat = 1) {
 }
 
 function createACGrassTexture(THREE) {
-  return makeCanvasTex(THREE, 256, (ctx, s) => {
-    ctx.fillStyle = '#75D450';
+  return makeCanvasTex(THREE, 512, (ctx, s) => {
+    // Rich sunlit Animal Crossing layered meadow grass
+    const grad = ctx.createLinearGradient(0, 0, s, s);
+    grad.addColorStop(0, '#6ED14E');
+    grad.addColorStop(0.5, '#7BDE5A');
+    grad.addColorStop(1, '#6AC94A');
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, s, s);
-    ctx.fillStyle = '#84DF5E';
+
+    // Soft dappled warm sunlight patches
+    for (let i = 0; i < 18; i++) {
+      const rx = (i * 97 + 41) % s;
+      const ry = (i * 67 + 23) % s;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(190, 242, 100, 0.22)' : 'rgba(74, 222, 128, 0.18)';
+      ctx.beginPath();
+      ctx.arc(rx, ry, 28 + (i % 4) * 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Iconic Animal Crossing soft rounded triangle turf pattern
+    ctx.fillStyle = 'rgba(134, 239, 108, 0.42)';
     for (let y = 0; y < s; y += 32) {
       for (let x = 0; x < s; x += 32) {
         const ox = ((y / 32) % 2) * 16;
         ctx.beginPath();
         ctx.moveTo(x + ox + 8, y + 6);
-        ctx.lineTo(x + ox + 15, y + 18);
-        ctx.lineTo(x + ox + 1, y + 18);
+        ctx.lineTo(x + ox + 16, y + 19);
+        ctx.lineTo(x + ox, y + 19);
         ctx.closePath();
         ctx.fill();
       }
     }
-  }, 14);
+
+    // Tiny painted clover/daisy highlights
+    for (let i = 0; i < 24; i++) {
+      const cx = (i * 83 + 19) % s;
+      const cy = (i * 113 + 37) % s;
+      ctx.fillStyle = i % 3 === 0 ? 'rgba(255, 255, 255, 0.55)' : 'rgba(254, 240, 138, 0.55)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, 18);
 }
 
 function createACPathTexture(THREE) {
-  return makeCanvasTex(THREE, 256, (ctx, s) => {
-    ctx.fillStyle = '#EED09D';
+  return makeCanvasTex(THREE, 512, (ctx, s) => {
+    // Warm cream-sand Animal Crossing cobblestone path
+    ctx.fillStyle = '#F2D8A7';
     ctx.fillRect(0, 0, s, s);
-    const stones = ['#E2BC80', '#F6E1B8', '#D7AE70'];
-    for (let i = 0; i < 36; i++) {
-      ctx.fillStyle = stones[i % stones.length];
-      const rx = (i * 67 + 13) % s;
-      const ry = (i * 43 + 29) % s;
+    const stones = ['#E9C78F', '#FAF0D7', '#DFB678', '#F6E3BE'];
+    for (let i = 0; i < 72; i++) {
+      const rx = (i * 79 + 17) % s;
+      const ry = (i * 53 + 31) % s;
+      const rw = 16 + (i % 9) * 2;
+      const rh = 11 + (i % 6) * 2;
+      ctx.fillStyle = 'rgba(180, 130, 70, 0.22)';
       ctx.beginPath();
-      ctx.ellipse(rx, ry, 10 + (i % 7), 7 + (i % 5), (i % 5) * 0.4, 0, Math.PI * 2);
+      ctx.ellipse(rx + 2, ry + 3, rw, rh, (i % 5) * 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = stones[i % stones.length];
+      ctx.beginPath();
+      ctx.ellipse(rx, ry, rw, rh, (i % 5) * 0.35, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, 10);
+  }, 14);
 }
 
 /**
@@ -697,61 +731,119 @@ export function buildFarmWorld3D(THREE, scene) {
   const grassTex = createACGrassTexture(THREE);
   const pathTex = createACPathTexture(THREE);
 
-  // Sunlit grass island
+  // 0. Shimmering Turquoise Animal Crossing Island Ocean + Soft Foam Ring + Golden Sandy Beach!
+  const oceanMesh = new THREE.Mesh(
+    new THREE.CircleGeometry(105, 64),
+    new THREE.MeshStandardMaterial({ color: '#38BDF8', roughness: 0.22, metalness: 0.15 })
+  );
+  oceanMesh.rotation.x = -Math.PI / 2;
+  oceanMesh.position.y = -0.65;
+  scene.add(oceanMesh);
+
+  const foamRing = new THREE.Mesh(
+    new THREE.RingGeometry(36.2, 38.4, 64),
+    new THREE.MeshBasicMaterial({ color: '#E0F2FE', side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
+  );
+  foamRing.rotation.x = -Math.PI / 2;
+  foamRing.position.y = -0.58;
+  scene.add(foamRing);
+
+  const beachShelf = new THREE.Mesh(
+    new THREE.CylinderGeometry(36.5, 38.0, 1.4, 64),
+    new THREE.MeshStandardMaterial({ color: '#FDE68A', roughness: 0.92 })
+  );
+  beachShelf.position.y = -0.92;
+  beachShelf.receiveShadow = true;
+  scene.add(beachShelf);
+
+  // Distant Pastel Horizon Islands for scenic depth!
+  const hillMat = new THREE.MeshStandardMaterial({ color: '#86EFAC', roughness: 0.95 });
+  [[-55, -52, 16, 8], [48, -58, 20, 10], [62, 12, 14, 7], [-60, 22, 15, 7]].forEach(([hx, hz, hr, hh]) => {
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(hr, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), hillMat);
+    hill.scale.set(1, hh / hr, 1);
+    hill.position.set(hx, -0.7, hz);
+    scene.add(hill);
+  });
+
+  // 1. Spacious Sunlit Grass Island (radius 32 -> 2.7x bigger meadow!)
   const groundMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(23.5, 25.0, 2.0, 56),
-    new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.92 })
+    new THREE.CylinderGeometry(32.5, 34.0, 2.0, 64),
+    new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.9 })
   );
   groundMesh.position.y = -1.0;
   groundMesh.receiveShadow = true;
   scene.add(groundMesh);
 
-  // Cobblestone / sandy circular village path
+  // Cobblestone circular village promenade + central plaza + cross walkways
   const pathRing = new THREE.Mesh(
-    new THREE.RingGeometry(10.2, 14.2, 56),
-    new THREE.MeshStandardMaterial({ map: pathTex, roughness: 0.9, side: THREE.DoubleSide })
+    new THREE.RingGeometry(14.5, 19.6, 64),
+    new THREE.MeshStandardMaterial({ map: pathTex, roughness: 0.88, side: THREE.DoubleSide })
   );
   pathRing.rotation.x = -Math.PI / 2;
-  pathRing.position.y = 0.02;
+  pathRing.position.y = 0.025;
   pathRing.receiveShadow = true;
   scene.add(pathRing);
 
   const centerPath = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.2, 12.8),
-    new THREE.MeshStandardMaterial({ map: pathTex, roughness: 0.9 })
+    new THREE.PlaneGeometry(4.0, 22.0),
+    new THREE.MeshStandardMaterial({ map: pathTex, roughness: 0.88 })
   );
   centerPath.rotation.x = -Math.PI / 2;
-  centerPath.position.set(0, 0.025, 6.2);
+  centerPath.position.set(0, 0.03, 9.5);
   centerPath.receiveShadow = true;
   scene.add(centerPath);
 
-  // Central Dance Stage Platform
-  const stageDeck = new THREE.Mesh(
-    new THREE.CylinderGeometry(3.6, 3.9, 0.38, 36),
-    new THREE.MeshStandardMaterial({ color: '#D97706', roughness: 0.75 })
+  const plazaCircle = new THREE.Mesh(
+    new THREE.CircleGeometry(7.2, 48),
+    new THREE.MeshStandardMaterial({ map: pathTex, roughness: 0.88 })
   );
-  stageDeck.position.set(0, 0.19, 0);
+  plazaCircle.rotation.x = -Math.PI / 2;
+  plazaCircle.position.set(0, 0.022, 0);
+  plazaCircle.receiveShadow = true;
+  scene.add(plazaCircle);
+
+  // Central Dance Stage Platform with warm wooden rim & festive gold trim
+  const stageDeck = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.8, 4.2, 0.42, 40),
+    new THREE.MeshStandardMaterial({ color: '#C2671D', roughness: 0.72 })
+  );
+  stageDeck.position.set(0, 0.21, 0);
   stageDeck.castShadow = true;
   stageDeck.receiveShadow = true;
   scene.add(stageDeck);
 
   const stageTop = new THREE.Mesh(
-    new THREE.CylinderGeometry(3.3, 3.3, 0.06, 36),
-    new THREE.MeshStandardMaterial({ color: '#FEF3C7', roughness: 0.8 })
+    new THREE.CylinderGeometry(3.5, 3.5, 0.07, 40),
+    new THREE.MeshStandardMaterial({ color: '#FEF3C7', roughness: 0.78 })
   );
-  stageTop.position.set(0, 0.40, 0);
+  stageTop.position.set(0, 0.43, 0);
   stageTop.receiveShadow = true;
   scene.add(stageTop);
 
-  // Blue Pond at Zone 3 (Cat & Mouse fishing spot)
-  const pond = new THREE.Mesh(
-    new THREE.CylinderGeometry(3.2, 3.2, 0.1, 32),
-    new THREE.MeshStandardMaterial({ color: '#38BDF8', roughness: 0.18, metalness: 0.1 })
+  const stageTrim = new THREE.Mesh(
+    new THREE.TorusGeometry(3.65, 0.09, 8, 40),
+    new THREE.MeshStandardMaterial({ color: '#FACC15', metalness: 0.55, roughness: 0.3 })
   );
-  pond.position.set(11.8, 0.04, -11.0);
-  scene.add(pond);
+  stageTrim.rotation.x = Math.PI / 2;
+  stageTrim.position.set(0, 0.44, 0);
+  scene.add(stageTrim);
 
-  // Helper to place static artist GLB buildings & props
+  // Sparkling Blue Pond at Zone 3 (Cat & Mouse fishing spot — scaled to spacious island!)
+  const pond = new THREE.Mesh(
+    new THREE.CylinderGeometry(4.4, 4.4, 0.1, 36),
+    new THREE.MeshStandardMaterial({ color: '#38BDF8', roughness: 0.14, metalness: 0.18 })
+  );
+  pond.position.set(17.2, 0.04, -15.8);
+  scene.add(pond);
+  const pondRim = new THREE.Mesh(
+    new THREE.RingGeometry(4.35, 4.95, 36),
+    new THREE.MeshStandardMaterial({ color: '#FDE68A', roughness: 0.9, side: THREE.DoubleSide })
+  );
+  pondRim.rotation.x = -Math.PI / 2;
+  pondRim.position.set(17.2, 0.03, -15.8);
+  scene.add(pondRim);
+
+  // Helper to place static artist GLB props
   const placeProp = (url, h, x, z, rotY = 0, y = 0) => {
     loadGLTF(url).then((gltf) => {
       const inst = instantiateGLTF(THREE, gltf, h, y);
@@ -762,67 +854,67 @@ export function buildFarmWorld3D(THREE, scene) {
     }).catch(() => {});
   };
 
-  // 1. Base Cozy Farm Props (Landmark buildings are now built by Wooju via buildVillageBuildings3D!)
-  placeProp('assets/models/quaternius/Hay.glb', 1.4, -7.2, -16.2, 0.4);
-  placeProp('assets/models/quaternius/Hay.glb', 1.2, -6.1, -15.4, -0.3);
-  placeProp('assets/models/nature/sign.glb', 1.8, 2.4, 13.8, -0.3);
-  placeProp('assets/models/nature/bridge_woodRound.glb', 1.3, 11.8, -11.0, 0.6);
-  placeProp('assets/models/nature/lily_large.glb', 0.15, 10.6, -10.2, 0);
-  placeProp('assets/models/nature/lily_large.glb', 0.15, 12.9, -11.8, 1.2);
+  // Base Cozy Farm Props
+  placeProp('assets/models/quaternius/Hay.glb', 1.5, -10.5, -22.5, 0.4);
+  placeProp('assets/models/quaternius/Hay.glb', 1.3, -9.0, -21.5, -0.3);
+  placeProp('assets/models/nature/sign.glb', 2.0, 3.2, 20.8, -0.3);
+  placeProp('assets/models/nature/bridge_woodRound.glb', 1.6, 17.2, -15.8, 0.6);
+  placeProp('assets/models/nature/lily_large.glb', 0.18, 15.6, -14.8, 0);
+  placeProp('assets/models/nature/lily_large.glb', 0.18, 18.8, -16.8, 1.2);
 
   // Festive lanterns around the central dance stage
-  [[-3.2, -2.4], [3.2, -2.4], [-3.2, 2.4], [3.2, 2.4]].forEach(([lx, lz]) => {
-    placeProp('assets/models/fantasy-town/lantern.glb', 2.6, lx, lz, 0);
+  [[-3.6, -2.8], [3.6, -2.8], [-3.6, 2.8], [3.6, 2.8]].forEach(([lx, lz]) => {
+    placeProp('assets/models/fantasy-town/lantern.glb', 2.7, lx, lz, 0);
   });
 
-  // 3. Sculpted Trees Ringing the Village (Kenney Nature & Fantasy Town)
+  // Lush Sculpted Forest Ring around the Spacious Island (24 trees!)
   const treeModels = [
     'assets/models/nature/tree_oak.glb',
     'assets/models/nature/tree_detailed.glb',
     'assets/models/nature/tree_fat.glb',
     'assets/models/fantasy-town/tree-high-round.glb',
   ];
-  const treeSpots = [
-    [-16.5, 9.2, 4.6], [-18.2, 2.5, 5.2], [-18.0, -3.8, 4.8], [-14.5, -14.2, 5.0],
-    [-10.5, -17.2, 4.5], [10.5, -16.5, 5.2], [15.5, -12.5, 4.8], [18.2, -1.5, 5.0],
-    [17.2, 5.5, 4.6], [15.2, 11.2, 5.1], [11.5, 15.2, 4.5], [-11.5, 15.2, 4.8],
-  ];
-  treeSpots.forEach(([tx, tz, th], i) => {
-    placeProp(treeModels[i % treeModels.length], th, tx, tz, (i * 1.3) % (Math.PI * 2));
-  });
-
-  // 4. Sculpted Wooden Fences & Gate
-  placeProp('assets/models/fantasy-town/fence-gate.glb', 2.2, 0, 17.5, 0);
-  for (let i = 0; i < 20; i++) {
-    const a = (i / 20) * Math.PI * 2;
-    if (Math.abs(a - Math.PI / 2) < 0.25) continue;
-    placeProp('assets/models/fantasy-town/fence.glb', 1.5, Math.cos(a) * 18.2, Math.sin(a) * 18.2, -a + Math.PI / 2);
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    // Keep front entrance path clear
+    if (Math.abs(a - Math.PI / 2) < 0.22) continue;
+    const rad = 28.5 + (i % 3) * 1.4;
+    const h = 4.8 + (i % 4) * 0.65;
+    placeProp(treeModels[i % treeModels.length], h, Math.cos(a) * rad, Math.sin(a) * rad, i * 1.1);
   }
 
-  // 5. Sculpted Flowers, Mushrooms & Rocks
+  // Sculpted Wooden Fences & Welcome Gate around the outer meadow
+  placeProp('assets/models/fantasy-town/fence-gate.glb', 2.5, 0, 26.8, 0);
+  for (let i = 0; i < 32; i++) {
+    const a = (i / 32) * Math.PI * 2;
+    if (Math.abs(a - Math.PI / 2) < 0.18) continue;
+    placeProp('assets/models/fantasy-town/fence.glb', 1.6, Math.cos(a) * 27.2, Math.sin(a) * 27.2, -a + Math.PI / 2);
+  }
+
+  // Abundant Animal Crossing Meadow Flowers, Mushrooms & Boulders
   const flowerModels = [
     'assets/models/nature/flower_redA.glb',
     'assets/models/nature/flower_yellowA.glb',
     'assets/models/nature/flower_purpleA.glb',
   ];
-  for (let i = 0; i < 24; i++) {
-    const ang = (i / 24) * Math.PI * 2;
-    const rad = i % 2 === 0 ? 6.8 : 15.5;
-    placeProp(flowerModels[i % 3], 0.65, Math.cos(ang) * rad, Math.sin(ang) * rad, i);
+  for (let i = 0; i < 42; i++) {
+    const ang = (i / 42) * Math.PI * 2;
+    const rad = i % 3 === 0 ? 9.5 : (i % 3 === 1 ? 22.8 : 25.4);
+    placeProp(flowerModels[i % 3], 0.72, Math.cos(ang) * rad, Math.sin(ang) * rad, i);
   }
-  [[-6.5, 5.5], [6.5, 5.5], [-7.5, -5.5], [7.5, -5.5]].forEach(([mx, mz], i) => {
-    placeProp('assets/models/nature/mushroom_redGroup.glb', 0.7, mx, mz, i);
+  [[-9.5, 8.2], [9.5, 8.2], [-10.5, -8.5], [10.5, -8.5], [-21.5, 12.0], [21.5, 11.5]].forEach(([mx, mz], i) => {
+    placeProp('assets/models/nature/mushroom_redGroup.glb', 0.8, mx, mz, i);
   });
-  [[-14.2, 12.2], [14.2, 12.2], [13.8, -13.2]].forEach(([rx, rz], i) => {
-    placeProp('assets/models/nature/rock_largeA.glb', 1.3, rx, rz, i * 1.1);
+  [[-22.5, 16.5], [22.5, 16.5], [20.5, -18.5], [-23.0, -16.0]].forEach(([rx, rz], i) => {
+    placeProp('assets/models/nature/rock_largeA.glb', 1.5, rx, rz, i * 1.1);
   });
 
-  // Drifting 3D Sky Clouds
+  // Soft Puffy 3D Sky Clouds drifting high above the island
   const clouds = [];
-  const cloudMat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.9 });
-  [[-14, 10.5, -18], [10, 11.2, -20], [-2, 11.8, -24], [18, 10.2, -10]].forEach(([cx, cy, cz]) => {
+  const cloudMat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.92 });
+  [[-22, 14.5, -26], [16, 15.5, -30], [-4, 16.2, -34], [26, 14.0, -14], [-28, 15.0, 6]].forEach(([cx, cy, cz]) => {
     const cg = new THREE.Group();
-    [[-1.0, 0, 0, 0.95], [0, 0.4, 0, 1.3], [1.1, 0.05, 0, 0.9]].forEach(([ox, oy, oz, r]) => {
+    [[-1.4, 0, 0, 1.2], [0, 0.5, 0, 1.65], [1.45, 0.08, 0, 1.15]].forEach(([ox, oy, oz, r]) => {
       const p = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), cloudMat);
       p.position.set(ox, oy, oz);
       cg.add(p);
@@ -832,37 +924,35 @@ export function buildFarmWorld3D(THREE, scene) {
     clouds.push(cg);
   });
 
-  // Wooju's Always-Present Cozy 3D Home right near the entrance! Walk to the door to go inside!
+  // Wooju's Always-Present Cozy 3D Home in its own landscaped yard near the entrance!
   const woojuHouseGroup = new THREE.Group();
-  const HOUSE_X = -6.2;
-  const HOUSE_Z = 14.6;
-  const DOOR_POS = { x: -4.8, z: 12.6 };
+  const HOUSE_X = -8.8;
+  const HOUSE_Z = 21.2;
+  const DOOR_POS = { x: -7.1, z: 18.8 };
   woojuHouseGroup.position.set(HOUSE_X, 0, HOUSE_Z);
   woojuHouseGroup.rotation.y = Math.PI * 0.18;
   loadGLTF('assets/models/quaternius/House_1.glb').then((gltf) => {
-    const inst = instantiateGLTF(THREE, gltf, 5.4, 0);
+    const inst = instantiateGLTF(THREE, gltf, 5.8, 0);
     woojuHouseGroup.add(inst.holder);
   }).catch(() => {});
   const houseHitMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.6, 2.6, 5.0, 12),
+    new THREE.CylinderGeometry(2.8, 2.8, 5.4, 12),
     new THREE.MeshBasicMaterial({ visible: false })
   );
-  houseHitMesh.position.y = 2.5;
+  houseHitMesh.position.y = 2.7;
   houseHitMesh.userData = { isWoojuHouse: true };
   woojuHouseGroup.add(houseHitMesh);
 
-  // Cute floating "🏡 우주 집" badge above Wooju's house
   const houseBadge = new THREE.Sprite(
     new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, '🏡', '#DCFCE7'), transparent: true })
   );
-  houseBadge.scale.set(1.35, 1.35, 1);
-  houseBadge.position.set(0, 5.9, 0);
+  houseBadge.scale.set(1.45, 1.45, 1);
+  houseBadge.position.set(0, 6.3, 0);
   woojuHouseGroup.add(houseBadge);
   scene.add(woojuHouseGroup);
 
-  // Cozy Welcome Doormat & Glowing Door Ring right in front of Wooju's House!
   const doorMat = new THREE.Mesh(
-    new THREE.BoxGeometry(1.5, 0.06, 1.0),
+    new THREE.BoxGeometry(1.6, 0.06, 1.05),
     new THREE.MeshStandardMaterial({ color: '#F59E0B', roughness: 0.85 })
   );
   doorMat.position.set(DOOR_POS.x, 0.04, DOOR_POS.z);
@@ -871,7 +961,7 @@ export function buildFarmWorld3D(THREE, scene) {
   scene.add(doorMat);
 
   const doorRing = new THREE.Mesh(
-    new THREE.RingGeometry(0.95, 1.25, 24),
+    new THREE.RingGeometry(1.0, 1.32, 24),
     new THREE.MeshBasicMaterial({ color: '#4ADE80', side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
   );
   doorRing.rotation.x = -Math.PI / 2;
@@ -884,7 +974,7 @@ export function buildFarmWorld3D(THREE, scene) {
     woojuHouse: {
       hitMeshes: [houseHitMesh, doorMat],
       doorPos: DOOR_POS,
-      exitPos: { x: -3.4, z: 10.6 },
+      exitPos: { x: -5.2, z: 16.4 },
       doorRing,
     },
   };
@@ -1217,120 +1307,120 @@ export function buildVillageBuildings3D(THREE, scene) {
     attachGLB(g1, fUrls[i % 3], 1.15, fx, 0, fz, i);
   });
   addLandmarkBadge(g1, '🌷', 6.4);
-  register('garden_arch', g1, { x: 0, z: 8.8 });
+  register('garden_arch', g1, { x: 0, z: 12.2 });
 
   // 2. magic_well (6 speaks) -> Wishing Well
   const g2 = new THREE.Group();
-  attachGLB(g2, 'assets/models/quaternius/Well.glb', 3.2, 0, 0, 0, 0.2);
-  addLandmarkBadge(g2, '🪣', 4.0);
-  register('magic_well', g2, { x: -8.5, z: -14.8 });
+  attachGLB(g2, 'assets/models/quaternius/Well.glb', 3.4, 0, 0, 0, 0.2);
+  addLandmarkBadge(g2, '🪣', 4.2);
+  register('magic_well', g2, { x: -12.0, z: -21.0 });
 
   // 3. green_stall (10 speaks) -> Green Fruit Market Stall
   const g3 = new THREE.Group();
-  attachGLB(g3, 'assets/models/fantasy-town/stall-green.glb', 3.6, 0, 0, 0, Math.PI * 0.45);
-  attachGLB(g3, 'assets/models/food/apple.glb', 0.7, 0.7, 1.05, 0.2, 0);
-  addLandmarkBadge(g3, '🍏', 4.3);
-  register('green_stall', g3, { x: -15.2, z: -2.5 });
+  attachGLB(g3, 'assets/models/fantasy-town/stall-green.glb', 3.8, 0, 0, 0, Math.PI * 0.45);
+  attachGLB(g3, 'assets/models/food/apple.glb', 0.75, 0.7, 1.05, 0.2, 0);
+  addLandmarkBadge(g3, '🍏', 4.5);
+  register('green_stall', g3, { x: -22.5, z: -3.5 });
 
   // 4. red_stall (15 speaks) -> Red Snack Stall + Farm Cart
   const g4 = new THREE.Group();
-  attachGLB(g4, 'assets/models/fantasy-town/stall-red.glb', 3.6, 0, 0, 0, -Math.PI * 0.45);
-  attachGLB(g4, 'assets/models/fantasy-town/cart.glb', 2.2, -1.8, 0, 2.2, 0.3);
-  addLandmarkBadge(g4, '🍿', 4.3);
-  register('red_stall', g4, { x: 15.6, z: -1.2 });
+  attachGLB(g4, 'assets/models/fantasy-town/stall-red.glb', 3.8, 0, 0, 0, -Math.PI * 0.45);
+  attachGLB(g4, 'assets/models/fantasy-town/cart.glb', 2.4, -2.0, 0, 2.4, 0.3);
+  addLandmarkBadge(g4, '🍿', 4.5);
+  register('red_stall', g4, { x: 22.8, z: -2.0 });
 
   // 5. fountain (20 speaks) -> Sparkling Plaza Fountain
   const g5 = new THREE.Group();
-  attachGLB(g5, 'assets/models/fantasy-town/fountain-round-detail.glb', 3.0, 0, 0, 0, 0);
-  addLandmarkBadge(g5, '⛲', 3.9);
-  register('fountain', g5, { x: 7.8, z: 13.8 });
+  attachGLB(g5, 'assets/models/fantasy-town/fountain-round-detail.glb', 3.2, 0, 0, 0, 0);
+  addLandmarkBadge(g5, '⛲', 4.1);
+  register('fountain', g5, { x: 11.5, z: 20.0 });
 
-  // 6. wooju_house (26 speaks) -> Wooju's Cozy Cottage
+  // 6. wooju_house (26 speaks) -> Wooju's Garden Villa
   const g6 = new THREE.Group();
-  attachGLB(g6, 'assets/models/quaternius/House_1.glb', 6.2, 0, 0, 0, Math.PI * 0.35);
-  addLandmarkBadge(g6, '🏡', 6.8);
-  register('wooju_house', g6, { x: -17.2, z: -8.2 });
+  attachGLB(g6, 'assets/models/quaternius/House_1.glb', 6.4, 0, 0, 0, Math.PI * 0.35);
+  addLandmarkBadge(g6, '🏡', 7.0);
+  register('wooju_house', g6, { x: -24.0, z: -11.5 });
 
   // 7. friend_villa (32 speaks) -> Animal Friends Villa
   const g7 = new THREE.Group();
-  attachGLB(g7, 'assets/models/quaternius/House_2.glb', 6.2, 0, 0, 0, -Math.PI * 0.35);
-  addLandmarkBadge(g7, '🏠', 6.8);
-  register('friend_villa', g7, { x: 17.5, z: -5.8 });
+  attachGLB(g7, 'assets/models/quaternius/House_2.glb', 6.4, 0, 0, 0, -Math.PI * 0.35);
+  addLandmarkBadge(g7, '🏠', 7.0);
+  register('friend_villa', g7, { x: 24.5, z: -8.5 });
 
   // 8. gold_windmill (40 speaks) -> Golden Windmill
   const g8 = new THREE.Group();
-  attachGLB(g8, 'assets/models/fantasy-town/windmill.glb', 8.6, 0, 0, 0, -0.25);
-  addLandmarkBadge(g8, '🌬️', 9.0);
-  register('gold_windmill', g8, { x: 5.8, z: -17.8 });
+  attachGLB(g8, 'assets/models/fantasy-town/windmill.glb', 9.2, 0, 0, 0, -0.25);
+  addLandmarkBadge(g8, '🌬️', 9.6);
+  register('gold_windmill', g8, { x: 8.5, z: -24.5 });
 
   // 9. star_gazebo (50 speaks) -> Starlight Gazebo Pavilion
   const g9 = new THREE.Group();
-  attachGLB(g9, 'assets/models/quaternius/Gazebo.glb', 5.8, 0, 0, 0, 0);
-  addLandmarkBadge(g9, '🏛️', 6.4);
-  register('star_gazebo', g9, { x: 0, z: -5.4 });
+  attachGLB(g9, 'assets/models/quaternius/Gazebo.glb', 6.0, 0, 0, 0, 0);
+  addLandmarkBadge(g9, '🏛️', 6.6);
+  register('star_gazebo', g9, { x: 0, z: -9.5 });
 
   // 10. royal_barn (62 speaks) -> Royal Golden Barn Cathedral + Red Banners
   const g10 = new THREE.Group();
-  attachGLB(g10, 'assets/models/quaternius/Stable.glb', 6.6, 0, 0, 0, 0);
-  attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.0, -3.0, 0, 2.2, 0.2);
-  attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.0, 3.0, 0, 2.2, -0.2);
-  addLandmarkBadge(g10, '🏰', 7.2);
-  register('royal_barn', g10, { x: -3.2, z: -18.2 });
+  attachGLB(g10, 'assets/models/quaternius/Stable.glb', 7.0, 0, 0, 0, 0);
+  attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.2, -3.2, 0, 2.4, 0.2);
+  attachGLB(g10, 'assets/models/fantasy-town/banner-red.glb', 3.2, 3.2, 0, 2.4, -0.2);
+  addLandmarkBadge(g10, '🏰', 7.6);
+  register('royal_barn', g10, { x: -4.8, z: -25.0 });
 
   // 11. rocket_pad (75 speaks) -> Giant 3D Wooju Space Rocket Launchpad!
   const g11 = new THREE.Group();
   const pad = new THREE.Mesh(
-    new THREE.CylinderGeometry(2.4, 2.7, 0.4, 24),
+    new THREE.CylinderGeometry(2.6, 2.9, 0.45, 24),
     new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.6 })
   );
-  pad.position.set(0, 0.2, 0);
+  pad.position.set(0, 0.22, 0);
   const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.95, 1.15, 4.6, 18),
+    new THREE.CylinderGeometry(1.0, 1.2, 4.8, 18),
     new THREE.MeshStandardMaterial({ color: '#F8FAFC', metalness: 0.3, roughness: 0.3 })
   );
-  body.position.set(0, 3.0, 0);
+  body.position.set(0, 3.1, 0);
   const nose = new THREE.Mesh(
-    new THREE.ConeGeometry(0.96, 1.8, 18),
+    new THREE.ConeGeometry(1.02, 1.9, 18),
     new THREE.MeshStandardMaterial({ color: '#EF4444', roughness: 0.35 })
   );
-  nose.position.set(0, 6.2, 0);
+  nose.position.set(0, 6.4, 0);
   const win = new THREE.Mesh(
-    new THREE.SphereGeometry(0.42, 14, 12),
+    new THREE.SphereGeometry(0.45, 14, 12),
     new THREE.MeshStandardMaterial({ color: '#38BDF8', emissive: '#0284C7', emissiveIntensity: 0.5 })
   );
-  win.position.set(0.72, 3.6, 0.55);
+  win.position.set(0.75, 3.7, 0.58);
   for (let i = 0; i < 3; i++) {
     const a = (i / 3) * Math.PI * 2;
     const fin = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, 1.5, 1.1),
+      new THREE.BoxGeometry(0.2, 1.6, 1.2),
       new THREE.MeshStandardMaterial({ color: '#F97316', roughness: 0.4 })
     );
-    fin.position.set(Math.cos(a) * 1.15, 1.4, Math.sin(a) * 1.15);
+    fin.position.set(Math.cos(a) * 1.2, 1.45, Math.sin(a) * 1.2);
     fin.rotation.y = -a + Math.PI / 2;
     g11.add(fin);
   }
   rocketFlame = new THREE.Mesh(
-    new THREE.ConeGeometry(0.75, 1.6, 12),
+    new THREE.ConeGeometry(0.8, 1.7, 12),
     new THREE.MeshBasicMaterial({ color: '#FACC15', transparent: true, opacity: 0.85 })
   );
   rocketFlame.rotation.x = Math.PI;
-  rocketFlame.position.set(0, 0.7, 0);
+  rocketFlame.position.set(0, 0.72, 0);
   g11.add(pad, body, nose, win, rocketFlame);
-  addLandmarkBadge(g11, '🚀', 7.9);
-  register('rocket_pad', g11, { x: -13.5, z: 12.2 });
+  addLandmarkBadge(g11, '🚀', 8.2);
+  register('rocket_pad', g11, { x: -19.5, z: 17.5 });
 
-  // 12. rainbow_arch (100 speaks) -> Legendary Giant 3D Rainbow Arch over the entire farm!
+  // 12. rainbow_arch (100 speaks) -> Legendary Giant 3D Rainbow Arch over the entire island!
   const g12 = new THREE.Group();
   const rbColors = ['#EF4444', '#F97316', '#FACC15', '#22C55E', '#38BDF8', '#A855F7'];
   rbColors.forEach((col, i) => {
     const arc = new THREE.Mesh(
-      new THREE.TorusGeometry(13.5 - i * 0.42, 0.22, 10, 48, Math.PI),
-      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.82 })
+      new THREE.TorusGeometry(20.0 - i * 0.52, 0.28, 10, 56, Math.PI),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.84 })
     );
     arc.position.set(0, 0.2, 0);
     g12.add(arc);
   });
-  register('rainbow_arch', g12, { x: 0, z: -3.5 });
+  register('rainbow_arch', g12, { x: 0, z: -5.0 });
 
   const getFocusPos = (id) => entries.get(id)?.focusPos || { x: 0, z: 0 };
 

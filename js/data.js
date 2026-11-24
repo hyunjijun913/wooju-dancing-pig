@@ -911,19 +911,19 @@ export const REHEARSAL_OUTRO = {
   gesture: "🙌 환하게 웃으며 멋지게 끝인사!"
 };
 
-// 12 sequential 3D farm spots mapped 1:1 to BASE_CARDS #1..#25 along a cozy circular path
+// 12 sequential 3D farm spots mapped 1:1 to BASE_CARDS #1..#25 along a spacious Animal Crossing island loop
 export const FARM_SPOTS = [
-  { id: "farmer",       zone: 1, cardIds: [1, 2, 3],      name: "브라운 아저씨", emoji: "👨‍🌾", itemEmoji: "😢", itemLabel: "슬픈 농장",    portrait: "assets/char_farmer.png",       pos: { x: 0, z: 12.5 },   prop: "sign" },
-  { id: "frog",         zone: 1, cardIds: [4, 5],         name: "개구리",        emoji: "🐸",  itemEmoji: "💭", itemLabel: "고민 시작",    portrait: "assets/char_frog.png",         pos: { x: -6.8, z: 10.5 }, prop: "lily" },
-  { id: "owl",          zone: 2, cardIds: [6, 7],         name: "부엉이",        emoji: "🦉",  itemEmoji: "💡", itemLabel: "저녁 아이디어", portrait: "assets/char_owl.png",          pos: { x: -11.5, z: 5.5 }, prop: "stump" },
-  { id: "chicken",      zone: 2, cardIds: [8],            name: "닭",            emoji: "🐔",  itemEmoji: "🥚", itemLabel: "달걀",         portrait: "assets/char_chicken.png",      pos: { x: -12.5, z: -1.0 }, prop: "nest" },
-  { id: "rabbit",       zone: 2, cardIds: [9],            name: "토끼",          emoji: "🐰",  itemEmoji: "🥕", itemLabel: "큰 당근",      portrait: "assets/char_rabbit.png",       pos: { x: -10.2, z: -7.5 }, prop: "garden" },
-  { id: "cow",          zone: 2, cardIds: [10],           name: "젖소",          emoji: "🐄",  itemEmoji: "🥛", itemLabel: "우유",         portrait: "assets/char_cow.png",          pos: { x: -4.8, z: -11.8 }, prop: "bucket" },
-  { id: "horse_pony",   zone: 2, cardIds: [11],           name: "말과 조랑말",   emoji: "🐴",  itemEmoji: "🌽", itemLabel: "옥수수",       portrait: "assets/char_horse_pony.png",   pos: { x: 2.5, z: -12.2 },  prop: "corn" },
-  { id: "cat_mouse",    zone: 3, cardIds: [12, 13, 14, 15], name: "고양이와 생쥐", emoji: "🐱",  itemEmoji: "🐟", itemLabel: "물고기 낚시",  portrait: "assets/char_cat_mouse.png",    pos: { x: 9.2, z: -8.8 },   prop: "pond" },
-  { id: "duck",         zone: 3, cardIds: [16],           name: "오리",          emoji: "🦆",  itemEmoji: "🍳", itemLabel: "저녁 요리",    portrait: "assets/char_duck.png",         pos: { x: 12.4, z: -2.2 },  prop: "pot" },
-  { id: "dog_goat",     zone: 3, cardIds: [17],           name: "개와 염소",     emoji: "🐶",  itemEmoji: "🧹", itemLabel: "헛간 청소",    portrait: "assets/char_dog_goat.png",     pos: { x: 11.4, z: 5.0 },   prop: "broom" },
-  { id: "donkey_sheep", zone: 3, cardIds: [18],           name: "당나귀와 양",   emoji: "🐑",  itemEmoji: "🎵", itemLabel: "노래 선물",    portrait: "assets/char_donkey_sheep.png", pos: { x: 6.5, z: 10.6 },   prop: "music" },
+  { id: "farmer",       zone: 1, cardIds: [1, 2, 3],      name: "브라운 아저씨", emoji: "👨‍🌾", itemEmoji: "😢", itemLabel: "슬픈 농장",    portrait: "assets/char_farmer.png",       pos: { x: 0, z: 18.0 },     prop: "sign" },
+  { id: "frog",         zone: 1, cardIds: [4, 5],         name: "개구리",        emoji: "🐸",  itemEmoji: "💭", itemLabel: "고민 시작",    portrait: "assets/char_frog.png",         pos: { x: -9.8, z: 15.2 },  prop: "lily" },
+  { id: "owl",          zone: 2, cardIds: [6, 7],         name: "부엉이",        emoji: "🦉",  itemEmoji: "💡", itemLabel: "저녁 아이디어", portrait: "assets/char_owl.png",          pos: { x: -16.5, z: 8.0 },  prop: "stump" },
+  { id: "chicken",      zone: 2, cardIds: [8],            name: "닭",            emoji: "🐔",  itemEmoji: "🥚", itemLabel: "달걀",         portrait: "assets/char_chicken.png",      pos: { x: -18.0, z: -1.5 }, prop: "nest" },
+  { id: "rabbit",       zone: 2, cardIds: [9],            name: "토끼",          emoji: "🐰",  itemEmoji: "🥕", itemLabel: "큰 당근",      portrait: "assets/char_rabbit.png",       pos: { x: -14.8, z: -10.8 }, prop: "garden" },
+  { id: "cow",          zone: 2, cardIds: [10],           name: "젖소",          emoji: "🐄",  itemEmoji: "🥛", itemLabel: "우유",         portrait: "assets/char_cow.png",          pos: { x: -7.0, z: -16.8 }, prop: "bucket" },
+  { id: "horse_pony",   zone: 2, cardIds: [11],           name: "말과 조랑말",   emoji: "🐴",  itemEmoji: "🌽", itemLabel: "옥수수",       portrait: "assets/char_horse_pony.png",   pos: { x: 3.6, z: -17.5 },  prop: "corn" },
+  { id: "cat_mouse",    zone: 3, cardIds: [12, 13, 14, 15], name: "고양이와 생쥐", emoji: "🐱",  itemEmoji: "🐟", itemLabel: "물고기 낚시",  portrait: "assets/char_cat_mouse.png",    pos: { x: 13.2, z: -12.6 }, prop: "pond" },
+  { id: "duck",         zone: 3, cardIds: [16],           name: "오리",          emoji: "🦆",  itemEmoji: "🍳", itemLabel: "저녁 요리",    portrait: "assets/char_duck.png",         pos: { x: 17.8, z: -3.2 },  prop: "pot" },
+  { id: "dog_goat",     zone: 3, cardIds: [17],           name: "개와 염소",     emoji: "🐶",  itemEmoji: "🧹", itemLabel: "헛간 청소",    portrait: "assets/char_dog_goat.png",     pos: { x: 16.4, z: 7.2 },   prop: "broom" },
+  { id: "donkey_sheep", zone: 3, cardIds: [18],           name: "당나귀와 양",   emoji: "🐑",  itemEmoji: "🎵", itemLabel: "노래 선물",    portrait: "assets/char_donkey_sheep.png", pos: { x: 9.4, z: 15.2 },   prop: "music" },
   { id: "pig_finale",   zone: 4, cardIds: [19, 20, 21, 22, 23, 24, 25], name: "춤추는 돼지", emoji: "🐷", itemEmoji: "💃", itemLabel: "댄스 파티!", portrait: "assets/char_pig.png", pos: { x: 0, z: 0 }, prop: "stage" },
 ];
 
