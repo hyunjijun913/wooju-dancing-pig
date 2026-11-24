@@ -1037,9 +1037,9 @@ export const VILLAGE_BUILDINGS = [
   { id: 'rainbow_arch',  name: '전설의 무지개 다리', emoji: '🌈', reqSpeaks: 100, desc: '따라 말하기 100회!' },
 ];
 
-// 24 Collectible Treasures (dropped from Treasure Chests on "💎 토씨 안 틀림!!" or every 5 speaks!)
+// 40 Outdoor Treasures & Garden Decorations (expanded from 24 -> 40!)
 export const TREASURE_ITEMS = [
-  // Common (8)
+  // Common (12)
   { id: 'tr_gold_egg',     name: '황금 달걀',       emoji: '🥚', rarity: 'common',    cat: '음식' },
   { id: 'tr_big_carrot',   name: '무지개 당근',     emoji: '🥕', rarity: 'common',    cat: '음식' },
   { id: 'tr_clover',       name: '네잎클로버',      emoji: '🍀', rarity: 'common',    cat: '자연' },
@@ -1048,7 +1048,11 @@ export const TREASURE_ITEMS = [
   { id: 'tr_apple_pie',    name: '꿀사과 파이',     emoji: '🥧', rarity: 'common',    cat: '음식' },
   { id: 'tr_sunflower',    name: '햇살 해바라기',   emoji: '🌻', rarity: 'common',    cat: '자연' },
   { id: 'tr_bell',         name: '딸랑이 종',       emoji: '🔔', rarity: 'common',    cat: '농장' },
-  // Rare (7)
+  { id: 'tr_tulip_pot',    name: '무지개 튤립 화분', emoji: '🌷', rarity: 'common',   cat: '정원' },
+  { id: 'tr_butterfly',    name: '반짝이 나비',     emoji: '🦋', rarity: 'common',    cat: '자연' },
+  { id: 'tr_honey_jar',    name: '달콤 꿀단지',     emoji: '🍯', rarity: 'common',    cat: '음식' },
+  { id: 'tr_ladybug',      name: '행운 무당벌레',   emoji: '🐞', rarity: 'common',    cat: '자연' },
+  // Rare (12)
   { id: 'tr_galaxy_milk',  name: '은하수 우유',     emoji: '🥛', rarity: 'rare',      cat: '음식' },
   { id: 'tr_dia_corn',     name: '다이아 옥수수',   emoji: '🌽', rarity: 'rare',      cat: '음식' },
   { id: 'tr_star_mush',    name: '별빛 버섯',       emoji: '🍄', rarity: 'rare',      cat: '자연' },
@@ -1056,18 +1060,120 @@ export const TREASURE_ITEMS = [
   { id: 'tr_gold_note',    name: '황금 음표',       emoji: '🎵', rarity: 'rare',      cat: '농장' },
   { id: 'tr_crystal_flw',  name: '크리스탈 꽃',     emoji: '🌺', rarity: 'rare',      cat: '자연' },
   { id: 'tr_magic_stew',   name: '오리의 마법 스튜', emoji: '🍲', rarity: 'rare',     cat: '음식' },
-  // Epic (5)
+  { id: 'tr_sakura_tree',  name: '분홍 벚꽃 나무',  emoji: '🌸', rarity: 'rare',      cat: '정원' },
+  { id: 'tr_cotton_candy', name: '솜사탕 기계',     emoji: '🍭', rarity: 'rare',      cat: '축제' },
+  { id: 'tr_fairy_house',  name: '요정의 버섯집',   emoji: '🏡', rarity: 'rare',      cat: '정원' },
+  { id: 'tr_rainbow_shell', name: '무지개 조개',    emoji: '🐚', rarity: 'rare',      cat: '자연' },
+  { id: 'tr_firefly_jar',  name: '반딧불이 유리병', emoji: '✨', rarity: 'rare',      cat: '정원' },
+  // Epic (9)
   { id: 'tr_legend_fish',  name: '전설의 황금 잉어', emoji: '🐟', rarity: 'epic',     cat: '음식' },
   { id: 'tr_dance_shoes',  name: '춤추는 마법 구두', emoji: '👟', rarity: 'epic',     cat: '농장' },
   { id: 'tr_farmer_hat',   name: '브라운 황금 모자', emoji: '🤠', rarity: 'epic',     cat: '농장' },
   { id: 'tr_meteor',       name: '미니 운석',       emoji: '☄️', rarity: 'epic',      cat: '우주' },
   { id: 'tr_saturn_ring',  name: '토성 반지',       emoji: '🪐', rarity: 'epic',      cat: '우주' },
-  // Legendary (4)
+  { id: 'tr_dino_fossil',  name: '티라노 공룡 화석', emoji: '🦖', rarity: 'epic',     cat: '전시' },
+  { id: 'tr_carousel',     name: '미니 회전목마',   emoji: '🎠', rarity: 'epic',      cat: '축제' },
+  { id: 'tr_ufo_model',    name: '빛나는 UFO 모형', emoji: '🛸', rarity: 'epic',      cat: '우주' },
+  { id: 'tr_treasure_map', name: '보물섬 황금 상자', emoji: '🗺️', rarity: 'epic',     cat: '전시' },
+  // Legendary (7)
   { id: 'tr_pig_trophy',   name: '춤추는 돼지 트로피', emoji: '🏆', rarity: 'legendary', cat: '전설' },
   { id: 'tr_star_compass', name: '은하 나침반',     emoji: '🧭', rarity: 'legendary', cat: '우주' },
   { id: 'tr_rocket_key',   name: '우주선 황금 열쇠', emoji: '🔑', rarity: 'legendary', cat: '우주' },
   { id: 'tr_wooju_medal',  name: '우주 대왕 메달',  emoji: '🥇', rarity: 'legendary', cat: '전설' },
+  { id: 'tr_solar_system', name: '태양계 행성 모형', emoji: '🌌', rarity: 'legendary', cat: '우주' },
+  { id: 'tr_crystal_castle', name: '크리스탈 미니 성', emoji: '🏰', rarity: 'legendary', cat: '전설' },
+  { id: 'tr_golden_dragon', name: '황금 드래곤 석상', emoji: '🐉', rarity: 'legendary', cat: '전설' },
 ];
+
+// 10 My-Home Wallpapers (wall_sky is unlocked by default)
+export const ROOM_WALLPAPERS = [
+  { id: 'wall_sky',     name: '구름 하늘 벽지',   emoji: '☁️', rarity: 'common',    bg: '#BAE6FD', fg: '#FFFFFF', pattern: 'clouds', defaultOwned: true },
+  { id: 'wall_wood',    name: '따뜻한 통나무 벽', emoji: '🪵', rarity: 'common',    bg: '#FDE68A', fg: '#D97706', pattern: 'stripes' },
+  { id: 'wall_forest',  name: '초록 숲속 벽지',   emoji: '🌲', rarity: 'common',    bg: '#BBF7D0', fg: '#22C55E', pattern: 'dots' },
+  { id: 'wall_pink',    name: '딸기 하트 벽지',   emoji: '💗', rarity: 'common',    bg: '#FCE7F3', fg: '#F472B6', pattern: 'dots' },
+  { id: 'wall_ocean',   name: '바다 물결 벽지',   emoji: '🌊', rarity: 'rare',      bg: '#A5F3FC', fg: '#0284C7', pattern: 'stripes' },
+  { id: 'wall_dino',    name: '공룡 탐험 벽지',   emoji: '🦕', rarity: 'rare',      bg: '#D9F99D', fg: '#65A30D', pattern: 'diamonds' },
+  { id: 'wall_candy',   name: '달콤 캔디 벽지',   emoji: '🍬', rarity: 'rare',      bg: '#FBCFE8', fg: '#A855F7', pattern: 'stripes' },
+  { id: 'wall_rainbow', name: '무지개 파스텔 벽', emoji: '🌈', rarity: 'epic',      bg: '#FEF3C7', fg: '#EC4899', pattern: 'rainbow' },
+  { id: 'wall_space',   name: '우주 별밤 벽지',   emoji: '🌌', rarity: 'epic',      bg: '#1E1B4B', fg: '#FACC15', pattern: 'stars' },
+  { id: 'wall_gold',    name: '황금 왕궁 벽지',   emoji: '👑', rarity: 'legendary', bg: '#FEF08A', fg: '#D97706', pattern: 'diamonds' },
+];
+
+// 10 My-Home Floorings (floor_oak is unlocked by default)
+export const ROOM_FLOORS = [
+  { id: 'floor_oak',    name: '원목 마루 바닥',   emoji: '🪵', rarity: 'common',    bg: '#E7B98A', fg: '#C8925C', pattern: 'planks', defaultOwned: true },
+  { id: 'floor_grass',  name: '폭신 잔디 카펫',   emoji: '🌿', rarity: 'common',    bg: '#86EFAC', fg: '#4ADE80', pattern: 'dots' },
+  { id: 'floor_check',  name: '체크 무늬 타일',   emoji: '🏁', rarity: 'common',    bg: '#F8FAFC', fg: '#94A3B8', pattern: 'check' },
+  { id: 'floor_sand',   name: '해변 모래 바닥',   emoji: '🏖️', rarity: 'common',    bg: '#FDE68A', fg: '#F59E0B', pattern: 'dots' },
+  { id: 'floor_pink',   name: '분홍 별 카펫',     emoji: '🌸', rarity: 'rare',      bg: '#FBCFE8', fg: '#F472B6', pattern: 'stars' },
+  { id: 'floor_cloud',  name: '하늘 구름 카펫',   emoji: '☁️', rarity: 'rare',      bg: '#E0F2FE', fg: '#FFFFFF', pattern: 'clouds' },
+  { id: 'floor_tatami', name: '아늑한 다다미',    emoji: '🎋', rarity: 'rare',      bg: '#D9F99D', fg: '#A3E635', pattern: 'planks' },
+  { id: 'floor_marble', name: '반짝이 대리석',    emoji: '💎', rarity: 'epic',      bg: '#F1F5F9', fg: '#CBD5E1', pattern: 'check' },
+  { id: 'floor_galaxy', name: '은하수 우주 바닥', emoji: '🪐', rarity: 'epic',      bg: '#312E81', fg: '#38BDF8', pattern: 'stars' },
+  { id: 'floor_gold',   name: '황금 대왕 카펫',   emoji: '✨', rarity: 'legendary', bg: '#FDE047', fg: '#B45309', pattern: 'diamonds' },
+];
+
+// 40 3D My-Home Furniture, Toys & Plushies!
+export const ROOM_FURNITURE = [
+  // Common (12)
+  { id: 'furn_bed_cozy',    name: '포근 구름 침대',   emoji: '🛏️', rarity: 'common',    shape: 'bed',      color: '#60A5FA', accent: '#FFFFFF' },
+  { id: 'furn_sofa_mint',   name: '민트 푹신 소파',   emoji: '🛋️', rarity: 'common',    shape: 'sofa',     color: '#34D399', accent: '#FEF08A' },
+  { id: 'furn_desk_wood',   name: '우주 공부 책상',   emoji: '🪑', rarity: 'common',    shape: 'table',    color: '#D97706', accent: '#FEF3C7' },
+  { id: 'furn_bookshelf',   name: '동화책 책장',      emoji: '📚', rarity: 'common',    shape: 'shelf',    color: '#B45309', accent: '#F43F5E' },
+  { id: 'furn_bear_plush',  name: '왕 곰돌이 인형',   emoji: '🧸', rarity: 'common',    shape: 'plush',    color: '#D97706', accent: '#FEF3C7' },
+  { id: 'furn_star_lamp',   name: '별빛 스탠드 램프', emoji: '💡', rarity: 'common',    shape: 'lamp',     color: '#FACC15', accent: '#FEF08A' },
+  { id: 'furn_rug_star',    name: '별 모양 러그',     emoji: '⭐', rarity: 'common',    shape: 'rug',      color: '#FDE047', accent: '#F59E0B' },
+  { id: 'furn_plant_pot',   name: '초록 몬스테라',    emoji: '🪴', rarity: 'common',    shape: 'tree',     color: '#22C55E', accent: '#D97706' },
+  { id: 'furn_chair_cat',   name: '고양이 쿠션 의자', emoji: '🐱', rarity: 'common',    shape: 'sofa',     color: '#F472B6', accent: '#FFFFFF' },
+  { id: 'furn_mini_fridge', name: '간식 미니 냉장고', emoji: '🧊', rarity: 'common',    shape: 'cabinet',  color: '#38BDF8', accent: '#FFFFFF' },
+  { id: 'furn_clock',       name: '뻐꾸기 시계탑',    emoji: '🕰️', rarity: 'common',    shape: 'cabinet',  color: '#92400E', accent: '#FACC15' },
+  { id: 'furn_globe',       name: '빙글빙글 지구본',  emoji: '🌍', rarity: 'common',    shape: 'plush',    color: '#38BDF8', accent: '#22C55E' },
+  // Rare (12)
+  { id: 'furn_tv_retro',    name: '만화 영화 TV',     emoji: '📺', rarity: 'rare',      shape: 'tv',       color: '#334155', accent: '#38BDF8' },
+  { id: 'furn_piano_mini',  name: '미니 피아노',      emoji: '🎹', rarity: 'rare',      shape: 'piano',    color: '#1E293B', accent: '#FFFFFF' },
+  { id: 'furn_fish_tank',   name: '반짝이 열대어 어항', emoji: '🐠', rarity: 'rare',    shape: 'tank',     color: '#38BDF8', accent: '#F97316' },
+  { id: 'furn_dino_plush',  name: '티라노 공룡 인형', emoji: '🦕', rarity: 'rare',      shape: 'plush',    color: '#22C55E', accent: '#FACC15' },
+  { id: 'furn_cake_table',  name: '생일 케이크 식탁', emoji: '🎂', rarity: 'rare',      shape: 'table',    color: '#F472B6', accent: '#FEF08A' },
+  { id: 'furn_train_set',   name: '칙칙폭폭 기차 놀이', emoji: '🚂', rarity: 'rare',    shape: 'table',    color: '#EF4444', accent: '#FACC15' },
+  { id: 'furn_tent_camp',   name: '인디언 놀이 텐트', emoji: '⛺', rarity: 'rare',      shape: 'tent',     color: '#FB923C', accent: '#FEF3C7' },
+  { id: 'furn_robot_toy',   name: '변신 로봇 피규어', emoji: '🤖', rarity: 'rare',      shape: 'plush',    color: '#6366F1', accent: '#38BDF8' },
+  { id: 'furn_drum_set',    name: '쿵쾅쿵쾅 드럼 세트', emoji: '🥁', rarity: 'rare',    shape: 'plush',    color: '#EF4444', accent: '#FACC15' },
+  { id: 'furn_cat_tower',   name: '냥냥 캣타워',      emoji: '🐈', rarity: 'rare',      shape: 'shelf',    color: '#FDE68A', accent: '#F97316' },
+  { id: 'furn_kitchen',     name: '꼬마 주방 놀이',   emoji: '🍳', rarity: 'rare',      shape: 'cabinet',  color: '#FB7185', accent: '#FFFFFF' },
+  { id: 'furn_soccer',      name: '미니 축구 골대',   emoji: '⚽', rarity: 'rare',      shape: 'tent',     color: '#22C55E', accent: '#FFFFFF' },
+  // Epic (10)
+  { id: 'furn_bed_rocket',  name: '우주 로켓 침대!',  emoji: '🚀', rarity: 'epic',      shape: 'bed',      color: '#EF4444', accent: '#38BDF8' },
+  { id: 'furn_arcade',      name: '오락실 게임기!',   emoji: '🕹️', rarity: 'epic',      shape: 'arcade',   color: '#6366F1', accent: '#FACC15' },
+  { id: 'furn_telescope',   name: '별 관찰 천체망원경', emoji: '🔭', rarity: 'epic',    shape: 'lamp',     color: '#E2E8F0', accent: '#38BDF8' },
+  { id: 'furn_lego_castle', name: '블록 대왕 성',     emoji: '🧱', rarity: 'epic',      shape: 'cabinet',  color: '#F59E0B', accent: '#EF4444' },
+  { id: 'furn_xmas_tree',   name: '반짝 트리 나무',   emoji: '🎄', rarity: 'epic',      shape: 'tree',     color: '#16A34A', accent: '#FACC15' },
+  { id: 'furn_trampoline',  name: '방방 트램펄린',    emoji: '🤸', rarity: 'epic',      shape: 'rug',      color: '#3B82F6', accent: '#FACC15' },
+  { id: 'furn_slide',       name: '실내 미끄럼틀',    emoji: '🛝', rarity: 'epic',      shape: 'tent',     color: '#FACC15', accent: '#EF4444' },
+  { id: 'furn_icecream',    name: '아이스크림 카트',  emoji: '🍦', rarity: 'epic',      shape: 'table',    color: '#F472B6', accent: '#38BDF8' },
+  { id: 'furn_unicorn',     name: '무지개 유니콘 인형', emoji: '🦄', rarity: 'epic',    shape: 'plush',    color: '#EC4899', accent: '#FDE047' },
+  { id: 'furn_ufo_lamp',    name: '둥둥 UFO 무드등',  emoji: '🛸', rarity: 'epic',      shape: 'lamp',     color: '#38BDF8', accent: '#A855F7' },
+  // Legendary (6)
+  { id: 'furn_grand_piano', name: '황금 그랜드 피아노', emoji: '🎼', rarity: 'legendary', shape: 'piano',  color: '#FACC15', accent: '#FFFFFF' },
+  { id: 'furn_trophy_wall', name: '황금 트로피 진열장', emoji: '🏆', rarity: 'legendary', shape: 'shelf',  color: '#F59E0B', accent: '#FEF08A' },
+  { id: 'furn_gold_throne', name: '우주 대왕 황금 의자', emoji: '👑', rarity: 'legendary', shape: 'sofa',  color: '#FACC15', accent: '#EF4444' },
+  { id: 'furn_planet_mob',  name: '빙글빙글 태양계 모빌', emoji: '🪐', rarity: 'legendary', shape: 'lamp', color: '#6366F1', accent: '#FACC15' },
+  { id: 'furn_crystal_ball', name: '마법 수정구슬',   emoji: '🔮', rarity: 'legendary', shape: 'plush',    color: '#A855F7', accent: '#38BDF8' },
+  { id: 'furn_rocket_tent', name: '우주선 비밀 기지!', emoji: '🛸', rarity: 'legendary', shape: 'tent',    color: '#4F46E5', accent: '#FACC15' },
+];
+
+// Unified 100-item catalog (40 treasures + 10 wallpapers + 10 floors + 40 furniture = 100!)
+export const ALL_COLLECTIBLES = [
+  ...TREASURE_ITEMS.map(x => ({ ...x, kind: 'treasure' })),
+  ...ROOM_WALLPAPERS.map(x => ({ ...x, kind: 'wallpaper' })),
+  ...ROOM_FLOORS.map(x => ({ ...x, kind: 'floor' })),
+  ...ROOM_FURNITURE.map(x => ({ ...x, kind: 'furniture' })),
+];
+
+export function getHomeLevel(ownedFurnitureCount = 0) {
+  if (ownedFurnitureCount >= 20) return { level: 3, name: '3단계 대왕 우주 왕궁', size: 15 };
+  if (ownedFurnitureCount >= 8)  return { level: 2, name: '2단계 넓은 거실',     size: 12.5 };
+  return { level: 1, name: '1단계 아담한 우주 방', size: 10 };
+}
 
 // 15 Unlockable 3D Wooju Avatar Gear Items across 3 simultaneous slots ('head' | 'back' | 'aura')
 export const WOOJU_GEAR = [
@@ -1161,17 +1267,21 @@ export function getUnlockedAchievements(masteryMap = {}, totalStars = 0, extra =
 
 export function rollTreasureDrop(ownedIds = [], { preferHigherRarity = false, rng = Math.random } = {}) {
   const ownedSet = new Set(ownedIds);
-  const unowned = TREASURE_ITEMS.filter(t => !ownedSet.has(t.id));
+  // Default wallpaper & floor are already owned so never drop them
+  ROOM_WALLPAPERS.filter(w => w.defaultOwned).forEach(w => ownedSet.add(w.id));
+  ROOM_FLOORS.filter(f => f.defaultOwned).forEach(f => ownedSet.add(f.id));
+
+  const unowned = ALL_COLLECTIBLES.filter(t => !ownedSet.has(t.id));
   if (unowned.length === 0) {
-    // All 24 collected! Return a random legendary bonus repeat
-    const legs = TREASURE_ITEMS.filter(t => t.rarity === 'legendary');
-    return { item: legs[Math.floor(rng() * legs.length)], isDuplicate: true };
+    const legs = ALL_COLLECTIBLES.filter(t => t.rarity === 'legendary');
+    const picked = legs[Math.floor(rng() * legs.length)];
+    return { item: picked, kind: picked.kind, isDuplicate: true };
   }
   const pool = preferHigherRarity
     ? (unowned.filter(t => t.rarity !== 'common').length > 0 ? unowned.filter(t => t.rarity !== 'common') : unowned)
     : unowned;
   const picked = pool[Math.floor(rng() * pool.length)];
-  return { item: picked, isDuplicate: false };
+  return { item: picked, kind: picked.kind, isDuplicate: false };
 }
 
 export function computeFarmProgress(masteryMap = {}) {

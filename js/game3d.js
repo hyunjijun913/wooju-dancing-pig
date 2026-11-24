@@ -5,6 +5,11 @@ import {
   BASE_CARDS,
   VILLAGE_BUILDINGS,
   TREASURE_ITEMS,
+  ROOM_WALLPAPERS,
+  ROOM_FLOORS,
+  ROOM_FURNITURE,
+  ALL_COLLECTIBLES,
+  getHomeLevel,
   WOOJU_GEAR,
   FARM_ACHIEVEMENTS,
   ATTENDANCE_REWARDS,
@@ -33,6 +38,7 @@ import {
   buildPartyRewards3D,
   buildVillageBuildings3D,
   buildPlacedTreasures3D,
+  buildMyHome3D,
 } from './models3d.js';
 
 let THREE_MOD = null;
@@ -99,6 +105,12 @@ export class FarmGame3D {
     this.perfectCount = 0;
     this.treasures = []; // owned treasure IDs (up to 24)
     this.placedTreasures = []; // [{ id, x, z }] placed directly in 3D farm!
+    this.homeState = { wallpaper: 'wall_sky', floor: 'floor_oak', placedFurniture: [] };
+    this.inHome = false;
+    this.savedOutdoorPos = { x: 0, z: 15.2 };
+    this.homeTab = 'furniture'; // 'furniture' | 'wallpaper' | 'floor'
+    this.placingFurnitureId = null;
+    this.lastRevealedKind = 'treasure';
     this.attendance = { days: [], lastClaimDate: null, streak: 0 };
     this.daily = normalizeDailyState(null, getLocalDateKey());
     this.paradeEnabled = true;
@@ -128,10 +140,12 @@ export class FarmGame3D {
 
     // 3D refs
     this.THREE = null;
+    this.outdoorGroup = null;
     this.wooju = null;
     this.partyRewards = null;
     this.villageBuildings = null;
     this.placedTreasures3D = null;
+    this.myHome3D = null;
     this.spotEntries = [];
     this.clouds = [];
     this.activeRing = null;
@@ -161,6 +175,13 @@ export class FarmGame3D {
         this.perfectCount = Number.isFinite(parsed.perfectCount) ? parsed.perfectCount : 0;
         this.treasures = Array.isArray(parsed.treasures) ? parsed.treasures : [];
         this.placedTreasures = Array.isArray(parsed.placedTreasures) ? parsed.placedTreasures : [];
+        this.homeState = parsed.homeState && typeof parsed.homeState === 'object'
+          ? {
+              wallpaper: parsed.homeState.wallpaper || 'wall_sky',
+              floor: parsed.homeState.floor || 'floor_oak',
+              placedFurniture: Array.isArray(parsed.homeState.placedFurniture) ? parsed.homeState.placedFurniture : [],
+            }
+          : { wallpaper: 'wall_sky', floor: 'floor_oak', placedFurniture: [] };
         this.attendance = parsed.attendance && typeof parsed.attendance === 'object'
           ? parsed.attendance
           : { days: [], lastClaimDate: null, streak: 0 };
@@ -173,6 +194,7 @@ export class FarmGame3D {
       this.perfectCount = 0;
       this.treasures = [];
       this.placedTreasures = [];
+      this.homeState = { wallpaper: 'wall_sky', floor: 'floor_oak', placedFurniture: [] };
       this.attendance = { days: [], lastClaimDate: null, streak: 0 };
       this.daily = normalizeDailyState(null, getLocalDateKey());
     }
@@ -189,6 +211,7 @@ export class FarmGame3D {
         perfectCount: this.perfectCount,
         treasures: this.treasures,
         placedTreasures: this.placedTreasures,
+        homeState: this.homeState,
         attendance: this.attendance,
         daily: this.daily,
       }));
@@ -281,8 +304,12 @@ export class FarmGame3D {
     this.partyRewards = null;
     this.villageBuildings = null;
     this.placedTreasures3D = null;
+    this.myHome3D = null;
+    this.outdoorGroup = null;
+    this.inHome = false;
     this.cameraFocusOverride = null;
     this.placingTreasureId = null;
+    this.placingFurnitureId = null;
     this.scene = null;
     this.camera = null;
   }
@@ -356,6 +383,7 @@ export class FarmGame3D {
         <div class="farm-float-top">
           <button class="farm-pill-btn farm-exit-btn" id="farmExitBtn">⬅️ 학습 메뉴</button>
           <div class="farm-ribbon" id="farmRibbon" aria-label="스토리 순서 띠"></div>
+          <button class="farm-pill-btn farm-home-btn" id="farmHomeBtn" title="우주의 3D 마이홈">🏡 내 집</button>
           <button class="farm-pill-btn farm-event-btn" id="farmEventBtn" title="출석체크 &amp; 일일 미션">
             🎁 출석·미션
             <span class="event-badge-dot" id="farmEventBadge" style="display:none;">!</span>
@@ -366,6 +394,7 @@ export class FarmGame3D {
 
         <div class="farm-guide-pill" id="farmGuidePill">👆 노란 점선 길을 따라 반짝이는 친구에게 가보세요!</div>
         <div class="farm-goal-pill" id="farmGoalPill">🗣️ 0회 · 다음 건물: 🌷 꽃길 정원 (3회)</div>
+        <div class="home-level-pill" id="homeLevelPill" style="display:none;">🏡 1단계 아담한 우주 방</div>
         <div class="farm-cinematic-banner" id="farmCinematicBanner" style="display:none;">🏗️ 뚝딱뚝딱 새 건물 짓는 중!!</div>
         <div class="farm-place-bar" id="farmPlaceBar" style="display:none;">
           <span id="farmPlaceText">👆 농장 땅을 톡! 눌러 보물을 장식하세요!</span>
@@ -446,6 +475,22 @@ export class FarmGame3D {
           </div>
         </div>
 
+        <!-- 🏡 My-Home 3D Interior Decorator Modal -->
+        <div class="farm-bag-modal" id="farmHomeModal" style="display:none;">
+          <div class="farm-bag-sheet">
+            <div class="modal-head">
+              <h2>🛋️ 우주의 3D 방 꾸미기</h2>
+              <button class="close-btn" id="farmHomeCloseBtn">✕</button>
+            </div>
+            <div class="bag-tab-bar" style="grid-template-columns:repeat(3,1fr);">
+              <button class="bag-tab active" data-home-tab="furniture">🛋️ 가구 <span id="homeFurnCount">0/40</span></button>
+              <button class="bag-tab" data-home-tab="wallpaper">🎨 벽지 <span id="homeWallCount">1/10</span></button>
+              <button class="bag-tab" data-home-tab="floor">🟫 바닥 <span id="homeFloorCount">1/10</span></button>
+            </div>
+            <div id="farmHomeBody"></div>
+          </div>
+        </div>
+
         <!-- 🎁 14-Day Attendance Check-in & Daily Missions Event Modal -->
         <div class="farm-bag-modal" id="farmEventModal" style="display:none;">
           <div class="farm-bag-sheet">
@@ -508,8 +553,19 @@ export class FarmGame3D {
     this.container.querySelector('#farmExitBtn').addEventListener('click', () => this.onExitFullscreen());
     this.container.querySelector('#farmEntryExitBtn').addEventListener('click', () => this.onExitFullscreen());
     this.container.querySelector('#farmResetBtn').addEventListener('click', () => this.resetProgress(false));
-    this.container.querySelector('#farmBagBtn').addEventListener('click', () => this._openBagModal());
+    this.container.querySelector('#farmBagBtn').addEventListener('click', () => {
+      if (this.inHome) this._openHomeModal();
+      else this._openBagModal();
+    });
     this.container.querySelector('#farmBagCloseBtn').addEventListener('click', () => this._closeBagModal());
+    this.container.querySelector('#farmHomeBtn').addEventListener('click', () => this._toggleMyHome());
+    this.container.querySelector('#farmHomeCloseBtn').addEventListener('click', () => this._closeHomeModal());
+    this.container.querySelectorAll('[data-home-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.homeTab = btn.dataset.homeTab;
+        this._renderHomeModal();
+      });
+    });
     this.container.querySelector('#farmEventBtn').addEventListener('click', () => this._openEventModal());
     this.container.querySelector('#farmEventCloseBtn').addEventListener('click', () => this._closeEventModal());
     this.container.querySelector('#farmDlgCloseBtn').addEventListener('click', () => this._hideDialogue());
@@ -517,10 +573,34 @@ export class FarmGame3D {
     this.container.querySelector('#chestCloseBtn').addEventListener('click', () => this._closeChestModal());
     this.container.querySelector('#chestPlaceNowBtn').addEventListener('click', () => {
       const id = this.lastRevealedTreasureId;
+      const kind = this.lastRevealedKind;
       this._closeChestModal();
-      if (id) this._enterPlaceMode(id);
+      if (!id) return;
+      if (kind === 'wallpaper') {
+        this.homeState.wallpaper = id;
+        this._saveRpgState();
+        this._enterMyHome();
+        this.onToast('🎨 새 벽지로 내 방을 예쁘게 꾸몄어요!');
+      } else if (kind === 'floor') {
+        this.homeState.floor = id;
+        this._saveRpgState();
+        this._enterMyHome();
+        this.onToast('🟫 새 바닥으로 내 방을 멋지게 바꿨어요!');
+      } else if (kind === 'furniture') {
+        this._enterMyHome();
+        this._enterFurniturePlaceMode(id);
+      } else {
+        if (this.inHome) this._exitMyHome();
+        this._enterPlaceMode(id);
+      }
     });
     this.container.querySelector('#farmPlaceHereBtn').addEventListener('click', () => {
+      if (this.placingFurnitureId) {
+        const fx = this.avatarPos.x + Math.sin(this.avatarAngle) * 1.9;
+        const fz = this.avatarPos.z + Math.cos(this.avatarAngle) * 1.9;
+        this._commitFurniturePlacement(this.placingFurnitureId, fx, fz);
+        return;
+      }
       if (!this.placingTreasureId) return;
       const fx = this.avatarPos.x + Math.sin(this.avatarAngle) * 2.1;
       const fz = this.avatarPos.z + Math.cos(this.avatarAngle) * 2.1;
@@ -591,13 +671,13 @@ export class FarmGame3D {
       const el = this.container?.querySelector(sel);
       if (el) el.textContent = txt;
     };
-    setTxt('#farmBagCount', `${prog.metCount}/${FARM_SPOTS.length}`);
+    setTxt('#farmBagCount', this.inHome ? `${this.homeState.placedFurniture.length}개 배치` : `${prog.metCount}/${FARM_SPOTS.length}`);
     setTxt('#farmBagModalCount', `${prog.metCount}/${FARM_SPOTS.length}`);
     setTxt('#farmBuildModalCount', `${unlockedBuildings.length}/${VILLAGE_BUILDINGS.length}`);
-    setTxt('#farmTrModalCount', `${this.treasures.length}/${TREASURE_ITEMS.length}`);
+    setTxt('#farmTrModalCount', `${this.treasures.length}/${ALL_COLLECTIBLES.length}`);
     setTxt('#farmGearModalCount', `${unlockedGear.length}/${WOOJU_GEAR.length}`);
     setTxt('#farmAchModalCount', `${unlockedAch.length}/${FARM_ACHIEVEMENTS.length}`);
-    setTxt('#farmBagPreview', `🏗️${unlockedBuildings.length} · 💎${this.treasures.length} · 👕${unlockedGear.length}`);
+    setTxt('#farmBagPreview', this.inHome ? '🛋️ 방 꾸미기' : `🏗️${unlockedBuildings.length} · 💎${this.treasures.length} · 👕${unlockedGear.length}`);
 
     const newDot = this.container?.querySelector('#farmGearNewDot');
     if (newDot) newDot.style.display = this.hasNewBadge ? 'inline-block' : 'none';
@@ -893,6 +973,7 @@ export class FarmGame3D {
       this._saveRpgState();
     }
     this.lastRevealedTreasureId = item.id;
+    this.lastRevealedKind = item.kind || 'treasure';
 
     const boxBtn = this.container?.querySelector('#chestBoxBtn');
     const subEl = this.container?.querySelector('#chestSub');
@@ -900,13 +981,22 @@ export class FarmGame3D {
     const rarityEl = this.container?.querySelector('#chestRarity');
     const icoEl = this.container?.querySelector('#chestItemIco');
     const nameEl = this.container?.querySelector('#chestItemName');
-    const rarityNames = { common: '⭐ 일반 보물', rare: '💙 희귀 보물!', epic: '💜 영웅 보물!!', legendary: '🌈 전설의 보물!!!' };
+    const placeNowBtn = this.container?.querySelector('#chestPlaceNowBtn');
+    const rarityNames = { common: '⭐ 일반', rare: '💙 희귀!', epic: '💜 영웅!!', legendary: '🌈 전설!!!' };
+    const kindNames = { treasure: '농장 보물', wallpaper: '방 벽지', floor: '방 바닥', furniture: '마이홈 가구' };
 
     if (boxBtn) boxBtn.style.display = 'none';
     if (subEl) subEl.style.display = 'none';
     if (rarityEl) {
-      rarityEl.textContent = isDuplicate ? '✨ 보너스 전설 보물! (별 +3!)' : rarityNames[item.rarity];
+      const kLabel = kindNames[this.lastRevealedKind] || '보물';
+      rarityEl.textContent = isDuplicate ? '✨ 보너스 전설 선물! (별 +3!)' : `${rarityNames[item.rarity]} · ${kLabel}`;
       rarityEl.className = `chest-rarity rarity-${item.rarity}`;
+    }
+    if (placeNowBtn) {
+      if (this.lastRevealedKind === 'wallpaper') placeNowBtn.textContent = '🎨 내 방 벽지로 바로 꾸미기!';
+      else if (this.lastRevealedKind === 'floor') placeNowBtn.textContent = '🟫 내 방 바닥으로 바로 꾸미기!';
+      else if (this.lastRevealedKind === 'furniture') placeNowBtn.textContent = '🛋️ 내 집에 가서 바로 놓기!';
+      else placeNowBtn.textContent = '🏡 지금 농장에 바로 장식하기!';
     }
     if (icoEl) icoEl.textContent = item.emoji;
     if (nameEl) nameEl.textContent = item.name;
@@ -936,8 +1026,254 @@ export class FarmGame3D {
 
   _exitPlaceMode() {
     this.placingTreasureId = null;
+    this.placingFurnitureId = null;
     const bar = this.container?.querySelector('#farmPlaceBar');
     if (bar) bar.style.display = 'none';
+  }
+
+  _getOwnedFurnitureIds() {
+    const owned = new Set(this.treasures);
+    return ROOM_FURNITURE.filter(f => owned.has(f.id)).map(f => f.id);
+  }
+
+  _toggleMyHome() {
+    if (this.inHome) this._exitMyHome();
+    else this._enterMyHome();
+  }
+
+  _enterMyHome() {
+    this._hideDialogue();
+    this._hideFinale();
+    this._closeBagModal();
+    this._exitPlaceMode();
+    if (!this.inHome) {
+      this.savedOutdoorPos = { x: this.avatarPos.x, z: this.avatarPos.z };
+    }
+    this.inHome = true;
+    this.walkTarget = null;
+    this.pendingSpotTrigger = null;
+    this.avatarPos = { x: 0, z: 2.2 };
+    this.avatarAngle = Math.PI;
+
+    const ownedFurnCount = this._getOwnedFurnitureIds().length;
+    const homeLv = getHomeLevel(ownedFurnCount);
+
+    if (this.outdoorGroup) this.outdoorGroup.visible = false;
+    if (this.myHome3D) {
+      this.myHome3D.group.visible = true;
+      this.myHome3D.syncRoomStyle(this.homeState.wallpaper, this.homeState.floor, homeLv.size);
+      this.myHome3D.syncFurniture(this.homeState.placedFurniture);
+    }
+    if (this.scene) {
+      this.scene.background = new this.THREE.Color('#FEF3C7');
+      this.scene.fog = null;
+    }
+
+    const homeBtn = this.container?.querySelector('#farmHomeBtn');
+    const ribbon = this.container?.querySelector('#farmRibbon');
+    const guide = this.container?.querySelector('#farmGuidePill');
+    const goal = this.container?.querySelector('#farmGoalPill');
+    const hover = this.container?.querySelector('#farmHoverBubble');
+    const lvPill = this.container?.querySelector('#homeLevelPill');
+    const pocketIco = this.container?.querySelector('.pocket-ico');
+    const pocketLbl = this.container?.querySelector('.pocket-label');
+
+    if (homeBtn) { homeBtn.textContent = '🌳 농장 나가기'; homeBtn.classList.add('in-home'); }
+    if (ribbon) ribbon.style.display = 'none';
+    if (guide) guide.style.display = 'none';
+    if (goal) goal.style.display = 'none';
+    if (hover) hover.style.display = 'none';
+    if (lvPill) {
+      const nextHint = homeLv.level === 1 ? ' (가구 8개면 넓어져요!)' : (homeLv.level === 2 ? ' (가구 20개면 왕궁!)' : ' ✨ 최고 단계!');
+      lvPill.textContent = `🏡 ${homeLv.name} · 가구 ${ownedFurnCount}개${nextHint}`;
+      lvPill.style.display = 'block';
+    }
+    if (pocketIco) pocketIco.textContent = '🛋️';
+    if (pocketLbl) pocketLbl.innerHTML = `방 꾸미기 <b id="farmBagCount">${this.homeState.placedFurniture.length}개</b>`;
+    this._updateBagBadge();
+  }
+
+  _exitMyHome() {
+    this._closeHomeModal();
+    this._exitPlaceMode();
+    this.inHome = false;
+    this.walkTarget = null;
+    this.avatarPos = { ...this.savedOutdoorPos };
+
+    if (this.outdoorGroup) this.outdoorGroup.visible = true;
+    if (this.myHome3D) this.myHome3D.group.visible = false;
+    if (this.scene) {
+      this.scene.background = new this.THREE.Color('#9BD8FF');
+      this.scene.fog = new this.THREE.Fog('#BFE8FF', 34, 88);
+    }
+
+    const homeBtn = this.container?.querySelector('#farmHomeBtn');
+    const ribbon = this.container?.querySelector('#farmRibbon');
+    const guide = this.container?.querySelector('#farmGuidePill');
+    const goal = this.container?.querySelector('#farmGoalPill');
+    const lvPill = this.container?.querySelector('#homeLevelPill');
+    const pocketIco = this.container?.querySelector('.pocket-ico');
+    const pocketLbl = this.container?.querySelector('.pocket-label');
+
+    if (homeBtn) { homeBtn.textContent = '🏡 내 집'; homeBtn.classList.remove('in-home'); }
+    if (ribbon) ribbon.style.display = 'flex';
+    if (guide) guide.style.display = 'block';
+    if (goal) goal.style.display = 'block';
+    if (lvPill) lvPill.style.display = 'none';
+    if (pocketIco) pocketIco.textContent = '🎒';
+    if (pocketLbl) pocketLbl.innerHTML = `도감·옷장 <b id="farmBagCount">0/12</b>`;
+    this._updateBagBadge();
+  }
+
+  _openHomeModal() {
+    this._renderHomeModal();
+    const modal = this.container?.querySelector('#farmHomeModal');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  _closeHomeModal() {
+    const modal = this.container?.querySelector('#farmHomeModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  _enterFurniturePlaceMode(furnId) {
+    const item = ROOM_FURNITURE.find(f => f.id === furnId);
+    if (!item) return;
+    this.placingFurnitureId = furnId;
+    const bar = this.container?.querySelector('#farmPlaceBar');
+    const txt = this.container?.querySelector('#farmPlaceText');
+    if (txt) txt.textContent = `👆 방 바닥을 톡! 눌러 ${item.emoji} ${item.name} 놓기!`;
+    if (bar) bar.style.display = 'flex';
+    this.onToast(`🛋️ 방 바닥 원하는 곳을 톡! 눌러 ${item.emoji} ${item.name}을(를) 배치하세요!`);
+  }
+
+  _commitFurniturePlacement(furnId, rawX, rawZ) {
+    const half = this.myHome3D ? this.myHome3D.getHalfSize() : 4.2;
+    const x = Math.max(-half, Math.min(half, rawX));
+    const z = Math.max(-half, Math.min(half, rawZ));
+    const idx = this.homeState.placedFurniture.findIndex(p => p.id === furnId);
+    if (idx >= 0) this.homeState.placedFurniture[idx] = { id: furnId, x, z, rot: 0 };
+    else this.homeState.placedFurniture.push({ id: furnId, x, z, rot: 0 });
+    this._saveRpgState();
+    if (this.myHome3D) this.myHome3D.syncFurniture(this.homeState.placedFurniture, furnId);
+    this._exitPlaceMode();
+    this._updateBagBadge();
+    this.audio.playStarSFX();
+    this.onConfetti(55);
+    const item = ROOM_FURNITURE.find(f => f.id === furnId);
+    if (item) this.onToast(`🛋️ ${item.emoji} ${item.name}을(를) 내 방에 멋지게 배치했어요!`);
+  }
+
+  _renderHomeModal() {
+    const body = this.container?.querySelector('#farmHomeBody');
+    if (!body) return;
+    const ownedSet = new Set(this.treasures);
+    ROOM_WALLPAPERS.filter(w => w.defaultOwned).forEach(w => ownedSet.add(w.id));
+    ROOM_FLOORS.filter(f => f.defaultOwned).forEach(f => ownedSet.add(f.id));
+
+    const ownedFurn = ROOM_FURNITURE.filter(f => ownedSet.has(f.id));
+    const ownedWalls = ROOM_WALLPAPERS.filter(w => ownedSet.has(w.id));
+    const ownedFloors = ROOM_FLOORS.filter(f => ownedSet.has(f.id));
+
+    const setTxt = (sel, txt) => { const el = this.container?.querySelector(sel); if (el) el.textContent = txt; };
+    setTxt('#homeFurnCount', `${ownedFurn.length}/${ROOM_FURNITURE.length}`);
+    setTxt('#homeWallCount', `${ownedWalls.length}/${ROOM_WALLPAPERS.length}`);
+    setTxt('#homeFloorCount', `${ownedFloors.length}/${ROOM_FLOORS.length}`);
+
+    this.container.querySelectorAll('[data-home-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.homeTab === this.homeTab);
+    });
+
+    if (this.homeTab === 'furniture') {
+      const placedIds = new Set(this.homeState.placedFurniture.map(p => p.id));
+      body.innerHTML = `
+        <p class="bag-hint">보물상자에서 모은 <b>40종 3D 가구·장난감</b>을 내 방에 마음대로 배치해요! (가구 8개 → 2단계 거실, 20개 → 3단계 왕궁!)</p>
+        <div class="farm-bag-grid">
+          ${ROOM_FURNITURE.map(f => {
+            const got = ownedSet.has(f.id);
+            const placed = placedIds.has(f.id);
+            return `
+              <div class="bag-slot ${got ? `got rarity-${f.rarity}` : ''}">
+                <div class="bag-slot-ico">${got ? f.emoji : '🔒'}</div>
+                <div class="bag-slot-name">${got ? f.name : '숨겨진 가구'}</div>
+                ${got
+                  ? `<button class="bag-place-btn ${placed ? 'placed' : ''}" data-place-furn="${f.id}">${placed ? '📍 옮기기' : '🛋️ 방에 놓기'}</button>`
+                  : `<div class="bag-slot-who">보물상자에서 획득</div>`}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+      body.querySelectorAll('[data-place-furn]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.placeFurn;
+          this._closeHomeModal();
+          this._enterFurniturePlaceMode(id);
+        });
+      });
+      return;
+    }
+
+    if (this.homeTab === 'wallpaper') {
+      body.innerHTML = `
+        <p class="bag-hint">원하는 벽지를 톡! 누르면 내 방 벽지가 즉시 바뀌어요!</p>
+        <div class="farm-bag-grid">
+          ${ROOM_WALLPAPERS.map(w => {
+            const got = ownedSet.has(w.id);
+            const active = this.homeState.wallpaper === w.id;
+            return `
+              <button class="bag-slot ${got ? 'got' : ''} ${active ? 'mastered' : ''}" data-set-wall="${w.id}" ${got ? '' : 'disabled'}>
+                <div class="home-swatch" style="background:${got ? w.bg : '#E2E8F0'}">${got ? w.emoji : '🔒'}</div>
+                <div class="bag-slot-name">${w.name}</div>
+                <div class="bag-slot-who">${active ? '✨ 적용 중!' : (got ? '👆 바꾸기' : '보물상자 획득')}</div>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+      body.querySelectorAll('[data-set-wall]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.setWall;
+          this.homeState.wallpaper = id;
+          this._saveRpgState();
+          const lv = getHomeLevel(this._getOwnedFurnitureIds().length);
+          if (this.myHome3D) this.myHome3D.syncRoomStyle(this.homeState.wallpaper, this.homeState.floor, lv.size);
+          this.audio.playChimeSFX();
+          this._renderHomeModal();
+        });
+      });
+      return;
+    }
+
+    if (this.homeTab === 'floor') {
+      body.innerHTML = `
+        <p class="bag-hint">원하는 바닥재를 톡! 누르면 내 방 바닥이 즉시 바뀌어요!</p>
+        <div class="farm-bag-grid">
+          ${ROOM_FLOORS.map(f => {
+            const got = ownedSet.has(f.id);
+            const active = this.homeState.floor === f.id;
+            return `
+              <button class="bag-slot ${got ? 'got' : ''} ${active ? 'mastered' : ''}" data-set-floor="${f.id}" ${got ? '' : 'disabled'}>
+                <div class="home-swatch" style="background:${got ? f.bg : '#E2E8F0'}">${got ? f.emoji : '🔒'}</div>
+                <div class="bag-slot-name">${f.name}</div>
+                <div class="bag-slot-who">${active ? '✨ 적용 중!' : (got ? '👆 바꾸기' : '보물상자 획득')}</div>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+      body.querySelectorAll('[data-set-floor]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.setFloor;
+          this.homeState.floor = id;
+          this._saveRpgState();
+          const lv = getHomeLevel(this._getOwnedFurnitureIds().length);
+          if (this.myHome3D) this.myHome3D.syncRoomStyle(this.homeState.wallpaper, this.homeState.floor, lv.size);
+          this.audio.playChimeSFX();
+          this._renderHomeModal();
+        });
+      });
+    }
   }
 
   _commitTreasurePlacement(treasureId, rawX, rawZ) {
@@ -1284,18 +1620,31 @@ export class FarmGame3D {
     this.raycaster = new THREE.Raycaster();
     this.clock = new THREE.Clock();
 
-    // 1. 100% 3D Farm World
-    const world = buildFarmWorld3D(THREE, this.scene);
+    // 1. Outdoor 3D Farm World wrapped in `outdoorGroup` so switching to 🏡 My-Home is instant!
+    this.outdoorGroup = new THREE.Group();
+    this.scene.add(this.outdoorGroup);
+
+    const world = buildFarmWorld3D(THREE, this.outdoorGroup);
     this.groundMesh = world.groundMesh;
     this.clouds = world.clouds;
 
     // 1b. v3/v4/v7 Living Party Feast, 12 Unlockable Village Buildings & Placed 3D Treasures
-    this.partyRewards = buildPartyRewards3D(THREE, this.scene);
+    this.partyRewards = buildPartyRewards3D(THREE, this.outdoorGroup);
     this.partyRewards.syncMastery(this.mastery);
-    this.villageBuildings = buildVillageBuildings3D(THREE, this.scene);
+    this.villageBuildings = buildVillageBuildings3D(THREE, this.outdoorGroup);
     this.villageBuildings.syncBuildings(getUnlockedBuildings(this.speakCount));
-    this.placedTreasures3D = buildPlacedTreasures3D(THREE, this.scene, TREASURE_ITEMS);
+    this.placedTreasures3D = buildPlacedTreasures3D(THREE, this.outdoorGroup, TREASURE_ITEMS);
     this.placedTreasures3D.syncPlaced(this.placedTreasures);
+
+    // 1c. v8: Cozy 3D My-Home Room (hidden until Wooju enters 🏡 내 집!)
+    this.myHome3D = buildMyHome3D(THREE, this.scene, {
+      wallpapers: ROOM_WALLPAPERS,
+      floors: ROOM_FLOORS,
+      furniture: ROOM_FURNITURE,
+    });
+    const homeLv = getHomeLevel(this._getOwnedFurnitureIds().length);
+    this.myHome3D.syncRoomStyle(this.homeState.wallpaper, this.homeState.floor, homeLv.size);
+    this.myHome3D.syncFurniture(this.homeState.placedFurniture);
 
     // 2. 100% 3D Wooju Explorer Avatar + Equipped 3D Gear
     this.wooju = buildWooju3D(THREE);
@@ -1329,7 +1678,7 @@ export class FarmGame3D {
 
       if (built.setMasteryVisual) built.setMasteryVisual(this.mastery[spot.id] || 0);
 
-      this.scene.add(built.group);
+      this.outdoorGroup.add(built.group);
       this.spotEntries.push({
         ...built,
         hitMesh,
@@ -1353,13 +1702,13 @@ export class FarmGame3D {
       new THREE.MeshBasicMaterial({ color: '#FACC15', side: THREE.DoubleSide, transparent: true, opacity: 0.92 })
     );
     this.activeRing.rotation.x = -Math.PI / 2;
-    this.scene.add(this.activeRing);
+    this.outdoorGroup.add(this.activeRing);
 
     this.exclaimSprite = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: createBadgeTexture(THREE, '!', '#F59E0B', '#FFFFFF'), transparent: true })
     );
     this.exclaimSprite.scale.set(0.95, 0.95, 1);
-    this.scene.add(this.exclaimSprite);
+    this.outdoorGroup.add(this.exclaimSprite);
 
     this.dashedTrail = [];
     const dashGeo = new THREE.CapsuleGeometry(0.11, 0.42, 4, 8);
@@ -1367,7 +1716,7 @@ export class FarmGame3D {
     for (let i = 0; i < 16; i++) {
       const dashMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? '#FACC15' : '#FFFFFF', transparent: true, opacity: 0.92 });
       const dash = new THREE.Mesh(dashGeo, dashMat);
-      this.scene.add(dash);
+      this.outdoorGroup.add(dash);
       this.dashedTrail.push(dash);
     }
 
@@ -1400,6 +1749,25 @@ export class FarmGame3D {
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       );
       this.raycaster.setFromCamera(ndc, this.camera);
+
+      // Indoor 🏡 My-Home floor tap (furniture placement or indoor walking)
+      if (this.inHome && this.myHome3D) {
+        const floorHits = this.raycaster.intersectObject(this.myHome3D.floorMesh, false);
+        if (floorHits.length > 0) {
+          const pt = floorHits[0].point;
+          if (this.placingFurnitureId) {
+            this._commitFurniturePlacement(this.placingFurnitureId, pt.x, pt.z);
+            return;
+          }
+          const half = this.myHome3D.getHalfSize();
+          const cx = Math.max(-half, Math.min(half, pt.x));
+          const cz = Math.max(-half, Math.min(half, pt.z));
+          this.walkTarget = { x: cx, z: cz };
+          this.pendingSpotTrigger = null;
+          this._spawnTapRing(cx, cz);
+        }
+        return;
+      }
 
       if (this.placingTreasureId) {
         const gHits = this.raycaster.intersectObject(this.groundMesh, false);
@@ -2004,19 +2372,27 @@ export class FarmGame3D {
         if (c.position.x > 26) c.position.x = -26;
       });
 
-      // Animate v3/v4/v7 Living Farm 3D Party Rewards, Village Buildings & Placed Treasures
-      if (this.partyRewards) this.partyRewards.update(t, dt);
-      if (this.villageBuildings) this.villageBuildings.update(t, dt);
-      if (this.placedTreasures3D) this.placedTreasures3D.update(t, dt);
+      // Animate v3/v4/v7/v8 Living Farm or My-Home 3D Furniture
+      if (this.inHome) {
+        if (this.myHome3D) this.myHome3D.update(t, dt);
+      } else {
+        if (this.partyRewards) this.partyRewards.update(t, dt);
+        if (this.villageBuildings) this.villageBuildings.update(t, dt);
+        if (this.placedTreasures3D) this.placedTreasures3D.update(t, dt);
+      }
 
       // 1. Wooju 3D Avatar Movement & Walking Limb Animation
       let moving = false;
-      const speed = 7.5;
+      const speed = this.inHome ? 5.6 : 7.5;
       if (this.entered && this.activeDialogueSpot === null) {
         if (Math.hypot(this.joyVec.x, this.joyVec.z) > 0.08) {
           const nx = this.avatarPos.x + this.joyVec.x * speed * dt;
           const nz = this.avatarPos.z + this.joyVec.z * speed * dt;
-          if (Math.hypot(nx, nz) <= 16.2) {
+          if (this.inHome && this.myHome3D) {
+            const half = this.myHome3D.getHalfSize();
+            this.avatarPos.x = Math.max(-half, Math.min(half, nx));
+            this.avatarPos.z = Math.max(-half, Math.min(half, nz));
+          } else if (Math.hypot(nx, nz) <= 16.2) {
             this.avatarPos.x = nx;
             this.avatarPos.z = nz;
           }
@@ -2034,7 +2410,7 @@ export class FarmGame3D {
             moving = true;
           } else {
             this.walkTarget = null;
-            if (this.pendingSpotTrigger) {
+            if (this.pendingSpotTrigger && !this.inHome) {
               const { spotIdx, isRevisit } = this.pendingSpotTrigger;
               this.pendingSpotTrigger = null;
               this._openDialogue(spotIdx, isRevisit);
@@ -2042,8 +2418,8 @@ export class FarmGame3D {
           }
         }
 
-        // Proximity auto-trigger when walking right up to the active unmet animal
-        if (moving && !this.pendingSpotTrigger && this.currentSpotIndex < FARM_SPOTS.length) {
+        // Proximity auto-trigger when walking right up to the active unmet animal (outdoor only)
+        if (!this.inHome && moving && !this.pendingSpotTrigger && this.currentSpotIndex < FARM_SPOTS.length) {
           const activeEntry = this.spotEntries[this.currentSpotIndex];
           if (activeEntry && Math.hypot(this.avatarPos.x - activeEntry.curX, this.avatarPos.z - activeEntry.curZ) < 2.4) {
             this.walkTarget = null;
@@ -2273,6 +2649,17 @@ export class FarmGame3D {
         const r = 21 * portraitBoost;
         this.camera.position.set(Math.sin(angle) * r, 8.2 * portraitBoost, Math.cos(angle) * r);
         this.camera.lookAt(0, 1.8, 0);
+      } else if (this.inHome) {
+        // Cozy Animal Crossing isometric corner-room view!
+        const roomHalf = this.myHome3D ? this.myHome3D.getHalfSize() : 4.2;
+        const zoom = (roomHalf / 4.2) * portraitBoost;
+        const tx = this.avatarPos.x * 0.35 + 6.2 * zoom;
+        const ty = 8.4 * zoom;
+        const tz = this.avatarPos.z * 0.35 + 10.2 * zoom;
+        this.camera.position.x += (tx - this.camera.position.x) * 0.1;
+        this.camera.position.y += (ty - this.camera.position.y) * 0.1;
+        this.camera.position.z += (tz - this.camera.position.z) * 0.1;
+        this.camera.lookAt(this.avatarPos.x * 0.25, 1.1, this.avatarPos.z * 0.25);
       } else {
         let focusX = this.avatarPos.x;
         let focusZ = this.avatarPos.z;
@@ -2310,7 +2697,7 @@ export class FarmGame3D {
 
       // 5. Project Floating Speech Bubble right above the nearest villager's 3D head
       if (hoverEl && hoverText) {
-        if (nearestIdx >= 0 && this.entered && this.activeDialogueSpot === null) {
+        if (!this.inHome && nearestIdx >= 0 && this.entered && this.activeDialogueSpot === null) {
           const m = this.spotEntries[nearestIdx];
           const tier = this.mastery[m.spot.id] || 0;
           projVec.set(m.curX, (this.paradeEnabled && tier >= 3 ? 0 : m.baseY) + 2.75, m.curZ);

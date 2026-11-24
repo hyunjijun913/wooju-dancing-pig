@@ -1454,3 +1454,328 @@ export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
 
   return { syncPlaced, update };
 }
+
+// --- v8: Animal Crossing-style 3D My-Home Room (Wallpapers, Floors, 40 3D Furniture & 3 Room Sizes) ---
+function createRoomPatternTex(THREE, { bg = '#BAE6FD', fg = '#FFFFFF', pattern = 'dots' } = {}, repeat = 4) {
+  return makeCanvasTex(THREE, 256, (ctx, s) => {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, s, s);
+    ctx.fillStyle = fg;
+    if (pattern === 'planks') {
+      ctx.fillRect(0, 0, s, 4);
+      ctx.fillRect(0, s / 2, s, 4);
+      ctx.fillRect(s / 2, 0, 4, s / 2);
+      ctx.fillRect(s / 4, s / 2, 4, s / 2);
+    } else if (pattern === 'stripes') {
+      for (let x = 0; x < s; x += 48) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(x, 0, 20, s);
+      }
+      ctx.globalAlpha = 1;
+    } else if (pattern === 'check') {
+      const cell = s / 4;
+      for (let y = 0; y < 4; y++) {
+        for (let x = 0; x < 4; x++) {
+          if ((x + y) % 2 === 0) {
+            ctx.globalAlpha = 0.45;
+            ctx.fillRect(x * cell, y * cell, cell, cell);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+    } else if (pattern === 'rainbow') {
+      const cols = ['#FCA5A5', '#FDBA74', '#FDE047', '#86EFAC', '#93C5FD', '#D8B4FE'];
+      const band = s / cols.length;
+      cols.forEach((c, i) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(0, i * band, s, band);
+      });
+    } else if (pattern === 'stars') {
+      for (let i = 0; i < 16; i++) {
+        const x = (i * 53 + 21) % s;
+        const y = (i * 71 + 17) % s;
+        const r = 6 + (i % 3) * 4;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (pattern === 'clouds') {
+      ctx.globalAlpha = 0.72;
+      [[64, 70, 26], [92, 66, 30], [120, 72, 24], [180, 180, 24], [206, 176, 28], [230, 182, 22]].forEach(([x, y, r]) => {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    } else if (pattern === 'diamonds') {
+      ctx.globalAlpha = 0.35;
+      for (let y = 32; y < s; y += 64) {
+        for (let x = 32; x < s; x += 64) {
+          ctx.beginPath();
+          ctx.moveTo(x, y - 20);
+          ctx.lineTo(x + 20, y);
+          ctx.lineTo(x, y + 20);
+          ctx.lineTo(x - 20, y);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      // dots
+      ctx.globalAlpha = 0.4;
+      for (let y = 32; y < s; y += 64) {
+        for (let x = 32; x < s; x += 64) {
+          ctx.beginPath();
+          ctx.arc(x, y, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+  }, repeat);
+}
+
+function buildFurnitureMesh3D(THREE, item) {
+  const g = new THREE.Group();
+  const mainMat = new THREE.MeshStandardMaterial({ color: item.color || '#60A5FA', roughness: 0.55 });
+  const accMat = new THREE.MeshStandardMaterial({ color: item.accent || '#FFFFFF', roughness: 0.45 });
+  const woodMat = new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.7 });
+  const addBox = (w, h, d, mat, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
+    return m;
+  };
+
+  switch (item.shape) {
+    case 'bed':
+      addBox(2.2, 0.45, 3.0, woodMat, 0, 0.25, 0);
+      addBox(2.0, 0.45, 2.7, mainMat, 0, 0.65, 0.1);
+      addBox(1.5, 0.28, 0.65, accMat, 0, 0.96, -0.95); // pillow
+      addBox(2.25, 1.35, 0.22, woodMat, 0, 0.72, -1.42); // headboard
+      break;
+    case 'sofa':
+      addBox(2.4, 0.65, 1.2, mainMat, 0, 0.35, 0);
+      addBox(2.4, 0.95, 0.32, mainMat, 0, 0.9, -0.45);
+      addBox(0.32, 0.85, 1.2, accMat, -1.08, 0.55, 0);
+      addBox(0.32, 0.85, 1.2, accMat, 1.08, 0.55, 0);
+      break;
+    case 'table':
+      addBox(2.0, 0.16, 1.4, mainMat, 0, 0.95, 0);
+      [[-0.85, -0.55], [0.85, -0.55], [-0.85, 0.55], [0.85, 0.55]].forEach(([lx, lz]) => {
+        addBox(0.14, 0.95, 0.14, woodMat, lx, 0.475, lz);
+      });
+      addBox(0.7, 0.35, 0.7, accMat, 0, 1.2, 0);
+      break;
+    case 'shelf':
+      addBox(1.9, 2.4, 0.65, mainMat, 0, 1.2, 0);
+      [0.55, 1.2, 1.85].forEach((sy, i) => {
+        addBox(1.6, 0.35, 0.48, i % 2 === 0 ? accMat : woodMat, 0, sy, 0.12);
+      });
+      break;
+    case 'piano':
+      addBox(2.2, 1.35, 1.0, mainMat, 0, 0.68, 0);
+      addBox(2.0, 0.12, 0.45, accMat, 0, 0.98, 0.48); // keys
+      break;
+    case 'tv':
+      addBox(1.8, 0.55, 0.8, woodMat, 0, 0.28, 0);
+      addBox(1.6, 1.05, 0.25, mainMat, 0, 1.12, 0);
+      addBox(1.38, 0.82, 0.08, accMat, 0, 1.12, 0.14);
+      break;
+    case 'tank':
+      addBox(1.8, 0.65, 0.9, woodMat, 0, 0.32, 0);
+      const glass = new THREE.Mesh(
+        new THREE.BoxGeometry(1.7, 1.0, 0.82),
+        new THREE.MeshStandardMaterial({ color: '#38BDF8', transparent: true, opacity: 0.52, roughness: 0.1 })
+      );
+      glass.position.set(0, 1.15, 0);
+      g.add(glass);
+      addBox(0.35, 0.22, 0.15, accMat, -0.25, 1.15, 0);
+      addBox(0.28, 0.18, 0.12, accMat, 0.35, 1.28, 0.1);
+      break;
+    case 'arcade':
+      addBox(1.3, 2.2, 1.1, mainMat, 0, 1.1, 0);
+      addBox(1.05, 0.75, 0.1, accMat, 0, 1.55, 0.54);
+      addBox(1.25, 0.18, 0.45, accMat, 0, 1.02, 0.62);
+      break;
+    case 'tent':
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.45, 2.4, 6), mainMat);
+      cone.position.y = 1.2;
+      cone.castShadow = true;
+      g.add(cone);
+      addBox(0.65, 1.0, 0.2, accMat, 0, 0.5, 1.05);
+      break;
+    case 'tree':
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.35, 0.6, 12), accMat);
+      pot.position.y = 0.3;
+      const foliage = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.0, 10), mainMat);
+      foliage.position.y = 1.55;
+      foliage.castShadow = true;
+      g.add(pot, foliage);
+      break;
+    case 'lamp':
+      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.32, 1.75, 12), woodMat);
+      stand.position.y = 0.88;
+      const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.42, 14, 12),
+        new THREE.MeshStandardMaterial({ color: item.color, emissive: item.accent, emissiveIntensity: 0.65 })
+      );
+      bulb.position.y = 1.95;
+      g.add(stand, bulb);
+      break;
+    case 'rug':
+      const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 0.08, 24), mainMat);
+      rug.position.y = 0.05;
+      const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.09, 24), accMat);
+      inner.position.y = 0.06;
+      g.add(rug, inner);
+      break;
+    case 'cabinet':
+      addBox(1.4, 2.0, 1.0, mainMat, 0, 1.0, 0);
+      addBox(1.15, 0.75, 0.12, accMat, 0, 1.4, 0.49);
+      addBox(1.15, 0.75, 0.12, accMat, 0, 0.52, 0.49);
+      break;
+    case 'plush':
+    default:
+      const cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.85, 0.35, 16), mainMat);
+      cushion.position.y = 0.18;
+      cushion.castShadow = true;
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 12), accMat);
+      body.position.y = 0.82;
+      body.castShadow = true;
+      g.add(cushion, body);
+      break;
+  }
+
+  // Cute crisp emoji badge floating gently above so 6yo recognizes every furniture/toy instantly!
+  const badge = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, item.emoji, '#FFFDF7'), transparent: true })
+  );
+  badge.scale.set(0.95, 0.95, 1);
+  badge.position.set(0, item.shape === 'rug' ? 0.85 : 2.35, 0);
+  g.add(badge);
+
+  return { group: g, badge, popProgress: 0.01 };
+}
+
+export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furniture = [] } = {}) {
+  const group = new THREE.Group();
+  group.visible = false;
+  scene.add(group);
+
+  const wallById = new Map(wallpapers.map(w => [w.id, w]));
+  const floorById = new Map(floors.map(f => [f.id, f]));
+  const furnById = new Map(furniture.map(f => [f.id, f]));
+
+  const roomShell = new THREE.Group();
+  group.add(roomShell);
+
+  const floorMat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.88 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.85 });
+
+  const floorMesh = new THREE.Mesh(new THREE.BoxGeometry(10, 0.4, 10), floorMat);
+  floorMesh.position.y = -0.2;
+  floorMesh.receiveShadow = true;
+  roomShell.add(floorMesh);
+
+  const backWall = new THREE.Mesh(new THREE.BoxGeometry(10.4, 6.2, 0.4), wallMat);
+  backWall.position.set(0, 2.9, -5.2);
+  backWall.receiveShadow = true;
+  roomShell.add(backWall);
+
+  const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6.2, 10.4), wallMat);
+  leftWall.position.set(-5.2, 2.9, 0);
+  leftWall.receiveShadow = true;
+  roomShell.add(leftWall);
+
+  // Sunny window on back wall
+  const winGroup = new THREE.Group();
+  const winFrame = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 2.1, 0.16),
+    new THREE.MeshStandardMaterial({ color: '#FFFDF7', roughness: 0.5 })
+  );
+  const winGlass = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 1.7, 0.18),
+    new THREE.MeshBasicMaterial({ color: '#BAE6FD' })
+  );
+  winGroup.add(winFrame, winGlass);
+  winGroup.position.set(0, 3.3, -4.95);
+  roomShell.add(winGroup);
+
+  // Placed 3D furniture container
+  const furnRoot = new THREE.Group();
+  group.add(furnRoot);
+  const placedMap = new Map();
+  let currentHalfSize = 4.2;
+
+  const syncRoomStyle = (wallId, floorId, roomSize = 10) => {
+    const wSpec = wallById.get(wallId) || wallpapers[0];
+    const fSpec = floorById.get(floorId) || floors[0];
+
+    if (wallMat.map) wallMat.map.dispose();
+    wallMat.map = createRoomPatternTex(THREE, wSpec, 4);
+    wallMat.needsUpdate = true;
+
+    if (floorMat.map) floorMat.map.dispose();
+    floorMat.map = createRoomPatternTex(THREE, fSpec, 4);
+    floorMat.needsUpdate = true;
+
+    const scaleXZ = roomSize / 10;
+    roomShell.scale.set(scaleXZ, 1, scaleXZ);
+    currentHalfSize = (roomSize / 2) - 0.9;
+  };
+
+  const syncFurniture = (placedList = [], popId = null) => {
+    const keepIds = new Set(placedList.map(p => p.id));
+    for (const [id, entry] of placedMap.entries()) {
+      if (!keepIds.has(id)) {
+        furnRoot.remove(entry.group);
+        placedMap.delete(id);
+      }
+    }
+    placedList.forEach(({ id, x, z, rot = 0 }) => {
+      const item = furnById.get(id);
+      if (!item) return;
+      let entry = placedMap.get(id);
+      if (!entry) {
+        entry = buildFurnitureMesh3D(THREE, item);
+        furnRoot.add(entry.group);
+        placedMap.set(id, entry);
+      }
+      entry.group.position.set(x, 0, z);
+      entry.group.rotation.y = rot;
+      if (id === popId) {
+        entry.popProgress = 0.01;
+        entry.group.scale.setScalar(0.01);
+      }
+    });
+  };
+
+  const update = (t, dt) => {
+    let i = 0;
+    placedMap.forEach((entry) => {
+      i += 1;
+      if (entry.popProgress < 1) {
+        entry.popProgress = Math.min(1, entry.popProgress + dt * 2.8);
+        const p = entry.popProgress;
+        const s = p < 0.7 ? (p / 0.7) * 1.18 : 1.18 - ((p - 0.7) / 0.3) * 0.18;
+        entry.group.scale.setScalar(Math.max(0.01, s));
+      }
+      if (entry.badge) {
+        entry.badge.position.y = (entry.badge.position.y > 1.5 ? 2.35 : 0.85) + Math.sin(t * 2.8 + i) * 0.07;
+      }
+    });
+  };
+
+  return {
+    group,
+    floorMesh,
+    syncRoomStyle,
+    syncFurniture,
+    update,
+    getHalfSize: () => currentHalfSize,
+  };
+}
