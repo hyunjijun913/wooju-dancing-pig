@@ -2373,6 +2373,8 @@ function buildFurnitureMesh3D(THREE, item) {
   const mainMat = new THREE.MeshStandardMaterial({ color: item.color || '#60A5FA', roughness: 0.55 });
   const accMat = new THREE.MeshStandardMaterial({ color: item.accent || '#FFFFFF', roughness: 0.45 });
   const woodMat = new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.7 });
+  let screenMesh = null;
+  let glowMesh = null;
   const addBox = (w, h, d, mat, x, y, z) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     m.position.set(x, y, z);
@@ -2415,7 +2417,11 @@ function buildFurnitureMesh3D(THREE, item) {
     case 'tv':
       addBox(1.8, 0.55, 0.8, woodMat, 0, 0.28, 0);
       addBox(1.6, 1.05, 0.25, mainMat, 0, 1.12, 0);
-      addBox(1.38, 0.82, 0.08, accMat, 0, 1.12, 0.14);
+      screenMesh = addBox(
+        1.38, 0.82, 0.08,
+        new THREE.MeshStandardMaterial({ color: '#1E293B', emissive: '#38BDF8', emissiveIntensity: 0.05, roughness: 0.2 }),
+        0, 1.12, 0.14
+      );
       break;
     case 'tank':
       addBox(1.8, 0.65, 0.9, woodMat, 0, 0.32, 0);
@@ -2425,12 +2431,16 @@ function buildFurnitureMesh3D(THREE, item) {
       );
       glass.position.set(0, 1.15, 0);
       g.add(glass);
-      addBox(0.35, 0.22, 0.15, accMat, -0.25, 1.15, 0);
+      glowMesh = addBox(0.35, 0.22, 0.15, accMat, -0.25, 1.15, 0);
       addBox(0.28, 0.18, 0.12, accMat, 0.35, 1.28, 0.1);
       break;
     case 'arcade':
       addBox(1.3, 2.2, 1.1, mainMat, 0, 1.1, 0);
-      addBox(1.05, 0.75, 0.1, accMat, 0, 1.55, 0.54);
+      screenMesh = addBox(
+        1.05, 0.75, 0.1,
+        new THREE.MeshStandardMaterial({ color: '#1E293B', emissive: '#FACC15', emissiveIntensity: 0.08, roughness: 0.2 }),
+        0, 1.55, 0.54
+      );
       addBox(1.25, 0.18, 0.45, accMat, 0, 1.02, 0.62);
       break;
     case 'tent':
@@ -2446,17 +2456,22 @@ function buildFurnitureMesh3D(THREE, item) {
       const foliage = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.0, 10), mainMat);
       foliage.position.y = 1.55;
       foliage.castShadow = true;
-      g.add(pot, foliage);
+      glowMesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.26),
+        new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#F59E0B', emissiveIntensity: 0.25 })
+      );
+      glowMesh.position.y = 2.65;
+      g.add(pot, foliage, glowMesh);
       break;
     case 'lamp':
       const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.32, 1.75, 12), woodMat);
       stand.position.y = 0.88;
-      const bulb = new THREE.Mesh(
+      glowMesh = new THREE.Mesh(
         new THREE.SphereGeometry(0.42, 14, 12),
-        new THREE.MeshStandardMaterial({ color: item.color, emissive: item.accent, emissiveIntensity: 0.65 })
+        new THREE.MeshStandardMaterial({ color: item.color, emissive: item.accent, emissiveIntensity: 0.25 })
       );
-      bulb.position.y = 1.95;
-      g.add(stand, bulb);
+      glowMesh.position.y = 1.95;
+      g.add(stand, glowMesh);
       break;
     case 'rug':
       const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 0.08, 24), mainMat);
@@ -2490,7 +2505,7 @@ function buildFurnitureMesh3D(THREE, item) {
   badge.position.set(0, item.shape === 'rug' ? 0.85 : 2.35, 0);
   g.add(badge);
 
-  return { group: g, badge, popProgress: 0.01 };
+  return { group: g, badge, screenMesh, glowMesh, poweredOn: false, popProgress: 0.01 };
 }
 
 export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furniture = [] } = {}) {
@@ -2616,7 +2631,18 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
 
   const triggerReact = (id) => {
     const entry = placedMap.get(id);
-    if (entry) entry.reactTime = 1.0;
+    if (!entry) return false;
+    entry.reactTime = 1.0;
+    if (entry.screenMesh || entry.glowMesh) {
+      entry.poweredOn = !entry.poweredOn;
+      if (entry.screenMesh) {
+        entry.screenMesh.material.emissiveIntensity = entry.poweredOn ? 1.1 : 0.06;
+      }
+      if (entry.glowMesh && entry.glowMesh.material?.emissive) {
+        entry.glowMesh.material.emissiveIntensity = entry.poweredOn ? 1.4 : 0.2;
+      }
+    }
+    return entry.poweredOn;
   };
 
   const getHitMeshes = () => [...placedMap.values()].map(e => e.hitMesh).filter(Boolean);
@@ -2640,6 +2666,13 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
           entry.group.position.y = 0;
           entry.group.scale.set(1, 1, 1);
         }
+      }
+      // Animated TV/Arcade cartoon screen colors & swimming fish when powered ON!
+      if (entry.poweredOn && entry.screenMesh) {
+        entry.screenMesh.material.emissive.setHSL((t * 0.55 + i) % 1, 0.9, 0.55);
+      }
+      if (entry.poweredOn && entry.glowMesh && !entry.screenMesh) {
+        entry.glowMesh.rotation.y = t * 2.2;
       }
       if (entry.badge) {
         entry.badge.position.y = (entry.badge.position.y > 1.5 ? 2.35 : 0.85) + Math.sin(t * 2.8 + i) * 0.07;

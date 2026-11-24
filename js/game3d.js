@@ -122,6 +122,7 @@ export class FarmGame3D {
     this.homeTab = 'furniture'; // 'furniture' | 'wallpaper' | 'floor'
     this.placingFurnitureId = null;
     this.selectedPlacedItem = null; // { kind: 'treasure' | 'furniture', id }
+    this.avatarPose = null; // { mode: 'sit' | 'sleep' | 'bounce', x, y, z, rotY }
     this.lastRevealedKind = 'treasure';
     this.attendance = { days: [], lastClaimDate: null, streak: 0 };
     this.daily = normalizeDailyState(null, getLocalDateKey());
@@ -383,11 +384,13 @@ export class FarmGame3D {
     this.placingTreasureId = null;
     this.cameraFocusOverride = null;
     this.avatarPos = { x: 0, z: 15.2 };
+    this.avatarPose = null;
     this.woojuTrail = [];
     this.walkTarget = null;
 
     if (this.wooju) {
       this.wooju.group.position.set(this.avatarPos.x, 0, this.avatarPos.z);
+      this.wooju.group.rotation.x = 0;
       this.wooju.setGear(this.equippedGear);
     }
     if (this.partyRewards) this.partyRewards.syncMastery(this.mastery);
@@ -455,6 +458,7 @@ export class FarmGame3D {
         </div>
         <div class="farm-place-bar" id="farmInspectBar" style="display:none;">
           <span id="farmInspectText">🥚 황금 달걀</span>
+          <button class="mini-btn" id="farmInspectUseBtn" style="background:#16A34A;color:#fff;">✨ 사용하기</button>
           <button class="mini-btn" id="farmInspectMoveBtn">📍 옮기기</button>
           <button class="mini-btn" id="farmInspectRotBtn" style="display:none;">🔄 돌리기</button>
           <button class="mini-btn del" id="farmInspectPickupBtn">🎒 주워담기</button>
@@ -728,6 +732,11 @@ export class FarmGame3D {
     });
     this.container.querySelector('#farmPlaceCancelBtn').addEventListener('click', () => this._exitPlaceMode());
     this.container.querySelector('#farmInspectCloseBtn').addEventListener('click', () => this._hideInspectBar());
+    this.container.querySelector('#farmInspectUseBtn').addEventListener('click', () => {
+      const sel = this.selectedPlacedItem;
+      if (!sel) return;
+      this._usePlacedItem(sel.kind, sel.id);
+    });
     this.container.querySelector('#farmInspectMoveBtn').addEventListener('click', () => {
       const sel = this.selectedPlacedItem;
       this._hideInspectBar();
@@ -1423,32 +1432,303 @@ export class FarmGame3D {
     this.onToast(r.msg);
   }
 
-  _reactToPlacedItem(kind, id) {
+  _getUseActionMeta(kind, id) {
+    const item = kind === 'furniture'
+      ? ROOM_FURNITURE.find(f => f.id === id)
+      : TREASURE_ITEMS.find(t => t.id === id);
+    if (!item) return { label: '✨ 사용하기' };
+
+    const isActivePose = this.avatarPose && this.avatarPose.id === id;
+    if (kind === 'furniture') {
+      if (item.shape === 'bed') return { label: isActivePose ? '🛏️ 일어나기' : '🛏️ 눕기' };
+      if (item.shape === 'sofa') return { label: isActivePose ? '🛋️ 일어나기' : '🛋️ 앉기' };
+      if (item.shape === 'tv') return { label: '📺 TV 켜기/끄기' };
+      if (item.shape === 'arcade') return { label: '🕹️ 게임 켜기/끄기' };
+      if (item.shape === 'lamp') return { label: id === 'furn_telescope' ? '🔭 별 보기' : '💡 불 켜기/끄기' };
+      if (item.shape === 'tree') return { label: id === 'furn_xmas_tree' ? '🎄 트리 켜기/끄기' : '💧 물 주기' };
+      if (item.shape === 'tank') return { label: '🐠 밥 주기' };
+      if (item.shape === 'piano') return { label: '🎹 연주하기' };
+      if (id === 'furn_drum_set') return { label: '🥁 드럼 치기' };
+      if (item.shape === 'rug' || id === 'furn_slide') return { label: isActivePose ? '🤸 그만 놀기' : (id === 'furn_slide' ? '🛝 미끄럼 타기' : '🤸 방방 뛰기') };
+      if (id === 'furn_soccer') return { label: '⚽ 슛 차기' };
+      if (item.shape === 'tent') return { label: isActivePose ? '⛺ 나오기' : '⛺ 들어가기' };
+      if (id === 'furn_desk_wood') return { label: isActivePose ? '🪑 일어나기' : '📖 공부하기' };
+      if (id === 'furn_cake_table') return { label: '🎂 케이크 먹기' };
+      if (id === 'furn_train_set') return { label: '🚂 기차 출발!' };
+      if (id === 'furn_icecream') return { label: '🍦 아이스크림!' };
+      if (id === 'furn_bookshelf') return { label: '📚 책 읽기' };
+      if (id === 'furn_cat_tower') return { label: '🐈 놀아주기' };
+      if (id === 'furn_trophy_wall') return { label: '🏆 감상하기' };
+      if (id === 'furn_mini_fridge') return { label: '🧊 간식 꺼내기' };
+      if (id === 'furn_clock') return { label: '🕰️ 뻐꾹 울리기' };
+      if (id === 'furn_kitchen') return { label: '🍳 요리하기' };
+      if (id === 'furn_lego_castle') return { label: '🧱 블록 쌓기' };
+      if (id === 'furn_globe') return { label: '🌍 돌려보기' };
+      if (id === 'furn_robot_toy') return { label: '🤖 변신하기' };
+      if (id === 'furn_crystal_ball') return { label: '🔮 마법 보기' };
+      return { label: '🤗 안아주기' };
+    }
+
+    // All 40 Outdoor Treasures
+    if (id === 'tr_carousel') return { label: isActivePose ? '🎠 내리기' : '🎠 목마 타기' };
+    if (id === 'tr_dance_shoes') return { label: isActivePose ? '👟 멈추기' : '💃 춤추기' };
+    if (id === 'tr_gold_note' || id === 'tr_bell') return { label: '🎵 소리 내기' };
+    if (id === 'tr_cotton_candy') return { label: '🍭 솜사탕 만들기' };
+    if (item.cat === '음식') return { label: '🍽️ 맛보기' };
+    if (item.cat === '우주') return { label: '🚀 우주 탐험' };
+    if (item.cat === '정원' || item.cat === '자연') return { label: '🌸 살펴보기' };
+    return { label: '✨ 만져보기' };
+  }
+
+  _usePlacedItem(kind, id) {
     const item = kind === 'furniture'
       ? ROOM_FURNITURE.find(f => f.id === id)
       : TREASURE_ITEMS.find(t => t.id === id);
     if (!item) return;
 
-    if (kind === 'furniture' && this.myHome3D?.triggerReact) this.myHome3D.triggerReact(id);
-    if (kind === 'treasure' && this.placedTreasures3D?.triggerReact) this.placedTreasures3D.triggerReact(id);
+    const updateUseBtn = () => {
+      const useBtn = this.container?.querySelector('#farmInspectUseBtn');
+      if (useBtn) useBtn.textContent = this._getUseActionMeta(kind, id).label;
+    };
 
-    const isMusic = /piano|drum|note|bell/.test(id);
-    const isArcade = /arcade|tv|robot/.test(id);
-    const isBoing = /bed|sofa|trampoline|slide|chair|throne|dino|bear|unicorn|cat|carousel/.test(id);
-    const isRocket = /ufo|rocket|meteor|planet|solar|saturn/.test(id);
-    const sfx = isMusic ? 'music' : (isArcade ? 'arcade' : (isRocket ? 'rocket' : (isBoing ? 'boing' : 'sparkle')));
+    if (kind === 'furniture') {
+      const placed = this.homeState.placedFurniture.find(p => p.id === id);
+      if (!placed) return;
+      const rot = placed.rot || 0;
+      const half = this.myHome3D ? this.myHome3D.getHalfSize() : 4.2;
+      const clampRoom = (v) => Math.max(-half, Math.min(half, v));
+      const frontX = clampRoom(placed.x + Math.sin(rot) * 1.9);
+      const frontZ = clampRoom(placed.z + Math.cos(rot) * 1.9);
+      const faceObjAngle = Math.atan2(placed.x - frontX, placed.z - frontZ);
+
+      this.walkTarget = null;
+
+      // 1. Beds -> Lie down / Wake up
+      if (item.shape === 'bed') {
+        if (this.avatarPose?.id === id) {
+          this.avatarPose = null;
+          this.avatarPos = { x: frontX, z: frontZ };
+          this.audio.playChimeSFX();
+          this.onToast(`☀️ 잘 잤어요! ${item.emoji} ${item.name}에서 일어났어요!`);
+        } else {
+          this.avatarPose = { mode: 'sleep', id, x: placed.x, y: 1.02, z: placed.z, rotY: rot };
+          this.avatarPos = { x: placed.x, z: placed.z };
+          this.avatarAngle = rot;
+          this.audio.playInteractSFX('boing');
+          this.onToast(id === 'furn_bed_rocket'
+            ? `🚀 우주 로켓 침대에 누워 우주 꿈을 꿔요! 쿨쿨~ 💤`
+            : `🛏️ ${item.name}에 포근하게 누웠어요! 쿨쿨~ 💤`);
+        }
+        updateUseBtn();
+        return;
+      }
+
+      // 2. Sofas / Chairs / Throne / Desk / Tent -> Sit / Stand up
+      if (item.shape === 'sofa' || id === 'furn_desk_wood' || (item.shape === 'tent' && id !== 'furn_slide' && id !== 'furn_soccer')) {
+        if (this.avatarPose?.id === id) {
+          this.avatarPose = null;
+          this.avatarPos = { x: frontX, z: frontZ };
+          this.audio.playChimeSFX();
+          this.onToast(`🚶 ${item.emoji} ${item.name}에서 일어났어요!`);
+        } else {
+          const sitY = item.shape === 'tent' ? 0.12 : (id === 'furn_desk_wood' ? 0.42 : 0.62);
+          const sitX = id === 'furn_desk_wood' ? clampRoom(placed.x + Math.sin(rot) * 1.15) : placed.x;
+          const sitZ = id === 'furn_desk_wood' ? clampRoom(placed.z + Math.cos(rot) * 1.15) : placed.z;
+          const sitRot = id === 'furn_desk_wood' ? faceObjAngle : rot;
+          this.avatarPose = { mode: 'sit', id, x: sitX, y: sitY, z: sitZ, rotY: sitRot };
+          this.avatarPos = { x: sitX, z: sitZ };
+          this.avatarAngle = sitRot;
+          this.audio.playInteractSFX('boing');
+          const msg = id === 'furn_gold_throne'
+            ? `👑 우주 대왕 황금 의자에 멋지게 앉았어요!!`
+            : (id === 'furn_desk_wood'
+              ? `📖 책상에 앉아 영어 동화 공부를 해요!`
+              : (item.shape === 'tent'
+                ? `⛺ ${item.name} 안에 쏙! 들어갔어요! 아늑해요~`
+                : `🛋️ ${item.name}에 폭~ 앉아서 쉬어요!`));
+          this.onToast(msg);
+        }
+        updateUseBtn();
+        return;
+      }
+
+      // 3. Trampoline / Rug / Slide -> Bounce repeatedly!
+      if (item.shape === 'rug' || id === 'furn_slide') {
+        if (this.avatarPose?.id === id) {
+          this.avatarPose = null;
+          this.avatarPos = { x: frontX, z: frontZ };
+          this.audio.playChimeSFX();
+          this.onToast(`✨ 신나게 놀고 내려왔어요!`);
+        } else {
+          this.avatarPose = { mode: 'bounce', id, x: placed.x, y: 0.12, z: placed.z, rotY: rot };
+          this.avatarPos = { x: placed.x, z: placed.z };
+          this.avatarAngle = rot;
+          this.audio.playInteractSFX('boing');
+          this.onConfetti(22);
+          this.onToast(id === 'furn_slide'
+            ? `🛝 슈우웅~ 실내 미끄럼틀을 신나게 타요!!`
+            : `🤸 통통통! ${item.name} 위에서 높이 방방 뛰어요!!`);
+        }
+        updateUseBtn();
+        return;
+      }
+
+      // 4. TV / Arcade -> Toggle animated cartoon screen ON/OFF & watch/play in front!
+      if (item.shape === 'tv' || item.shape === 'arcade') {
+        const poweredOn = this.myHome3D?.triggerReact ? this.myHome3D.triggerReact(id) : true;
+        this.avatarPos = { x: frontX, z: frontZ };
+        this.avatarAngle = faceObjAngle;
+        this.avatarPose = poweredOn
+          ? { mode: item.shape === 'arcade' ? 'dance' : 'sit', id, x: frontX, y: 0, z: frontZ, rotY: faceObjAngle }
+          : null;
+        this.audio.playInteractSFX('arcade');
+        if (poweredOn) this.onConfetti(18);
+        this.onToast(item.shape === 'tv'
+          ? (poweredOn ? `📺 만화 영화 TV가 켜졌어요! 알록달록 재밌다!!` : `📺 TV를 껐어요!`)
+          : (poweredOn ? `🕹️ 오락실 게임기 스타트! 삐빅삐빅 최고 점수 도전!!` : `🕹️ 게임기를 껐어요!`));
+        updateUseBtn();
+        return;
+      }
+
+      // 5. Lamps / Trees / Fish Tank -> Toggle glowing lights / spinning animation ON/OFF!
+      if (item.shape === 'lamp' || item.shape === 'tree' || item.shape === 'tank') {
+        const poweredOn = this.myHome3D?.triggerReact ? this.myHome3D.triggerReact(id) : true;
+        this.avatarPose = null;
+        this.avatarPos = { x: frontX, z: frontZ };
+        this.avatarAngle = faceObjAngle;
+        const isSpace = /telescope|ufo|planet/.test(id);
+        this.audio.playInteractSFX(isSpace ? 'rocket' : 'sparkle');
+        if (poweredOn) this.onConfetti(20);
+        const msg = item.shape === 'tank'
+          ? (poweredOn ? `🐠 열대어 어항 불빛 ON! 물고기들이 신나게 헤엄쳐요!` : `🐠 어항 조명을 잠깐 껐어요!`)
+          : (id === 'furn_telescope'
+            ? (poweredOn ? `🔭 천체망원경으로 반짝이는 별자리를 봐요!!` : `🔭 망원경 덮개를 닫았어요!`)
+            : (id === 'furn_plant_pot'
+              ? `💧 초록 몬스테라에 물을 줬어요! 쑥쑥 자라라~ 🌱`
+              : (poweredOn ? `${item.emoji} ${item.name} 불빛이 반짝반짝 켜졌어요!!` : `${item.emoji} ${item.name} 불빛을 껐어요!`)));
+        this.onToast(msg);
+        updateUseBtn();
+        return;
+      }
+
+      // 6. Piano / Drum -> Play melody & dance in front!
+      if (item.shape === 'piano' || id === 'furn_drum_set') {
+        if (this.myHome3D?.triggerReact) this.myHome3D.triggerReact(id);
+        this.avatarPos = { x: frontX, z: frontZ };
+        this.avatarAngle = faceObjAngle;
+        this.avatarPose = { mode: 'dance', id, x: frontX, y: 0, z: frontZ, rotY: faceObjAngle };
+        this.audio.playInteractSFX('music');
+        this.onConfetti(26);
+        this.onToast(id === 'furn_drum_set'
+          ? `🥁 쿵쾅쿵쾅! 우주가 신나게 드럼을 연주해요!!`
+          : `🎹 딩동댕동~ ${item.name}으로 멋진 연주를 해요!!`);
+        updateUseBtn();
+        return;
+      }
+
+      // 7. All remaining furniture (tables, shelves, cabinets, plushies, soccer)
+      if (this.myHome3D?.triggerReact) this.myHome3D.triggerReact(id);
+      this.avatarPose = null;
+      this.avatarPos = { x: frontX, z: frontZ };
+      this.avatarAngle = faceObjAngle;
+      const customMsgs = {
+        furn_cake_table:  ['music',   '🎂 생일 축하해요~ 달콤한 케이크를 냠냠 먹어요!'],
+        furn_train_set:   ['boing',   '🚂 칙칙폭폭! 미니 기차가 신나게 달려요!'],
+        furn_icecream:    ['sparkle', '🍦 딸기·초코 아이스크림 완성! 시원하고 달콤해요!'],
+        furn_bookshelf:   ['sparkle', '📚 동화책을 꺼내서 영어로 읽어봐요!'],
+        furn_cat_tower:   ['boing',   '🐈 야옹~ 캣타워에서 고양이 친구와 놀아요!'],
+        furn_trophy_wall: ['music',   '🏆 우주의 반짝이는 황금 트로피들이 눈부셔요!!'],
+        furn_mini_fridge: ['sparkle', '🧊 딸깍! 냉장고에서 시원한 우유와 간식을 꺼냈어요!'],
+        furn_clock:       ['music',   '🕰️ 뻐꾹~ 뻐꾹! 시계탑에서 귀여운 새가 나왔어요!'],
+        furn_kitchen:     ['sparkle', '🍳 치이익~ 꼬마 주방에서 맛있는 요리를 만들어요!'],
+        furn_lego_castle: ['boing',   '🧱 뚝딱뚝딱! 알록달록 블록 대왕 성을 쌓아요!'],
+        furn_soccer:      ['boing',   '⚽ 슛~ 골인!! 우주가 멋진 골을 넣었어요!!'],
+        furn_globe:       ['sparkle', '🌍 빙글빙글 지구본을 돌리며 세계 여행을 떠나요!'],
+        furn_robot_toy:   ['arcade',  '🤖 위잉~ 철컥! 변신 로봇이 멋지게 변신했어요!!'],
+        furn_crystal_ball:['sparkle', '🔮 수리수리 마수리~ 수정구슬에서 무지개 빛이 나요!'],
+        furn_bear_plush:  ['boing',   '🧸 폭신한 왕 곰돌이 인형을 꼬옥~ 안아줬어요!'],
+        furn_dino_plush:  ['boing',   '🦕 크앙~ 귀여운 티라노 공룡 인형과 놀아요!'],
+        furn_unicorn:     ['sparkle', '🦄 무지개 유니콘 인형을 쓰다듬으니 별빛이 반짝!'],
+      };
+      const [sfx, msg] = customMsgs[id] || ['sparkle', `${item.emoji} ${item.name}이(가) 반짝반짝 신나게 움직여요!`];
+      this.audio.playInteractSFX(sfx);
+      this.onConfetti(20);
+      this.onToast(msg);
+      updateUseBtn();
+      return;
+    }
+
+    // Outdoor Treasures (ALL 40 items!)
+    const placed = this.placedTreasures.find(p => p.id === id);
+    if (this.placedTreasures3D?.triggerReact) this.placedTreasures3D.triggerReact(id);
+    this.walkTarget = null;
+
+    if (placed) {
+      const ang = Math.atan2(this.avatarPos.x - placed.x, this.avatarPos.z - placed.z);
+      const standX = placed.x + Math.sin(ang) * 2.0;
+      const standZ = placed.z + Math.cos(ang) * 2.0;
+      const r = Math.hypot(standX, standZ);
+      this.avatarPos = r > 25.6
+        ? { x: (standX / r) * 25.6, z: (standZ / r) * 25.6 }
+        : { x: standX, z: standZ };
+      this.avatarAngle = Math.atan2(placed.x - this.avatarPos.x, placed.z - this.avatarPos.z);
+
+      if (id === 'tr_carousel') {
+        if (this.avatarPose?.id === id) {
+          this.avatarPose = null;
+          this.audio.playChimeSFX();
+          this.onToast(`🎠 회전목마에서 내렸어요! 재밌었다!`);
+        } else {
+          this.avatarPose = { mode: 'bounce', id, x: this.avatarPos.x, y: 0.15, z: this.avatarPos.z, rotY: this.avatarAngle };
+          this.audio.playInteractSFX('music');
+          this.onConfetti(28);
+          this.onToast(`🎠 빙글빙글 미니 회전목마를 신나게 타요!!`);
+        }
+        updateUseBtn();
+        return;
+      }
+
+      if (id === 'tr_dance_shoes') {
+        if (this.avatarPose?.id === id) {
+          this.avatarPose = null;
+          this.audio.playChimeSFX();
+          this.onToast(`👟 마법 구두 춤을 잠깐 멈췄어요!`);
+        } else {
+          this.avatarPose = { mode: 'dance', id, x: this.avatarPos.x, y: 0, z: this.avatarPos.z, rotY: this.avatarAngle };
+          this.audio.playInteractSFX('music');
+          this.onConfetti(30);
+          this.onToast(`💃 춤추는 마법 구두를 신고 신나게 춤춰요!!`);
+        }
+        updateUseBtn();
+        return;
+      }
+    }
+
+    this.avatarPose = null;
+    const isMusic = /note|bell/.test(id);
+    const isSpace = item.cat === '우주';
+    const isFood = item.cat === '음식';
+    const isNature = item.cat === '정원' || item.cat === '자연';
+    const sfx = isMusic ? 'music' : (isSpace ? 'rocket' : (isFood ? 'boing' : 'sparkle'));
     this.audio.playInteractSFX(sfx);
-    this.onConfetti(18);
+    this.onConfetti(22);
 
-    const verb = isMusic ? '딩동댕~ 신나는 음악이 나와요!'
-      : (isArcade ? '삐빅삐빅! 게임 불빛이 반짝여요!'
-      : (isRocket ? '슈우웅~ 우주 에너지가 반짝!'
-      : (isBoing ? '통통~ 포근하게 움직여요!' : '반짝반짝 예쁘게 빛나요!')));
-    this.onToast(`${item.emoji} ${item.name}: ${verb}`);
+    const msg = isMusic
+      ? `${item.emoji} ${item.name}에서 딩동댕~ 예쁜 소리가 울려 퍼져요!`
+      : (isSpace
+        ? `${item.emoji} ${item.name}: 슈우웅~ 신비한 우주 에너지가 반짝!!`
+        : (isFood
+          ? `${item.emoji} ${item.name}을(를) 한 입 냠냠! 우와, 정말 맛있어요!!`
+          : (id === 'tr_cotton_candy'
+            ? `🍭 빙글빙글~ 달콤한 핑크 솜사탕이 완성됐어요!`
+            : (isNature
+              ? `${item.emoji} ${item.name}이(가) 산들바람에 반짝반짝 인사해요!`
+              : `${item.emoji} ${item.name}이(가) 화려한 빛을 내며 춤춰요!!`))));
+    this.onToast(msg);
+    updateUseBtn();
   }
 
   _showInspectBar(kind, id) {
-    this._reactToPlacedItem(kind, id);
     const item = kind === 'furniture'
       ? ROOM_FURNITURE.find(f => f.id === id)
       : TREASURE_ITEMS.find(t => t.id === id);
@@ -1460,6 +1740,7 @@ export class FarmGame3D {
     if (txt) txt.textContent = `${item.emoji} ${item.name}`;
     if (rotBtn) rotBtn.style.display = kind === 'furniture' ? 'inline-block' : 'none';
     if (bar) bar.style.display = 'flex';
+    this._usePlacedItem(kind, id);
   }
 
   _hideInspectBar() {
@@ -1469,6 +1750,7 @@ export class FarmGame3D {
   }
 
   _pickupTreasure(id) {
+    if (this.avatarPose?.id === id) this.avatarPose = null;
     const item = TREASURE_ITEMS.find(t => t.id === id);
     this.placedTreasures = this.placedTreasures.filter(p => p.id !== id);
     this._saveRpgState();
@@ -1481,6 +1763,7 @@ export class FarmGame3D {
   }
 
   _pickupFurniture(id) {
+    if (this.avatarPose?.id === id) this.avatarPose = null;
     const item = ROOM_FURNITURE.find(f => f.id === id);
     this.homeState.placedFurniture = this.homeState.placedFurniture.filter(p => p.id !== id);
     this._saveRpgState();
@@ -1518,6 +1801,7 @@ export class FarmGame3D {
         : { x: this.avatarPos.x, z: this.avatarPos.z };
     }
     this.inHome = true;
+    this.avatarPose = null;
     this.walkTarget = null;
     this.pendingSpotTrigger = null;
     this.avatarPos = { x: 0, z: 1.4 };
@@ -1567,6 +1851,7 @@ export class FarmGame3D {
     this._exitPlaceMode();
     this._hideInspectBar();
     this.inHome = false;
+    this.avatarPose = null;
     this.walkingToHouseDoor = false;
     this.doorCooldownUntil = performance.now() + 1600;
     this.walkTarget = null;
@@ -3248,13 +3533,29 @@ export class FarmGame3D {
         }
       }
 
+      if (moving && this.avatarPose) {
+        this.avatarPose = null;
+      }
+
       if (this.wooju) {
-        this.wooju.group.position.x = this.avatarPos.x;
-        this.wooju.group.position.y = this.inLiveStage ? 0.42 : 0;
-        this.wooju.group.position.z = this.avatarPos.z;
-        this.wooju.group.rotation.y = this.avatarAngle;
-        if (moving) this.audio.playStepSFX(this.inHome);
-        if (this.wooju.setAnim) this.wooju.setAnim(this.inLiveStage ? 'dance' : (moving ? 'walk' : 'idle'));
+        if (!this.inLiveStage && this.avatarPose) {
+          const p = this.avatarPose;
+          const bounceY = p.mode === 'bounce' ? Math.abs(Math.sin(t * 7.5)) * 1.35 : 0;
+          this.wooju.group.position.set(p.x, p.y + bounceY, p.z);
+          this.wooju.group.rotation.x = p.mode === 'sleep' ? -Math.PI / 2 : 0;
+          this.wooju.group.rotation.y = p.rotY ?? this.avatarAngle;
+          if (this.wooju.setAnim) {
+            this.wooju.setAnim((p.mode === 'bounce' || p.mode === 'dance') ? 'dance' : 'idle');
+          }
+        } else {
+          this.wooju.group.position.x = this.avatarPos.x;
+          this.wooju.group.position.y = this.inLiveStage ? 0.42 : 0;
+          this.wooju.group.position.z = this.avatarPos.z;
+          this.wooju.group.rotation.x = 0;
+          this.wooju.group.rotation.y = this.avatarAngle;
+          if (moving) this.audio.playStepSFX(this.inHome);
+          if (this.wooju.setAnim) this.wooju.setAnim(this.inLiveStage ? 'dance' : (moving ? 'walk' : 'idle'));
+        }
         if (this.wooju.updateMixer) this.wooju.updateMixer(dt);
         if (this.wooju.updateCosmetics) this.wooju.updateCosmetics(t, moving);
       }
