@@ -1179,6 +1179,56 @@ body.farm-fullscreen .farm-card {
 }
 
 /* ===========================
+   v6: Interactive Word-by-Word Pointing Chips & STT Green-Light Highlight
+   =========================== */
+.word-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+.word-chip {
+  border: 2px solid #E2E8F0;
+  background: #FFFFFF;
+  color: #1E293B;
+  border-radius: 11px;
+  padding: 4px 8px;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: transform 0.14s, background 0.18s, border-color 0.18s, color 0.18s;
+}
+.word-chip:active { transform: scale(0.93); }
+.word-chip.word-active {
+  background: #FEF08A;
+  border-color: #F59E0B;
+  color: #78350F;
+  transform: translateY(-2px) scale(1.06);
+  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.28);
+}
+.word-chip.word-pointed {
+  background: #DBEAFE;
+  border-color: #3B82F6;
+  color: #1D4ED8;
+  transform: scale(1.08);
+}
+.word-chip.word-lit {
+  background: linear-gradient(135deg, #DCFCE7, #BBF7D0);
+  border-color: #22C55E;
+  color: #15803D;
+  box-shadow: 0 3px 10px rgba(34, 197, 94, 0.28);
+  animation: popIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.word-chip.word-hidden {
+  background: #F1F5F9;
+  border-style: dashed;
+  border-color: #CBD5E1;
+  color: #94A3B8;
+  letter-spacing: 2px;
+}
+
+/* ===========================
    1~4단계: Main Learning Card
    =========================== */
 .stage-card {

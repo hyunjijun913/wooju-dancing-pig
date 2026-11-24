@@ -1320,3 +1320,124 @@ export function claimDailyAttendance(attendanceState, todayKey) {
 
   return { nextAttendance, claimedDay: cycleDay, reward, alreadyClaimed: false };
 }
+
+// --- v6: Kid-Friendly Word-by-Word Pointing & Speech-to-Text Matching ---
+const KID_PHONETIC_ALIASES = {
+  said: ['sad', 'set', 'sat', 'say', 'head'],
+  wont: ['want', 'one', 'dont', 'went'],
+  mice: ['nice', 'my', 'rice', 'ice'],
+  barn: ['born', 'bun', 'bar', 'burn', 'bond'],
+  curl: ['girl', 'call', 'car', 'cool', 'curls'],
+  laughed: ['left', 'raft', 'laugh', 'loved', 'last'],
+  owl: ['all', 'howl', 'our', 'out', 'oil'],
+  pony: ['funny', 'bony', 'penny', 'tony', 'phoney'],
+  donkey: ['monkey', 'dunk', 'funky'],
+  sheep: ['ship', 'cheap', 'sleep', 'sheet'],
+  goat: ['coat', 'boat', 'got', 'gold', 'go'],
+  pig: ['big', 'pick', 'peak', 'peg'],
+  farmer: ['father', 'former', 'farm', 'armor'],
+  brown: ['crown', 'clown', 'down', 'round', 'brow'],
+  quiet: ['quite', 'white', 'client', 'kite'],
+  frog: ['fog', 'log', 'from', 'frock'],
+  corn: ['horn', 'born', 'coin', 'cone', 'call'],
+  duck: ['dog', 'dark', 'dock', 'luck', 'truck'],
+  fix: ['six', 'mix', 'picks', 'pics', 'fish'],
+  tail: ['tell', 'tall', 'tale', 'trail', 'sale'],
+  dance: ['dense', 'dents', 'pants', 'chance', 'dancing'],
+  dancing: ['dansing', 'dance', 'chasing'],
+  never: ['ever', 'clever', 'neighbor'],
+  seen: ['sing', 'scene', 'seem', 'see', 'sin'],
+  carrot: ['parrot', 'care', 'car', 'carrots'],
+  chicken: ['kitchen', 'check', 'chick'],
+  rabbit: ['habit', 'rapid', 'robot'],
+  dinner: ['winner', 'inner', 'diner', 'tinner'],
+  egg: ['leg', 'ache', 'eight', 'eggs'],
+  milk: ['melt', 'silk', 'mill'],
+  fish: ['dish', 'wish', 'finish', 'fix'],
+  clean: ['green', 'queen', 'keen', 'lean'],
+  song: ['long', 'strong', 'some', 'sung'],
+  happy: ['heavy', 'hippie', 'hobby'],
+  animals: ['animal', 'enamel'],
+  know: ['no', 'now', 'new'],
+  him: ['hem', 'ham', 'them', 'in'],
+  his: ['is', 'he', 'this'],
+  for: ['four', 'far', 'or', 'from'],
+  an: ['and', 'in', 'a', 'on'],
+  the: ['a', 'da', 'de', 'they', 'there'],
+  to: ['two', 'too', 'do'],
+  eat: ['it', 'heat', 'each'],
+  have: ['half', 'had', 'has'],
+  you: ['your', 'u', 'do'],
+  what: ['want', 'hot', 'but'],
+  make: ['bake', 'take', 'cake'],
+  give: ['get', 'live', 'gift'],
+  pick: ['pig', 'big', 'pack', 'peak'],
+  looked: ['look', 'book', 'cooked'],
+};
+
+export function normalizeWord(word = '') {
+  return String(word).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export function tokenizeWords(text = '') {
+  return String(text)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((raw, index) => ({
+      index,
+      raw,
+      norm: normalizeWord(raw),
+    }))
+    .filter(w => w.norm.length > 0);
+}
+
+function editDistanceAtMostOne(a, b) {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i++; j++;
+    } else {
+      edits++;
+      if (edits > 1) return false;
+      if (a.length > b.length) i++;
+      else if (b.length > a.length) j++;
+      else { i++; j++; }
+    }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+function isKidWordMatch(targetNorm, spokenNorm) {
+  if (!targetNorm || !spokenNorm) return false;
+  if (targetNorm === spokenNorm) return true;
+  const aliases = KID_PHONETIC_ALIASES[targetNorm];
+  if (aliases && aliases.includes(spokenNorm)) return true;
+  if (targetNorm.length >= 4 && spokenNorm.length >= 3 && editDistanceAtMostOne(targetNorm, spokenNorm)) {
+    return true;
+  }
+  return false;
+}
+
+export function matchSpokenWords(targetText, spokenTranscript, prevMatched = new Set()) {
+  const targetTokens = tokenizeWords(targetText);
+  const spokenTokens = tokenizeWords(spokenTranscript).map(t => t.norm);
+  const matchedIndices = new Set(prevMatched);
+
+  for (const t of targetTokens) {
+    if (matchedIndices.has(t.index)) continue;
+    if (spokenTokens.some(sp => isKidWordMatch(t.norm, sp))) {
+      matchedIndices.add(t.index);
+    }
+  }
+
+  const totalCount = targetTokens.length;
+  const matchedCount = targetTokens.filter(t => matchedIndices.has(t.index)).length;
+  const ratio = totalCount > 0 ? matchedCount / totalCount : 0;
+  // Require all words for very short phrases (<=3 words), or >=85% for longer sentences
+  const isPerfect = totalCount > 0 && (totalCount <= 3 ? matchedCount === totalCount : ratio >= 0.85);
+
+  return { targetTokens, matchedIndices, matchedCount, totalCount, ratio, isPerfect };
+}

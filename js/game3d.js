@@ -23,6 +23,8 @@ import {
   recordDailyActivity,
   evaluateDailyQuests,
   claimDailyAttendance,
+  tokenizeWords,
+  matchSpokenWords,
 } from './data.js';
 import {
   buildWooju3D,
@@ -138,6 +140,8 @@ export class FarmGame3D {
     this._onResize = null;
     this._onPointerDown = null;
     this._typeTimer = null;
+    this._wordSweepTimer = null;
+    this._autoPerfectTimer = null;
   }
 
   _loadRpgState() {
@@ -231,8 +235,7 @@ export class FarmGame3D {
       cancelAnimationFrame(this.rafId);
       this.rafId = null;
     }
-    clearInterval(this._typeTimer);
-    this._typeTimer = null;
+    this._clearWordTimers();
     this.audio.stopAll();
     this.isListening = false;
     this.activeDialogueSpot = null;
@@ -1355,61 +1358,161 @@ export class FarmGame3D {
     }
   }
 
-  _typewriterCaption(el, text) {
+  _clearWordTimers() {
     clearInterval(this._typeTimer);
-    el.textContent = '';
-    let i = 0;
-    this._typeTimer = setInterval(() => {
-      i += 2;
-      el.textContent = text.slice(0, i);
-      if (i >= text.length) {
-        clearInterval(this._typeTimer);
-        this._typeTimer = null;
-      }
-    }, 24);
+    this._typeTimer = null;
+    clearInterval(this._wordSweepTimer);
+    this._wordSweepTimer = null;
+    clearTimeout(this._autoPerfectTimer);
+    this._autoPerfectTimer = null;
   }
 
-  _startMagicGaugeForDialogue(cards) {
+  _renderWordChips(el, targetText, { matchedIndices = new Set(), hiddenMode = false, activeIdx = -1 } = {}) {
+    if (!el) return;
+    const tokens = tokenizeWords(targetText);
+    el.innerHTML = `<div class="word-chip-wrap">${tokens.map((t) => {
+      const lit = matchedIndices.has(t.index);
+      const active = t.index === activeIdx;
+      const hidden = hiddenMode && !lit;
+      const cls = ['word-chip', lit ? 'word-lit' : '', active ? 'word-active' : '', hidden ? 'word-hidden' : ''].join(' ');
+      const label = hidden ? '•'.repeat(Math.min(5, Math.max(2, t.norm.length))) : t.raw;
+      return `<button type="button" class="${cls}" data-word-idx="${t.index}" data-word-raw="${t.raw.replace(/"/g, '&quot;')}">${label}</button>`;
+    }).join('')}</div>`;
+
+    el.querySelectorAll('.word-chip').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const raw = btn.dataset.wordRaw || '';
+        btn.classList.add('word-pointed');
+        setTimeout(() => btn.classList.remove('word-pointed'), 420);
+        this.audio.speakSingleWord(raw);
+      });
+    });
+  }
+
+  _startWordSweep(el, card) {
+    clearInterval(this._wordSweepTimer);
+    const tokens = tokenizeWords(card.en);
+    if (!tokens.length) return;
+    const durMs = Math.max(1200, ((card.end || 3) - (card.start || 0)) * 1000);
+    const stepMs = Math.max(140, Math.round(durMs / tokens.length));
+    let cur = 0;
+    this._renderWordChips(el, card.en, { activeIdx: 0 });
+    this._wordSweepTimer = setInterval(() => {
+      cur += 1;
+      if (cur >= tokens.length) {
+        clearInterval(this._wordSweepTimer);
+        this._wordSweepTimer = null;
+        this._renderWordChips(el, card.en, { activeIdx: -1 });
+        return;
+      }
+      el.querySelectorAll('.word-chip').forEach((btn, i) => {
+        btn.classList.toggle('word-active', i === cur);
+      });
+    }, stepMs);
+  }
+
+  _startMagicGaugeForDialogue(cards, spotIdx) {
     const gaugeEl = this.container?.querySelector('#farmMagicGauge');
     const labelEl = this.container?.querySelector('#farmMagicLabel');
     const fillEl = this.container?.querySelector('#farmMagicFill');
     const pctEl = this.container?.querySelector('#farmMagicPct');
+    const enEl = this.container?.querySelector('#farmDlgEn');
     const normalBtn = this.container?.querySelector('#farmJudgeNormalBtn');
     const crownBtn = this.container?.querySelector('#farmJudgeCrownBtn');
+    const perfectBtn = this.container?.querySelector('#farmJudgePerfectBtn');
     if (!gaugeEl || !fillEl || !pctEl || !labelEl) return;
 
+    this._clearWordTimers();
     this.voiceFilled = false;
     fillEl.style.width = '0%';
     pctEl.textContent = '0%';
     gaugeEl.classList.remove('filled');
     normalBtn?.classList.remove('pulse-ready');
     crownBtn?.classList.remove('pulse-ready');
-    labelEl.textContent = this.dialogueMode === 'memory'
-      ? '🌙 그림만 보고 영어로 크게 말해보세요!'
-      : '🎙️ 이제 우주 차례! 영어로 따라 말해요!';
+    perfectBtn?.classList.remove('pulse-ready');
 
-    // Scale required speech duration gently (0.7s ~ 1.4s) so 6yo isn't fatigued but can't 1-frame scream
-    const totalDur = cards.reduce((s, c) => s + Math.max(1.5, (c.end - c.start)), 0);
-    const targetSpeechSec = Math.max(0.7, Math.min(1.4, totalDur * 0.16));
+    const fullText = cards.map(c => c.en).join(' ');
+    const hiddenMode = this.dialogueMode === 'memory';
+    let matchedIndices = new Set();
+    let autoPerfectFired = false;
 
-    this.audio.startVoiceGauge({
-      targetSpeechSec,
-      onProgress: (pct) => {
+    this._renderWordChips(enEl, fullText, { matchedIndices, hiddenMode });
+
+    const startFallbackVoiceGauge = () => {
+      labelEl.textContent = hiddenMode
+        ? '🌙 그림만 보고 영어로 크게 말해보세요!'
+        : '🎙️ 단어를 톡! 눌러 듣거나 영어로 따라 말해요!';
+      const totalDur = cards.reduce((s, c) => s + Math.max(1.5, (c.end - c.start)), 0);
+      const targetSpeechSec = Math.max(0.7, Math.min(1.4, totalDur * 0.16));
+      this.audio.startVoiceGauge({
+        targetSpeechSec,
+        onProgress: (pct) => {
+          fillEl.style.width = `${pct}%`;
+          pctEl.textContent = `${pct}%`;
+        },
+        onFilled: () => {
+          this.voiceFilled = true;
+          gaugeEl.classList.add('filled');
+          labelEl.textContent = '✨ 마법 주문 충전 완료!! 아래 보상 버튼을 눌러요!';
+          if (hiddenMode) crownBtn?.classList.add('pulse-ready');
+          else normalBtn?.classList.add('pulse-ready');
+        },
+        onMicDenied: () => {
+          labelEl.textContent = '👆 단어를 톡! 눌러 듣고 말한 뒤 보상 버튼을 눌러요!';
+          pctEl.textContent = '✨';
+        },
+      });
+    };
+
+    const sttStarted = this.audio.startSpeechMatch({
+      onTranscript: (transcript) => {
+        if (this.activeDialogueSpot !== spotIdx || autoPerfectFired) return;
+        const res = matchSpokenWords(fullText, transcript, matchedIndices);
+        const prevSize = matchedIndices.size;
+        matchedIndices = res.matchedIndices;
+
+        if (matchedIndices.size !== prevSize) {
+          this._renderWordChips(enEl, fullText, { matchedIndices, hiddenMode });
+        }
+
+        const pct = Math.min(100, Math.round(res.ratio * 100));
         fillEl.style.width = `${pct}%`;
-        pctEl.textContent = `${pct}%`;
+        pctEl.textContent = `${res.matchedCount}/${res.totalCount}`;
+        labelEl.textContent = `✨ 단어 불 켜기: ${res.matchedCount}/${res.totalCount}개 맞췄어요!`;
+
+        if (res.isPerfect) {
+          autoPerfectFired = true;
+          this.voiceFilled = true;
+          this.audio.stopSpeechMatch();
+          // Light up all remaining words golden for celebration!
+          const allIdx = new Set(res.targetTokens.map(t => t.index));
+          this._renderWordChips(enEl, fullText, { matchedIndices: allIdx, hiddenMode: false });
+          gaugeEl.classList.add('filled');
+          fillEl.style.width = '100%';
+          pctEl.textContent = '💎100%';
+          labelEl.textContent = '💎 우와!! 토씨 하나 안 틀렸어요!! 퍼펙트!!';
+          perfectBtn?.classList.add('pulse-ready');
+          this.audio.playChimeSFX();
+          this._autoPerfectTimer = setTimeout(() => {
+            if (this.activeDialogueSpot === spotIdx) {
+              this._claimSpotReward(spotIdx, 3, { isPerfect: true });
+            }
+          }, 800);
+        } else if (pct >= 50 && !this.voiceFilled) {
+          this.voiceFilled = true;
+          normalBtn?.classList.add('pulse-ready');
+        }
       },
-      onFilled: () => {
-        this.voiceFilled = true;
-        gaugeEl.classList.add('filled');
-        labelEl.textContent = '✨ 마법 주문 충전 완료!! 아래 보상 버튼을 눌러요!';
-        if (this.dialogueMode === 'memory') crownBtn?.classList.add('pulse-ready');
-        else normalBtn?.classList.add('pulse-ready');
-      },
-      onMicDenied: () => {
-        labelEl.textContent = '🎤 크게 말하고 아래 보상 버튼을 눌러주세요!';
-        pctEl.textContent = '✨';
-      },
+      onUnsupported: () => startFallbackVoiceGauge(),
+      onError: () => startFallbackVoiceGauge(),
     });
+
+    if (sttStarted) {
+      labelEl.textContent = hiddenMode
+        ? '🎙️ 외워서 말하면 숨겨진 단어가 반짝 열려요!'
+        : '🎙️ 영어로 말하면 단어에 초록불이 켜져요! (단어 톡=듣기)';
+    }
   }
 
   _openDialogue(spotIdx, isRevisit = false) {
@@ -1472,7 +1575,7 @@ export class FarmGame3D {
         this.audio.playSegmentSequence(cards, {
           onCardStart: (card) => {
             renderIcons(card, false);
-            this._typewriterCaption(enEl, card.en);
+            this._startWordSweep(enEl, card);
             koEl.textContent = card.ko || '';
           },
           onAllDone: () => {
@@ -1482,7 +1585,7 @@ export class FarmGame3D {
             normalBtn.textContent = currentTier === 0
               ? `⭐ 따라 말했어요! (${spot.itemEmoji} 3D 선물 받기!)`
               : '⭐ 따라 말했어요!';
-            this._startMagicGaugeForDialogue(cards);
+            this._startMagicGaugeForDialogue(cards, spotIdx);
           },
         });
       } else if (modeKey === 'hint') {
@@ -1492,25 +1595,25 @@ export class FarmGame3D {
         const mainCard = firstChunkedCard || cards[0];
         renderIcons(mainCard, true);
         if (firstChunkedCard) {
-          enEl.textContent = `${firstChunkedCard.chunks[0].en}  👉  ???`;
+          this._renderWordChips(enEl, firstChunkedCard.chunks[0].en);
           koEl.textContent = '🤝 앞부분을 듣고 뒷부분을 우주가 이어 말해요!';
           this.isListening = true;
           this.audio.playSegment(firstChunkedCard.chunks[0].start, firstChunkedCard.chunks[0].end, {
             rate: 0.95,
             onDone: () => {
               this.isListening = false;
-              this._startMagicGaugeForDialogue(cards);
+              this._startMagicGaugeForDialogue(cards, spotIdx);
             },
           });
         } else {
-          enEl.textContent = '👂 첫 1초 힌트를 듣고 이어 말해요!';
-          koEl.textContent = '';
+          this._renderWordChips(enEl, mainCard.en, { hiddenMode: true });
+          koEl.textContent = '👂 첫 1초 힌트를 듣고 이어 말해요!';
           this.isListening = true;
           this.audio.playSegment(mainCard.start, Math.min(mainCard.end, mainCard.start + 1.05), {
             rate: 1.0,
             onDone: () => {
               this.isListening = false;
-              this._startMagicGaugeForDialogue(cards);
+              this._startMagicGaugeForDialogue(cards, spotIdx);
             },
           });
         }
@@ -1519,13 +1622,11 @@ export class FarmGame3D {
         normalBtn.disabled = false;
         normalBtn.textContent = '⭐ 힌트 보고 말했어요';
         crownBtn.textContent = '👑 안 보고 혼자 외웠어요!!';
-        // Show icons from all cards in this spot without Korean labels
         iconsEl.innerHTML = cards.map(c =>
           (c.icons || []).map(([em]) => `<span class="farm-icon-chip">${em}</span>`).join('')
         ).join('<span class="farm-icon-arrow">·</span>');
-        enEl.textContent = '🌙 그림만 보고 영어로 말해보세요!';
-        koEl.textContent = '성공하면 👑 황금 왕관을 쓰고 우주 뒤를 따라와요!';
-        this._startMagicGaugeForDialogue(cards);
+        koEl.textContent = '🌙 그림만 보고 영어로 말하면 숨겨진 단어가 반짝 열려요!';
+        this._startMagicGaugeForDialogue(cards, spotIdx);
       }
     };
 
@@ -1535,18 +1636,19 @@ export class FarmGame3D {
 
     replayBtn.onclick = () => {
       this.audio.stopVoiceGauge();
+      this.audio.stopSpeechMatch();
       this.isListening = true;
       this.audio.playSegmentSequence(cards, {
         onCardStart: (card) => {
           renderIcons(card, this.dialogueMode === 'memory');
           if (this.dialogueMode !== 'memory') {
-            this._typewriterCaption(enEl, card.en);
+            this._startWordSweep(enEl, card);
             koEl.textContent = card.ko || '';
           }
         },
         onAllDone: () => {
           this.isListening = false;
-          this._startMagicGaugeForDialogue(cards);
+          this._startMagicGaugeForDialogue(cards, spotIdx);
         },
       });
     };
@@ -1554,22 +1656,23 @@ export class FarmGame3D {
     if (chunkBtn && firstChunkedCard) {
       chunkBtn.onclick = () => {
         this.audio.stopVoiceGauge();
+        this.audio.stopSpeechMatch();
         this.isListening = true;
         renderIcons(firstChunkedCard, false);
-        enEl.textContent = `✂️ 1조각: ${firstChunkedCard.chunks[0].en}`;
-        koEl.textContent = firstChunkedCard.chunks[0].ko || '';
+        this._renderWordChips(enEl, firstChunkedCard.chunks[0].en);
+        koEl.textContent = `✂️ 1조각: ${firstChunkedCard.chunks[0].ko || ''}`;
         this.audio.playSegment(firstChunkedCard.chunks[0].start, firstChunkedCard.chunks[0].end, {
           rate: 0.92,
           onDone: () => {
             setTimeout(() => {
               if (this.activeDialogueSpot !== spotIdx) return;
-              enEl.textContent = `✂️ 2조각: ${firstChunkedCard.chunks[1].en}`;
-              koEl.textContent = firstChunkedCard.chunks[1].ko || '';
+              this._renderWordChips(enEl, firstChunkedCard.chunks[1].en);
+              koEl.textContent = `✂️ 2조각: ${firstChunkedCard.chunks[1].ko || ''}`;
               this.audio.playSegment(firstChunkedCard.chunks[1].start, firstChunkedCard.chunks[1].end, {
                 rate: 0.92,
                 onDone: () => {
                   this.isListening = false;
-                  this._startMagicGaugeForDialogue(cards);
+                  this._startMagicGaugeForDialogue(cards, spotIdx);
                 },
               });
             }, 900);
@@ -1718,8 +1821,7 @@ export class FarmGame3D {
   }
 
   _hideDialogue() {
-    clearInterval(this._typeTimer);
-    this._typeTimer = null;
+    this._clearWordTimers();
     this.audio.stopAll();
     this.isListening = false;
     this.activeDialogueSpot = null;

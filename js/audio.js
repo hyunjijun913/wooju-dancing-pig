@@ -56,6 +56,10 @@ export class AudioEngine {
     this.gaugeRaf = null;
     this.gaugeToken = 0;
 
+    // Live Speech-to-Text word-lighting recognizer (v6)
+    this.speechRec = null;
+    this.speechActive = false;
+
     // Full Mode 4 one-take presentation recorder
     this.rehearsalRec = null;
     this.rehearsalStream = null;
@@ -215,6 +219,7 @@ export class AudioEngine {
     this.clearEchoTimer();
     this._teardownEchoMic(false, null);
     this.stopVoiceGauge();
+    this.stopSpeechMatch();
     if (this.storyAudio) this.storyAudio.pause();
     if (this.activeCustomAudio) {
       this.activeCustomAudio.onended = null;
@@ -781,6 +786,97 @@ export class AudioEngine {
     if (this.gaugeStream) {
       this.gaugeStream.getTracks().forEach(t => t.stop());
       this.gaugeStream = null;
+    }
+  }
+
+  // --- v6: Point-to-Hear Single Word & Live SpeechRecognition Word Matcher ---
+  speakSingleWord(word) {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const clean = String(word || '').replace(/[^a-zA-Z0-9'\- ]/g, '').trim();
+    if (!clean) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(clean);
+      utter.lang = 'en-US';
+      utter.rate = 0.84;
+      if (this.preferredVoice) utter.voice = this.preferredVoice;
+      window.speechSynthesis.speak(utter);
+    } catch (_) {}
+  }
+
+  supportsSpeechRecognition() {
+    if (typeof window === 'undefined') return false;
+    return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }
+
+  startSpeechMatch({ onTranscript = () => {}, onUnsupported = () => {}, onError = () => {} } = {}) {
+    this.stopSpeechMatch();
+    if (!this.supportsSpeechRecognition()) {
+      onUnsupported();
+      return false;
+    }
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new SR();
+      rec.lang = 'en-US';
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.maxAlternatives = 3;
+
+      let committed = '';
+      this.speechRec = rec;
+      this.speechActive = true;
+
+      rec.onresult = (event) => {
+        if (this.speechRec !== rec) return;
+        let interim = '';
+        let altBag = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const res = event.results[i];
+          const primary = res[0]?.transcript || '';
+          for (let a = 0; a < res.length; a++) {
+            altBag += ' ' + (res[a]?.transcript || '');
+          }
+          if (res.isFinal) committed += ' ' + primary;
+          else interim += ' ' + primary;
+        }
+        onTranscript((committed + ' ' + interim + ' ' + altBag).trim());
+      };
+
+      rec.onerror = (e) => {
+        if (this.speechRec !== rec) return;
+        const code = e?.error || 'unknown';
+        if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture') {
+          this.stopSpeechMatch();
+          onError(code);
+        }
+      };
+
+      rec.onend = () => {
+        // Auto-restart while dialogue is still waiting for Wooju to finish speaking
+        if (this.speechRec === rec && this.speechActive) {
+          try { rec.start(); } catch (_) {}
+        }
+      };
+
+      rec.start();
+      return true;
+    } catch (_) {
+      this.stopSpeechMatch();
+      onUnsupported();
+      return false;
+    }
+  }
+
+  stopSpeechMatch() {
+    this.speechActive = false;
+    const rec = this.speechRec;
+    this.speechRec = null;
+    if (rec) {
+      rec.onresult = null;
+      rec.onerror = null;
+      rec.onend = null;
+      try { rec.stop(); } catch (_) {}
     }
   }
 
