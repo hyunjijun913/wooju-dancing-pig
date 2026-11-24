@@ -527,11 +527,14 @@ export class FarmGame3D {
           </div>
           <div class="speech-quality-bar" id="farmQualityBar" style="display:none;"></div>
 
-          <!-- Hybrid Judge / Reward Buttons (3-way: Repeat/Hint, Solo 3★, Perfect Treasure!) -->
+          <!-- Hybrid Judge / Reward Buttons (Locked until Wooju actually speaks! Parent 1.2s hold override available) -->
           <div class="farm-judge-row farm-judge-row-3">
-            <button class="big-btn btn-star farm-judge-btn" id="farmJudgeNormalBtn">⭐ 따라 말했어요!</button>
-            <button class="big-btn btn-crown farm-judge-btn" id="farmJudgeCrownBtn">👑 혼자 외웠어요!</button>
-            <button class="big-btn btn-perfect farm-judge-btn" id="farmJudgePerfectBtn">💎 토씨 안 틀림!!</button>
+            <button class="big-btn btn-star farm-judge-btn" id="farmJudgeNormalBtn" disabled>🔒 먼저 말해요!</button>
+            <button class="big-btn btn-crown farm-judge-btn" id="farmJudgeCrownBtn" disabled>🔒 65% 이상 말해요!</button>
+            <button class="big-btn btn-perfect farm-judge-btn" id="farmJudgePerfectBtn" disabled>🔒 완벽 발음 도전!</button>
+          </div>
+          <div class="parent-override-row">
+            <button type="button" class="parent-hold-btn" id="farmParentUnlockBtn">🔐 부모님 직접 판정 (1초 꾹 누르기)</button>
           </div>
         </div>
 
@@ -1396,7 +1399,56 @@ export class FarmGame3D {
     if (bar) bar.style.display = 'none';
   }
 
+  _reactToBuilding(buildingId) {
+    const b = VILLAGE_BUILDINGS.find(x => x.id === buildingId);
+    if (!b) return;
+    if (this.villageBuildings?.triggerReact) this.villageBuildings.triggerReact(buildingId);
+    const reactions = {
+      garden_arch:   { sfx: 'sparkle', msg: '🌷 꽃길 아치에서 향기로운 꽃잎이 흩날려요!' },
+      magic_well:    { sfx: 'sparkle', msg: '🪣 소원 우물에 동전을 퐁당! "발표회 대성공!"' },
+      green_stall:   { sfx: 'boing',   msg: '🍏 아삭아삭 싱싱한 사과랑 당근이 가득해요!' },
+      red_stall:     { sfx: 'boing',   msg: '🍿 고소한 팝콘이 톡톡! 맛있겠다~!' },
+      fountain:      { sfx: 'sparkle', msg: '⛲ 반짝이 분수에서 시원한 물줄기가 쏴아~!' },
+      wooju_house:   { sfx: 'music',   msg: '🏡 우주의 아늑한 별장! 굴뚝에서 따뜻한 기운이 나요!' },
+      friend_villa:  { sfx: 'music',   msg: '🏠 동물 친구들이 안에서 까르르 웃고 있어요!' },
+      gold_windmill: { sfx: 'boing',   msg: '🌬️ 황금 풍차가 시원한 바람에 빙글빙글~!' },
+      star_gazebo:   { sfx: 'sparkle', msg: '🏛️ 별빛 정자에서 반짝이는 별가루가 내려요!' },
+      royal_barn:    { sfx: 'music',   msg: '🏰 황금 헛간 성에서 축하 팡파르가 울려요!' },
+      rocket_pad:    { sfx: 'rocket',  msg: '🚀 3, 2, 1 발사!! 우주 로켓이 힘차게 솟아올랐어요!' },
+      rainbow_arch:  { sfx: 'sparkle', msg: '🌈 전설의 무지개 다리가 일곱 빛깔로 반짝여요!' },
+    };
+    const r = reactions[buildingId] || { sfx: 'sparkle', msg: `${b.emoji} ${b.name}이(가) 반짝반짝 반응해요!` };
+    this.audio.playInteractSFX(r.sfx);
+    this.onConfetti(buildingId === 'rocket_pad' ? 65 : 24);
+    this.onToast(r.msg);
+  }
+
+  _reactToPlacedItem(kind, id) {
+    const item = kind === 'furniture'
+      ? ROOM_FURNITURE.find(f => f.id === id)
+      : TREASURE_ITEMS.find(t => t.id === id);
+    if (!item) return;
+
+    if (kind === 'furniture' && this.myHome3D?.triggerReact) this.myHome3D.triggerReact(id);
+    if (kind === 'treasure' && this.placedTreasures3D?.triggerReact) this.placedTreasures3D.triggerReact(id);
+
+    const isMusic = /piano|drum|note|bell/.test(id);
+    const isArcade = /arcade|tv|robot/.test(id);
+    const isBoing = /bed|sofa|trampoline|slide|chair|throne|dino|bear|unicorn|cat|carousel/.test(id);
+    const isRocket = /ufo|rocket|meteor|planet|solar|saturn/.test(id);
+    const sfx = isMusic ? 'music' : (isArcade ? 'arcade' : (isRocket ? 'rocket' : (isBoing ? 'boing' : 'sparkle')));
+    this.audio.playInteractSFX(sfx);
+    this.onConfetti(18);
+
+    const verb = isMusic ? '딩동댕~ 신나는 음악이 나와요!'
+      : (isArcade ? '삐빅삐빅! 게임 불빛이 반짝여요!'
+      : (isRocket ? '슈우웅~ 우주 에너지가 반짝!'
+      : (isBoing ? '통통~ 포근하게 움직여요!' : '반짝반짝 예쁘게 빛나요!')));
+    this.onToast(`${item.emoji} ${item.name}: ${verb}`);
+  }
+
   _showInspectBar(kind, id) {
+    this._reactToPlacedItem(kind, id);
     const item = kind === 'furniture'
       ? ROOM_FURNITURE.find(f => f.id === id)
       : TREASURE_ITEMS.find(t => t.id === id);
@@ -2274,7 +2326,7 @@ export class FarmGame3D {
         }
       }
 
-      // Tap any placed outdoor 3D treasure to Move or Pick Up back into Bag!
+      // Tap any placed outdoor 3D treasure to play its reaction & Move/Pick Up!
       if (this.placedTreasures3D?.getHitMeshes) {
         const trHits = this.raycaster.intersectObjects(this.placedTreasures3D.getHitMeshes(), false);
         if (trHits.length > 0) {
@@ -2283,6 +2335,15 @@ export class FarmGame3D {
         }
       }
       this._hideInspectBar();
+
+      // Tap any built 3D Village Building for a fun interactive animation & sound!
+      if (this.villageBuildings?.getHitMeshes) {
+        const bHits = this.raycaster.intersectObjects(this.villageBuildings.getHitMeshes(), false);
+        if (bHits.length > 0) {
+          this._reactToBuilding(bHits[0].object.userData.buildingId);
+          return;
+        }
+      }
 
       const spotTargets = this.spotEntries.map(m => m.hitMesh);
       const spotHits = this.raycaster.intersectObjects(spotTargets, false);
@@ -2534,12 +2595,60 @@ export class FarmGame3D {
 
     this._clearWordTimers();
     this.voiceFilled = false;
+    this.unlockedJudgeTier = 0;
+    this.parentOverrideUnlocked = false;
     fillEl.style.width = '0%';
     pctEl.textContent = '0%';
     gaugeEl.classList.remove('filled');
     normalBtn?.classList.remove('pulse-ready');
     crownBtn?.classList.remove('pulse-ready');
     perfectBtn?.classList.remove('pulse-ready');
+
+    const syncJudgeButtons = () => {
+      const ov = this.parentOverrideUnlocked;
+      const tier = this.unlockedJudgeTier;
+      if (normalBtn) {
+        normalBtn.disabled = !(ov || tier >= 1);
+        normalBtn.textContent = (ov || tier >= 1)
+          ? (this.dialogueMode === 'hint' ? '⭐⭐ 힌트 성공!' : '⭐ 따라 말했어요!')
+          : '🔒 먼저 말해요!';
+      }
+      if (crownBtn) {
+        crownBtn.disabled = !(ov || tier >= 2);
+        crownBtn.textContent = (ov || tier >= 2) ? '👑 혼자 외웠어요!' : '🔒 잘 말하면 열려요!';
+      }
+      if (perfectBtn) {
+        perfectBtn.disabled = !(ov || tier >= 3);
+        perfectBtn.textContent = (ov || tier >= 3) ? '💎 토씨 안 틀림!!' : '🔒 완벽 발음 도전!';
+      }
+    };
+    syncJudgeButtons();
+
+    // Parent 1.0s hold-to-unlock override (prevents 6yo button mashing, helps if mic/STT mishears!)
+    const parentBtn = this.container?.querySelector('#farmParentUnlockBtn');
+    if (parentBtn) {
+      let holdTimer = null;
+      parentBtn.textContent = '🔐 부모님 직접 판정 (1초 꾹 누르기)';
+      parentBtn.onpointerdown = (e) => {
+        e.stopPropagation();
+        parentBtn.textContent = '⏳ 꾹 누르는 중...';
+        clearTimeout(holdTimer);
+        holdTimer = setTimeout(() => {
+          this.parentOverrideUnlocked = true;
+          syncJudgeButtons();
+          this.audio.playChimeSFX();
+          parentBtn.textContent = '🔓 부모님 판정 열림!';
+          this.onToast('🔓 부모님이 직접 별/왕관 버튼을 눌러줄 수 있어요!');
+        }, 1000);
+      };
+      const cancelHold = () => {
+        clearTimeout(holdTimer);
+        if (!this.parentOverrideUnlocked) parentBtn.textContent = '🔐 부모님 직접 판정 (1초 꾹 누르기)';
+      };
+      parentBtn.onpointerup = cancelHold;
+      parentBtn.onpointerleave = cancelHold;
+      parentBtn.onpointercancel = cancelHold;
+    }
 
     const fullText = cards.map(c => c.en).join(' ');
     const fullTimings = this._buildWordTimingsForCards(cards);
@@ -2554,7 +2663,7 @@ export class FarmGame3D {
         ? '🌙 그림만 보고 영어로 크게 말해보세요!'
         : '🎙️ 단어를 톡! 눌러 듣거나 영어로 따라 말해요!';
       const totalDur = cards.reduce((s, c) => s + Math.max(1.5, (c.end - c.start)), 0);
-      const targetSpeechSec = Math.max(0.7, Math.min(1.4, totalDur * 0.16));
+      const targetSpeechSec = Math.max(0.85, Math.min(1.6, totalDur * 0.2));
       this.audio.startVoiceGauge({
         targetSpeechSec,
         onProgress: (pct) => {
@@ -2563,14 +2672,16 @@ export class FarmGame3D {
         },
         onFilled: () => {
           this.voiceFilled = true;
+          this.unlockedJudgeTier = Math.max(this.unlockedJudgeTier, hiddenMode ? 2 : 1);
+          syncJudgeButtons();
           gaugeEl.classList.add('filled');
-          labelEl.textContent = '✨ 마법 주문 충전 완료!! 아래 보상 버튼을 눌러요!';
+          labelEl.textContent = '✨ 목소리 확인 완료!! 아래 별 버튼을 눌러요!';
           if (hiddenMode) crownBtn?.classList.add('pulse-ready');
           else normalBtn?.classList.add('pulse-ready');
         },
         onMicDenied: () => {
-          labelEl.textContent = '👆 단어를 톡! 눌러 듣고 말한 뒤 보상 버튼을 눌러요!';
-          pctEl.textContent = '✨';
+          labelEl.textContent = '🎤 마이크 권한이 없어요! 아래 부모님 버튼을 1초 꾹 눌러주세요!';
+          pctEl.textContent = '🔐';
         },
       });
     };
@@ -2590,6 +2701,16 @@ export class FarmGame3D {
         fillEl.style.width = `${pct}%`;
         pctEl.textContent = `${res.matchedCount}/${res.totalCount}`;
         labelEl.textContent = `✨ 단어 불 켜기: ${res.matchedCount}/${res.totalCount}개 (순서 ${res.orderPct}%)`;
+
+        // Unlock reward tiers progressively ONLY as Wooju actually speaks accurately!
+        let nextTier = this.unlockedJudgeTier;
+        if (res.matchedCount >= 2 || pct >= 35) nextTier = Math.max(nextTier, 1);
+        if (pct >= 65) nextTier = Math.max(nextTier, 2);
+        if (res.isPerfect) nextTier = 3;
+        if (nextTier !== this.unlockedJudgeTier) {
+          this.unlockedJudgeTier = nextTier;
+          syncJudgeButtons();
+        }
 
         const qualBar = this.container?.querySelector('#farmQualityBar');
         if (qualBar) {
@@ -2689,11 +2810,13 @@ export class FarmGame3D {
       });
 
       if (modeKey === 'repeat') {
-        normalBtn.textContent = currentTier === 0 ? `⭐ 따라 말했어요! (${spot.itemEmoji} 받기)` : '⭐ 따라 말했어요!';
-        crownBtn.textContent = '👑 혼자 다 외웠어요!';
+        normalBtn.disabled = true;
+        crownBtn.disabled = true;
+        if (perfectBtn) perfectBtn.disabled = true;
+        normalBtn.textContent = '🎧 먼저 원어민 말을 들어요...';
+        crownBtn.textContent = '🔒 잘 말하면 열려요!';
+        if (perfectBtn) perfectBtn.textContent = '🔒 완벽 발음 도전!';
         this.isListening = true;
-        normalBtn.disabled = currentTier === 0;
-        if (currentTier === 0) normalBtn.textContent = '🎧 먼저 원어민 말을 들어요...';
         this.audio.playSegmentSequence(cards, {
           onCardStart: (card) => {
             renderIcons(card, false);
@@ -2703,17 +2826,13 @@ export class FarmGame3D {
           onAllDone: () => {
             this.isListening = false;
             this.dialogueListened = true;
-            normalBtn.disabled = false;
-            normalBtn.textContent = currentTier === 0
-              ? `⭐ 따라 말했어요! (${spot.itemEmoji} 3D 선물 받기!)`
-              : '⭐ 따라 말했어요!';
             this._startMagicGaugeForDialogue(cards, spotIdx);
           },
         });
       } else if (modeKey === 'hint') {
-        normalBtn.disabled = false;
-        normalBtn.textContent = '⭐⭐ 힌트로 성공!';
-        crownBtn.textContent = '👑 혼자 다 외웠어요!';
+        normalBtn.disabled = true;
+        crownBtn.disabled = true;
+        if (perfectBtn) perfectBtn.disabled = true;
         const mainCard = firstChunkedCard || cards[0];
         renderIcons(mainCard, true);
         if (firstChunkedCard) {
@@ -2742,10 +2861,10 @@ export class FarmGame3D {
           });
         }
       } else {
-        // 'memory' — 3-Star Golden Crown Challenge!
-        normalBtn.disabled = false;
-        normalBtn.textContent = '⭐ 힌트 보고 말했어요';
-        crownBtn.textContent = '👑 안 보고 혼자 외웠어요!!';
+        // 'memory' — 3-Star Golden Crown Challenge! All reward buttons stay locked until Wooju speaks!
+        normalBtn.disabled = true;
+        crownBtn.disabled = true;
+        if (perfectBtn) perfectBtn.disabled = true;
         iconsEl.innerHTML = cards.map(c =>
           (c.icons || []).map(([em]) => `<span class="farm-icon-chip">${em}</span>`).join('')
         ).join('<span class="farm-icon-arrow">·</span>');

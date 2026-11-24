@@ -1713,8 +1713,16 @@ export function buildVillageBuildings3D(THREE, scene) {
     // Position group at its exact world location so scale/rise animations happen IN PLACE!
     group.position.set(focusPos.x, 0, focusPos.z);
     group.visible = false;
+    // Generous invisible touch collider so Wooju can tap any built building for a fun reaction!
+    const hitMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(2.6, 2.6, 5.5, 10),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    hitMesh.position.y = 2.7;
+    hitMesh.userData = { buildingId: id };
+    group.add(hitMesh);
     root.add(group);
-    entries.set(id, { group, focusPos, buildProgress: 1, active: false });
+    entries.set(id, { group, hitMesh, focusPos, buildProgress: 1, reactTime: 0, active: false });
   };
 
   const attachGLB = (parent, url, h, x = 0, y = 0, z = 0, rotY = 0) => {
@@ -1926,17 +1934,22 @@ export function buildVillageBuildings3D(THREE, scene) {
     });
   };
 
+  const triggerReact = (id) => {
+    const entry = entries.get(id);
+    if (entry && entry.active) entry.reactTime = 1.0;
+  };
+
+  const getHitMeshes = () => [...entries.values()].filter(e => e.active).map(e => e.hitMesh);
+
   const update = (t, dt) => {
-    entries.forEach((entry) => {
+    entries.forEach((entry, id) => {
       if (entry.active && entry.buildProgress < 1) {
         entry.buildProgress = Math.min(1, entry.buildProgress + dt * 0.58);
         const p = entry.buildProgress;
         if (p < 0.25) {
-          // Hammering dust phase before rising
           entry.group.position.y = -4.2;
           entry.group.scale.set(0.4, 0.08, 0.4);
         } else if (p < 0.82) {
-          // Smooth rise from the ground with squash & stretch!
           const r = (p - 0.25) / 0.57;
           const ease = 1 - Math.pow(1 - r, 3);
           entry.group.position.y = -4.2 * (1 - ease);
@@ -1944,12 +1957,32 @@ export function buildVillageBuildings3D(THREE, scene) {
           const sy = 0.25 + ease * 0.92;
           entry.group.scale.set(sx, sy, sx);
         } else {
-          // Juicy bounce settle!
           const b = (p - 0.82) / 0.18;
           entry.group.position.y = 0;
           const sx = 1.08 - b * 0.08;
           const sy = 1.17 - b * 0.17;
           entry.group.scale.set(sx, sy, sx);
+        }
+      } else if (entry.active && entry.reactTime > 0) {
+        // Fun tactile interaction animation when Wooju taps a building!
+        entry.reactTime = Math.max(0, entry.reactTime - dt * 1.4);
+        const p = 1 - entry.reactTime;
+        if (id === 'rocket_pad') {
+          // Rocket blasts up and lands back down!
+          entry.group.position.y = Math.sin(p * Math.PI) * 5.2;
+        } else if (id === 'gold_windmill') {
+          entry.group.rotation.y = Math.sin(p * Math.PI) * 0.35;
+          const s = 1 + Math.sin(p * Math.PI) * 0.14;
+          entry.group.scale.set(s, s, s);
+        } else {
+          const bounce = Math.sin(p * Math.PI);
+          entry.group.scale.set(1 + bounce * 0.12, 1 + bounce * 0.2, 1 + bounce * 0.12);
+          entry.group.position.y = bounce * 0.45;
+        }
+        if (entry.reactTime === 0) {
+          entry.group.position.y = 0;
+          entry.group.rotation.y = 0;
+          entry.group.scale.set(1, 1, 1);
         }
       }
     });
@@ -1979,7 +2012,7 @@ export function buildVillageBuildings3D(THREE, scene) {
     }
   };
 
-  return { syncBuildings, update, getFocusPos };
+  return { syncBuildings, update, getFocusPos, triggerReact, getHitMeshes };
 }
 
 // --- v7/v8.3/v12.1: Exact-Match Animal Crossing Grounded 3D Outdoor Decorations ---
@@ -2213,6 +2246,11 @@ export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
     });
   };
 
+  const triggerReact = (id) => {
+    const entry = placedMeshes.get(id);
+    if (entry) entry.reactTime = 1.0;
+  };
+
   const getHitMeshes = () => [...placedMeshes.values()].map(e => e.hitMesh).filter(Boolean);
 
   const update = (t, dt) => {
@@ -2224,6 +2262,18 @@ export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
         const p = entry.popProgress;
         const s = p < 0.7 ? (p / 0.7) * 1.18 : 1.18 - ((p - 0.7) / 0.3) * 0.18;
         entry.group.scale.setScalar(Math.max(0.01, s));
+      } else if (entry.reactTime > 0) {
+        entry.reactTime = Math.max(0, entry.reactTime - dt * 1.8);
+        const p = 1 - entry.reactTime;
+        const hop = Math.sin(p * Math.PI);
+        entry.group.position.y = hop * 0.95;
+        entry.group.rotation.y = p * Math.PI * 2;
+        entry.group.scale.set(1 + hop * 0.15, 1 + hop * 0.22, 1 + hop * 0.15);
+        if (entry.reactTime === 0) {
+          entry.group.position.y = 0;
+          entry.group.rotation.y = 0;
+          entry.group.scale.set(1, 1, 1);
+        }
       }
       if (entry.animTarget && entry.animKind === 'hover') {
         entry.animTarget.rotation.y = t * 1.2 + idx;
@@ -2234,7 +2284,7 @@ export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
     });
   };
 
-  return { syncPlaced, update, getHitMeshes };
+  return { syncPlaced, update, getHitMeshes, triggerReact };
 }
 
 // --- v8: Animal Crossing-style 3D My-Home Room (Wallpapers, Floors, 40 3D Furniture & 3 Room Sizes) ---
@@ -2564,6 +2614,11 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
     });
   };
 
+  const triggerReact = (id) => {
+    const entry = placedMap.get(id);
+    if (entry) entry.reactTime = 1.0;
+  };
+
   const getHitMeshes = () => [...placedMap.values()].map(e => e.hitMesh).filter(Boolean);
 
   const update = (t, dt) => {
@@ -2575,6 +2630,16 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
         const p = entry.popProgress;
         const s = p < 0.7 ? (p / 0.7) * 1.18 : 1.18 - ((p - 0.7) / 0.3) * 0.18;
         entry.group.scale.setScalar(Math.max(0.01, s));
+      } else if (entry.reactTime > 0) {
+        entry.reactTime = Math.max(0, entry.reactTime - dt * 1.9);
+        const p = 1 - entry.reactTime;
+        const hop = Math.sin(p * Math.PI);
+        entry.group.position.y = hop * 0.65;
+        entry.group.scale.set(1 + hop * 0.14, 1 + hop * 0.2, 1 + hop * 0.14);
+        if (entry.reactTime === 0) {
+          entry.group.position.y = 0;
+          entry.group.scale.set(1, 1, 1);
+        }
       }
       if (entry.badge) {
         entry.badge.position.y = (entry.badge.position.y > 1.5 ? 2.35 : 0.85) + Math.sin(t * 2.8 + i) * 0.07;
@@ -2592,6 +2657,7 @@ export function buildMyHome3D(THREE, scene, { wallpapers = [], floors = [], furn
     update,
     getHalfSize: () => currentHalfSize,
     getHitMeshes,
+    triggerReact,
   };
 }
 

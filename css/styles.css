@@ -1453,6 +1453,36 @@ body.farm-fullscreen .farm-card {
 .balloon-choice-btn .bc-emo { font-size: 36px; }
 .balloon-choice-btn .bc-lbl { font-size: 12.5px; }
 
+/* v12.3: Locked Anti-Cheat Reward Buttons & Parent 1s Hold Override */
+.farm-judge-btn:disabled {
+  opacity: 0.48;
+  filter: grayscale(0.55);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.parent-override-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -2px;
+}
+.parent-hold-btn {
+  border: 1.5px dashed #CBD5E1;
+  background: transparent;
+  color: #64748B;
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.parent-hold-btn:active {
+  background: #FEF3C7;
+  border-color: #F59E0B;
+  color: #92400E;
+}
+
 /* ===========================
    1~4단계: Main Learning Card
    =========================== */

@@ -1039,6 +1039,41 @@ export class AudioEngine {
     } catch (_) {}
   }
 
+  // --- v12.3: Interactive Toy/Building Sound Effects ('music' | 'arcade' | 'boing' | 'rocket' | 'sparkle') ---
+  playInteractSFX(kind = 'sparkle') {
+    try {
+      const ctx = this.getAudioCtx();
+      if (!ctx) return;
+      const playTone = (type, f1, f2, start, dur, vol = 0.14) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(f1, ctx.currentTime + start);
+        if (f2 !== f1) osc.frequency.exponentialRampToValueAtTime(f2, ctx.currentTime + start + dur);
+        gain.gain.setValueAtTime(vol, ctx.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + dur + 0.02);
+      };
+
+      if (kind === 'music') {
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => playTone('triangle', f, f, i * 0.08, 0.25, 0.15));
+      } else if (kind === 'arcade') {
+        [440, 587.33, 880, 1174.66].forEach((f, i) => playTone('square', f, f, i * 0.06, 0.1, 0.07));
+      } else if (kind === 'boing') {
+        playTone('sine', 180, 560, 0, 0.22, 0.16);
+        playTone('sine', 520, 260, 0.16, 0.18, 0.11);
+      } else if (kind === 'rocket') {
+        playTone('sawtooth', 90, 420, 0, 0.5, 0.1);
+        playTone('triangle', 320, 880, 0.25, 0.35, 0.12);
+      } else {
+        [659.25, 987.77, 1318.5].forEach((f, i) => playTone('sine', f, f, i * 0.06, 0.22, 0.13));
+      }
+    } catch (_) {}
+  }
+
   // --- Mode 4 One-Take Full Rehearsal Recorder ---
   async startFullRehearsalRec() {
     this.unlock();
