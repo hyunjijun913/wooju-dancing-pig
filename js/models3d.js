@@ -261,21 +261,188 @@ function createGoldCrownMesh(THREE, scale = 1.0) {
   return crown;
 }
 
+// --- v12: Irresistibly Cute Chibi 2-Head-Tall 3D Toy Characters (Animal Crossing / Sanrio Clay Style!) ---
+function addCuteFace(THREE, parent, { headR = 0.62, y = 0, z = 0.54, cheekColor = '#FDA4AF', snout = null, beak = null, mouth = true } = {}) {
+  const eyeMat = new THREE.MeshStandardMaterial({ color: '#1E293B', roughness: 0.15 });
+  const shineMat = new THREE.MeshBasicMaterial({ color: '#FFFFFF' });
+  const cheekMat = new THREE.MeshBasicMaterial({ color: cheekColor, transparent: true, opacity: 0.72 });
+
+  [-0.22, 0.22].forEach((ex) => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(headR * 0.145, 12, 10), eyeMat);
+    eye.position.set(ex * (headR / 0.62), y + headR * 0.06, z);
+    const shine = new THREE.Mesh(new THREE.SphereGeometry(headR * 0.055, 8, 8), shineMat);
+    shine.position.set(ex * (headR / 0.62) + 0.03, y + headR * 0.11, z + headR * 0.11);
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(headR * 0.13, 10, 8), cheekMat);
+    cheek.scale.set(1.25, 0.75, 0.45);
+    cheek.position.set(ex * 1.48 * (headR / 0.62), y - headR * 0.12, z - 0.04);
+    parent.add(eye, shine, cheek);
+  });
+
+  if (snout) {
+    const sn = new THREE.Mesh(
+      new THREE.SphereGeometry(headR * 0.28, 12, 10),
+      new THREE.MeshStandardMaterial({ color: snout.color || '#FBCFE8', roughness: 0.45 })
+    );
+    sn.scale.set(1.25, 0.85, 0.75);
+    sn.position.set(0, y - headR * 0.1, z + headR * 0.16);
+    parent.add(sn);
+    if (snout.nostrils) {
+      [-0.07, 0.07].forEach((nx) => {
+        const n = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), eyeMat);
+        n.position.set(nx, y - headR * 0.08, z + headR * 0.34);
+        parent.add(n);
+      });
+    }
+  } else if (beak) {
+    const bk = new THREE.Mesh(
+      new THREE.ConeGeometry(headR * 0.22, headR * 0.36, 10),
+      new THREE.MeshStandardMaterial({ color: beak.color || '#FB923C', roughness: 0.4 })
+    );
+    bk.rotation.x = Math.PI / 2;
+    if (beak.flat) bk.scale.set(1.3, 1.0, 0.55);
+    bk.position.set(0, y - headR * 0.08, z + headR * 0.16);
+    parent.add(bk);
+  } else if (mouth) {
+    const smile = new THREE.Mesh(
+      new THREE.TorusGeometry(headR * 0.11, 0.022, 6, 12, Math.PI),
+      eyeMat
+    );
+    smile.rotation.z = Math.PI;
+    smile.position.set(0, y - headR * 0.12, z + 0.03);
+    parent.add(smile);
+  }
+}
+
+function createCuteChibiActor(THREE, {
+  bodyColor = '#FBCFE8',
+  headColor = null,
+  bellyColor = '#FFFDF7',
+  scale = 1.0,
+  decorate = () => {},
+} = {}) {
+  const root = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.45 });
+  const headMat = new THREE.MeshStandardMaterial({ color: headColor || bodyColor, roughness: 0.45 });
+  const bellyMat = new THREE.MeshStandardMaterial({ color: bellyColor, roughness: 0.5 });
+
+  // Plump Chibi Torso
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.56, 16, 14), bodyMat);
+  torso.scale.set(1.0, 1.05, 0.92);
+  torso.position.y = 0.72;
+  torso.castShadow = true;
+  root.add(torso);
+
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 12), bellyMat);
+  belly.scale.set(0.95, 0.95, 0.55);
+  belly.position.set(0, 0.68, 0.32);
+  root.add(belly);
+
+  // Big Adorable Chibi Head
+  const headGroup = new THREE.Group();
+  headGroup.position.set(0, 1.54, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 18, 16), headMat);
+  head.scale.set(1.06, 0.96, 1.0);
+  head.castShadow = true;
+  headGroup.add(head);
+  root.add(headGroup);
+
+  // Stubby Cute Limbs (animated in update!)
+  const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.24, 6, 8), headMat);
+  armL.position.set(-0.6, 0.85, 0.05);
+  armL.rotation.z = 0.45;
+  armL.castShadow = true;
+  const armR = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.24, 6, 8), headMat);
+  armR.position.set(0.6, 0.85, 0.05);
+  armR.rotation.z = -0.45;
+  armR.castShadow = true;
+
+  const legL = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.2, 6, 8), bodyMat);
+  legL.position.set(-0.24, 0.22, 0);
+  legL.castShadow = true;
+  const legR = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.2, 6, 8), bodyMat);
+  legR.position.set(0.24, 0.22, 0);
+  legR.castShadow = true;
+
+  root.add(armL, armR, legL, legR);
+
+  const extras = decorate({ root, headGroup, torso, bodyMat, headMat }) || {};
+  root.scale.setScalar(scale);
+
+  let animState = 'idle';
+  let phase = Math.random() * Math.PI * 2;
+  const setAnim = (s) => { animState = s || 'idle'; };
+  const update = (dt) => {
+    phase += dt * (animState === 'run' ? 14 : (animState === 'dance' ? 10 : (animState === 'walk' ? 9 : (animState === 'talk' ? 8 : 2.6))));
+    if (animState === 'walk' || animState === 'run') {
+      const amp = animState === 'run' ? 0.85 : 0.55;
+      legL.rotation.x = Math.sin(phase) * amp;
+      legR.rotation.x = -Math.sin(phase) * amp;
+      armL.rotation.x = -Math.sin(phase) * amp * 0.8;
+      armR.rotation.x = Math.sin(phase) * amp * 0.8;
+      root.position.y = Math.abs(Math.sin(phase)) * (animState === 'run' ? 0.35 : 0.16);
+      headGroup.rotation.z = Math.sin(phase) * 0.08;
+    } else if (animState === 'dance') {
+      root.position.y = Math.abs(Math.sin(phase)) * 0.36;
+      root.rotation.z = Math.sin(phase * 0.5) * 0.14;
+      armL.rotation.z = 0.9 + Math.sin(phase) * 0.55;
+      armR.rotation.z = -0.9 - Math.sin(phase) * 0.55;
+      headGroup.rotation.z = Math.sin(phase) * 0.16;
+    } else if (animState === 'talk') {
+      root.position.y = Math.abs(Math.sin(phase)) * 0.14;
+      headGroup.rotation.x = Math.sin(phase) * 0.12;
+      armL.rotation.z = 0.65 + Math.sin(phase) * 0.28;
+      armR.rotation.z = -0.65 - Math.sin(phase) * 0.28;
+    } else {
+      root.position.y = 0;
+      root.rotation.z = 0;
+      legL.rotation.x *= 0.85;
+      legR.rotation.x *= 0.85;
+      armL.rotation.x *= 0.85;
+      armR.rotation.x *= 0.85;
+      armL.rotation.z = 0.45 + Math.sin(phase) * 0.06;
+      armR.rotation.z = -0.45 - Math.sin(phase) * 0.06;
+      headGroup.rotation.z = Math.sin(phase * 0.7) * 0.05;
+      headGroup.rotation.x = 0;
+    }
+    if (extras.tail) extras.tail.rotation.y = Math.sin(phase * 1.4) * 0.35;
+  };
+
+  return { root, setAnim, update };
+}
+
 /**
- * Loads Wooju's 3D Animated Character Model (Kenney Mini-Character + Skeletal Animations)
- * Plus 5 unlockable 3D gear cosmetics!
+ * Builds Wooju's Adorable 2-Head-Tall Chibi 3D Explorer Avatar + 15 Unlockable 3D Gear Cosmetics!
  */
 export function buildWooju3D(THREE) {
   const group = new THREE.Group();
-  const mixers = [];
-  const ctrl = createAnimController(mixers);
 
-  loadGLTF('assets/models/mini-characters/character-male-b.glb').then((gltf) => {
-    const inst = instantiateGLTF(THREE, gltf, 2.25, 0);
-    group.add(inst.holder);
-    mixers.push(inst);
-    ctrl.setAnim('idle');
-  }).catch(() => {});
+  const chibi = createCuteChibiActor(THREE, {
+    bodyColor: '#3B82F6', // Cozy blue overalls
+    headColor: '#FFDFC4', // Warm peach skin
+    bellyColor: '#60A5FA',
+    scale: 0.98,
+    decorate: ({ headGroup, torso }) => {
+      addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.56, cheekColor: '#FB7185' });
+      // Fluffy chocolate-brown hair cap + cute bangs!
+      const hairMat = new THREE.MeshStandardMaterial({ color: '#5C3A21', roughness: 0.65 });
+      const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.66, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.56), hairMat);
+      hairCap.position.y = 0.04;
+      headGroup.add(hairCap);
+      [-0.24, 0, 0.24].forEach((bx) => {
+        const bang = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), hairMat);
+        bang.position.set(bx, 0.34, 0.46);
+        headGroup.add(bang);
+      });
+      // Cute yellow rocket star badge on Wooju's shirt!
+      const badge = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.14),
+        new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#F59E0B', emissiveIntensity: 0.35 })
+      );
+      badge.position.set(0, 0.08, 0.52);
+      torso.add(badge);
+    },
+  });
+  group.add(chibi.root);
 
   // --- Unlockable 3D Avatar Cosmetics (15 Items across head / back / aura!) ---
   const gearMeshes = {};
@@ -573,8 +740,8 @@ export function buildWooju3D(THREE) {
 
   return {
     group,
-    setAnim: ctrl.setAnim,
-    updateMixer: ctrl.updateMixer,
+    setAnim: chibi.setAnim,
+    updateMixer: chibi.update,
     setGear,
     updateCosmetics,
   };
@@ -640,8 +807,250 @@ const SPOT_SPEC = {
   },
 };
 
+function buildChibiSpotActors(THREE, spotId) {
+  const mkEar = (r, h, col, x, y, z, rz = 0) => {
+    const m = new THREE.Mesh(new THREE.CapsuleGeometry(r, h, 6, 10), new THREE.MeshStandardMaterial({ color: col, roughness: 0.45 }));
+    m.position.set(x, y, z);
+    m.rotation.z = rz;
+    return m;
+  };
+  const actors = [];
+
+  if (spotId === 'farmer') {
+    actors.push(createCuteChibiActor(THREE, {
+      bodyColor: '#2563EB', headColor: '#FFDFC4', bellyColor: '#EF4444', scale: 1.05,
+      decorate: ({ headGroup }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.56 });
+        const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.08, 18), new THREE.MeshStandardMaterial({ color: '#FDE047', roughness: 0.65 }));
+        brim.position.y = 0.42;
+        const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.56, 0.42, 16), new THREE.MeshStandardMaterial({ color: '#FACC15', roughness: 0.65 }));
+        crown.position.y = 0.65;
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(0.57, 0.57, 0.1, 16), new THREE.MeshStandardMaterial({ color: '#EF4444' }));
+        band.position.y = 0.49;
+        headGroup.add(brim, crown, band);
+      },
+    }));
+  } else if (spotId === 'frog') {
+    actors.push(createCuteChibiActor(THREE, {
+      bodyColor: '#4ADE80', headColor: '#4ADE80', bellyColor: '#DCFCE7', scale: 0.85,
+      decorate: ({ headGroup }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.06, z: 0.55, cheekColor: '#F472B6' });
+        [-0.32, 0.32].forEach(ex => {
+          const bump = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 10), new THREE.MeshStandardMaterial({ color: '#4ADE80', roughness: 0.45 }));
+          bump.position.set(ex, 0.52, 0.12);
+          const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), new THREE.MeshStandardMaterial({ color: '#1E293B' }));
+          pupil.position.set(ex, 0.55, 0.31);
+          headGroup.add(bump, pupil);
+        });
+      },
+    }));
+  } else if (spotId === 'owl') {
+    actors.push(createCuteChibiActor(THREE, {
+      bodyColor: '#B45309', headColor: '#D97706', bellyColor: '#FEF3C7', scale: 0.9,
+      decorate: ({ headGroup }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: 0, z: 0.55, beak: { color: '#FACC15' } });
+        [-0.38, 0.38].forEach((ex, i) => {
+          const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.36, 8), new THREE.MeshStandardMaterial({ color: '#92400E' }));
+          tuft.position.set(ex, 0.58, 0);
+          tuft.rotation.z = i === 0 ? 0.35 : -0.35;
+          headGroup.add(tuft);
+        });
+      },
+    }));
+  } else if (spotId === 'chicken') {
+    actors.push(createCuteChibiActor(THREE, {
+      bodyColor: '#FFFDF7', headColor: '#FFFDF7', bellyColor: '#FEF3C7', scale: 0.86,
+      decorate: ({ headGroup }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: 0, z: 0.55, beak: { color: '#FB923C' } });
+        [-0.12, 0, 0.12].forEach((cx, i) => {
+          const comb = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), new THREE.MeshStandardMaterial({ color: '#EF4444' }));
+          comb.position.set(cx, 0.64 + (i === 1 ? 0.08 : 0), 0.05);
+          headGroup.add(comb);
+        });
+      },
+    }));
+  } else if (spotId === 'rabbit') {
+    actors.push(createCuteChibiActor(THREE, {
+      bodyColor: '#FFF1F2', headColor: '#FFF1F2', bellyColor: '#FFFFFF', scale: 0.9,
+      decorate: ({ headGroup, root }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.56, cheekColor: '#F472B6' });
+        headGroup.add(mkEar(0.14, 0.68, '#FFF1F2', -0.26, 0.82, 0, 0.12));
+        headGroup.add(mkEar(0.14, 0.68, '#FFF1F2', 0.26, 0.82, 0, -0.12));
+        headGroup.add(mkEar(0.08, 0.5, '#FBCFE8', -0.26, 0.82, 0.08, 0.12));
+        headGroup.add(mkEar(0.08, 0.5, '#FBCFE8', 0.26, 0.82, 0.08, -0.12));
+        const tail = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), new THREE.MeshStandardMaterial({ color: '#FFFFFF' }));
+        tail.position.set(0, 0.62, -0.58);
+        root.add(tail);
+        return { tail };
+      },
+    }));
+  } else if (spotId === 'cow') {
+    actors.push(createCuteChibiActor(THREE, {
+      bodyColor: '#FFFFFF', headColor: '#FFFFFF', bellyColor: '#FFFBEB', scale: 0.98,
+      decorate: ({ headGroup, torso }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: 0.02, z: 0.54, snout: { color: '#FBCFE8', nostrils: true } });
+        headGroup.add(mkEar(0.12, 0.26, '#FFFFFF', -0.62, 0.22, 0, 1.1));
+        headGroup.add(mkEar(0.12, 0.26, '#FFFFFF', 0.62, 0.22, 0, -1.1));
+        [-0.25, 0.25].forEach(hx => {
+          const horn = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.26, 8), new THREE.MeshStandardMaterial({ color: '#FDE68A' }));
+          horn.position.set(hx, 0.62, 0.05);
+          headGroup.add(horn);
+        });
+        const spot = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 8), new THREE.MeshStandardMaterial({ color: '#334155' }));
+        spot.position.set(0.32, 0.2, 0.35);
+        torso.add(spot);
+      },
+    }));
+  } else if (spotId === 'horse_pony') {
+    [
+      { x: -0.68, sc: 1.0, col: '#D97706', mane: '#78350F' },
+      { x: 0.68, sc: 0.72, col: '#FDBA74', mane: '#92400E' },
+    ].forEach(({ x, sc, col, mane }) => {
+      const a = createCuteChibiActor(THREE, {
+        bodyColor: col, headColor: col, bellyColor: '#FEF3C7', scale: sc,
+        decorate: ({ headGroup }) => {
+          addCuteFace(THREE, headGroup, { headR: 0.62, y: 0, z: 0.54, snout: { color: '#FEF3C7', nostrils: true } });
+          headGroup.add(mkEar(0.11, 0.3, col, -0.35, 0.62, 0, 0.2));
+          headGroup.add(mkEar(0.11, 0.3, col, 0.35, 0.62, 0, -0.2));
+          const m = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), new THREE.MeshStandardMaterial({ color: mane }));
+          m.position.set(0, 0.55, 0.22);
+          headGroup.add(m);
+        },
+      });
+      a.root.position.x = x;
+      actors.push(a);
+    });
+  } else if (spotId === 'cat_mouse') {
+    const cat = createCuteChibiActor(THREE, {
+      bodyColor: '#FB923C', headColor: '#FB923C', bellyColor: '#FFF7ED', scale: 0.88,
+      decorate: ({ headGroup, root }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.56, cheekColor: '#F472B6' });
+        [-0.36, 0.36].forEach((ex, i) => {
+          const ear = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.38, 6), new THREE.MeshStandardMaterial({ color: '#FB923C' }));
+          ear.position.set(ex, 0.6, 0);
+          ear.rotation.z = i === 0 ? 0.28 : -0.28;
+          headGroup.add(ear);
+        });
+        const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.55, 6, 8), new THREE.MeshStandardMaterial({ color: '#EA580C' }));
+        tail.position.set(0, 0.65, -0.62);
+        tail.rotation.x = 0.7;
+        root.add(tail);
+        return { tail };
+      },
+    });
+    cat.root.position.x = -0.62;
+    const mouse = createCuteChibiActor(THREE, {
+      bodyColor: '#CBD5E1', headColor: '#CBD5E1', bellyColor: '#F8FAFC', scale: 0.62,
+      decorate: ({ headGroup }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.56, cheekColor: '#F472B6' });
+        [-0.48, 0.48].forEach(ex => {
+          const ear = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), new THREE.MeshStandardMaterial({ color: '#CBD5E1' }));
+          ear.scale.set(1, 1, 0.35);
+          ear.position.set(ex, 0.52, 0);
+          const inner = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshStandardMaterial({ color: '#FBCFE8' }));
+          inner.scale.set(1, 1, 0.35);
+          inner.position.set(ex, 0.52, 0.06);
+          headGroup.add(ear, inner);
+        });
+      },
+    });
+    mouse.root.position.x = 0.62;
+    actors.push(cat, mouse);
+  } else if (spotId === 'duck') {
+    actors.push(createCuteChibiActor(THREE, {
+      bodyColor: '#FDE047', headColor: '#FDE047', bellyColor: '#FEF9C3', scale: 0.86,
+      decorate: ({ headGroup }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: 0, z: 0.54, beak: { color: '#F97316', flat: true } });
+        const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshStandardMaterial({ color: '#FACC15' }));
+        tuft.position.set(0, 0.65, 0);
+        headGroup.add(tuft);
+      },
+    }));
+  } else if (spotId === 'dog_goat') {
+    const dog = createCuteChibiActor(THREE, {
+      bodyColor: '#E5B27A', headColor: '#E5B27A', bellyColor: '#FFFBEB', scale: 0.88,
+      decorate: ({ headGroup, root }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.55, snout: { color: '#FFFBEB', nostrils: false } });
+        headGroup.add(mkEar(0.15, 0.42, '#92400E', -0.62, 0.06, 0.05, 0.25));
+        headGroup.add(mkEar(0.15, 0.42, '#92400E', 0.62, 0.06, 0.05, -0.25));
+        const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.38, 6, 8), new THREE.MeshStandardMaterial({ color: '#92400E' }));
+        tail.position.set(0, 0.62, -0.58);
+        tail.rotation.x = 0.8;
+        root.add(tail);
+        return { tail };
+      },
+    });
+    dog.root.position.x = -0.64;
+    const goat = createCuteChibiActor(THREE, {
+      bodyColor: '#F8FAFC', headColor: '#F8FAFC', bellyColor: '#FFFFFF', scale: 0.88,
+      decorate: ({ headGroup }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.56 });
+        [-0.22, 0.22].forEach(hx => {
+          const horn = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.34, 8), new THREE.MeshStandardMaterial({ color: '#CBD5E1' }));
+          horn.position.set(hx, 0.68, 0);
+          headGroup.add(horn);
+        });
+      },
+    });
+    goat.root.position.x = 0.64;
+    actors.push(dog, goat);
+  } else if (spotId === 'donkey_sheep') {
+    const donkey = createCuteChibiActor(THREE, {
+      bodyColor: '#94A3B8', headColor: '#94A3B8', bellyColor: '#F1F5F9', scale: 0.9,
+      decorate: ({ headGroup }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: 0, z: 0.54, snout: { color: '#F1F5F9', nostrils: true } });
+        headGroup.add(mkEar(0.12, 0.58, '#94A3B8', -0.28, 0.78, 0, 0.18));
+        headGroup.add(mkEar(0.12, 0.58, '#94A3B8', 0.28, 0.78, 0, -0.18));
+      },
+    });
+    donkey.root.position.x = -0.68;
+    const sheep = createCuteChibiActor(THREE, {
+      bodyColor: '#FFFFFF', headColor: '#FFFBEB', bellyColor: '#FFFFFF', scale: 0.9,
+      decorate: ({ headGroup, torso }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.56, cheekColor: '#F472B6' });
+        const woolMat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.85 });
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          const puff = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), woolMat);
+          puff.position.set(Math.cos(a) * 0.45, 0.1, Math.sin(a) * 0.45);
+          torso.add(puff);
+        }
+        const woolHat = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), woolMat);
+        woolHat.position.set(0, 0.48, 0);
+        headGroup.add(woolHat);
+      },
+    });
+    sheep.root.position.x = 0.68;
+    actors.push(donkey, sheep);
+  } else {
+    // 🐷 THE DANCING PIG (star of the story — peach-pink, rosy cheeks & curly 3D tail!)
+    actors.push(createCuteChibiActor(THREE, {
+      bodyColor: '#F9A8D4', headColor: '#F9A8D4', bellyColor: '#FCE7F3', scale: 1.04,
+      decorate: ({ headGroup, root }) => {
+        addCuteFace(THREE, headGroup, { headR: 0.62, y: 0.02, z: 0.54, snout: { color: '#F472B6', nostrils: true }, cheekColor: '#FB7185' });
+        [-0.42, 0.42].forEach((ex, i) => {
+          const ear = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.34, 6), new THREE.MeshStandardMaterial({ color: '#F472B6' }));
+          ear.position.set(ex, 0.55, 0.05);
+          ear.rotation.z = i === 0 ? 0.55 : -0.55;
+          headGroup.add(ear);
+        });
+        // Iconic curly pig tail ("the curl in his tail!")
+        const tail = new THREE.Mesh(
+          new THREE.TorusGeometry(0.18, 0.055, 8, 16, Math.PI * 1.65),
+          new THREE.MeshStandardMaterial({ color: '#EC4899', roughness: 0.4 })
+        );
+        tail.position.set(0, 0.68, -0.62);
+        root.add(tail);
+        return { tail };
+      },
+    }));
+  }
+
+  return actors;
+}
+
 /**
- * Loads artist-crafted 3D character(s) + 3D story item prop for each of the 12 spots.
+ * Builds Adorable Chibi 3D Story Character(s) + 3D story item prop for each of the 12 spots.
  */
 export function buildSpotCharacter3D(THREE, spotId) {
   const group = new THREE.Group();
@@ -650,9 +1059,12 @@ export function buildSpotCharacter3D(THREE, spotId) {
   const itemMesh = new THREE.Group();
   group.add(itemMesh);
 
-  const mixers = [];
-  const ctrl = createAnimController(mixers);
   const spec = SPOT_SPEC[spotId] || SPOT_SPEC.pig_finale;
+  const actors = buildChibiSpotActors(THREE, spotId);
+  actors.forEach(a => bodyRoot.add(a.root));
+
+  const setAnim = (s) => actors.forEach(a => a.setAnim(s));
+  const updateMixer = (dt) => actors.forEach(a => a.update(dt));
 
   if (spec.prop) {
     loadGLTF(spec.prop.url).then((gltf) => {
@@ -662,17 +1074,6 @@ export function buildSpotCharacter3D(THREE, spotId) {
       group.add(inst.holder);
     }).catch(() => {});
   }
-
-  spec.chars.forEach((ch) => {
-    loadGLTF(ch.url).then((gltf) => {
-      const inst = instantiateGLTF(THREE, gltf, ch.h, ch.y || 0);
-      inst.holder.position.x += ch.x || 0;
-      inst.holder.position.z += ch.z || 0;
-      bodyRoot.add(inst.holder);
-      mixers.push(inst);
-      ctrl.setAnim('idle');
-    }).catch(() => {});
-  });
 
   if (spec.item) {
     loadGLTF(spec.item.url).then((gltf) => {
@@ -719,8 +1120,8 @@ export function buildSpotCharacter3D(THREE, spotId) {
     itemMesh,
     crownMesh,
     auraMesh,
-    setAnim: ctrl.setAnim,
-    updateMixer: ctrl.updateMixer,
+    setAnim,
+    updateMixer,
     setMasteryVisual,
     updateMasteryVisual,
   };
