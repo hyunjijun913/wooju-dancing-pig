@@ -61,6 +61,8 @@ export class AudioEngine {
     // Live Speech-to-Text word-lighting recognizer (v6)
     this.speechRec = null;
     this.speechActive = false;
+    this._speechResumeOpts = null;
+    this._speechResumeTimer = null;
 
     // Cozy Animal Crossing-style procedural marimba BGM & auto-ducking (v9)
     this.bgmEnabled = false;
@@ -460,7 +462,9 @@ export class AudioEngine {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true }));
       // Guard against abort/mode switch while awaiting getUserMedia!
       if (token !== this.playToken) {
         stream.getTracks().forEach(t => t.stop());
@@ -728,15 +732,23 @@ export class AudioEngine {
 
   playHint1s(card, { mode = 3 } = {}) {
     this.unlock();
+    const hadSpeech = Boolean(this.speechActive && this._speechResumeOpts);
+    const savedSpeech = hadSpeech ? this._speechResumeOpts : null;
     this.stopAll({ keepRehearsalRec: mode === 4 });
     const token = this.playToken;
+    const resume = () => {
+      if (savedSpeech && token === this.playToken) {
+        this._speechResumeOpts = savedSpeech;
+        this._resumeSpeechAfterPlayback();
+      }
+    };
     this._playSingleSource(card, {
       mode,
       feature: 'hint1s',
       rate: 1.0,
       maxDurationSec: 1.05,
       token,
-      onDone: () => {},
+      onDone: resume,
     });
   }
 
@@ -801,7 +813,9 @@ export class AudioEngine {
       return false;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true }));
       if (gToken !== this.gaugeToken) {
         stream.getTracks().forEach(t => t.stop());
         return false;
@@ -878,39 +892,82 @@ export class AudioEngine {
   // --- v8.4: Studio Neural Individual Word MP3 Playback (clean, warm, zero seek-clip!) ---
   speakSingleWord(word) {
     const norm = String(word || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const pausedSpeech = this._pauseSpeechForPlayback();
+    const onFinished = () => {
+      if (pausedSpeech) this._resumeSpeechAfterPlayback();
+    };
     if (norm && this.wordAudioEl) {
       this.unlock();
       try {
+        this.wordAudioEl.onended = onFinished;
+        this.wordAudioEl.onerror = onFinished;
+        this.wordAudioEl.volume = 1.0;
         this.wordAudioEl.pause();
         this.wordAudioEl.src = `assets/words/${norm}.mp3`;
         this.wordAudioEl.currentTime = 0;
         const p = this.wordAudioEl.play();
         if (p && p.catch) {
-          p.catch(() => this._fallbackSpeakWordTTS(word));
+          p.catch(() => this._fallbackSpeakWordTTS(word, onFinished));
         }
         return;
       } catch (_) {}
     }
-    this._fallbackSpeakWordTTS(word);
+    this._fallbackSpeakWordTTS(word, onFinished);
   }
 
-  _fallbackSpeakWordTTS(word) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  _fallbackSpeakWordTTS(word, onDone = null) {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      if (onDone) onDone();
+      return;
+    }
     const clean = String(word || '').replace(/[^a-zA-Z0-9'\- ]/g, '').trim();
-    if (!clean) return;
+    if (!clean) {
+      if (onDone) onDone();
+      return;
+    }
     try {
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(clean);
       utter.lang = 'en-US';
       utter.rate = 0.84;
       if (this.preferredVoice) utter.voice = this.preferredVoice;
+      utter.onend = () => { if (onDone) onDone(); };
+      utter.onerror = () => { if (onDone) onDone(); };
       window.speechSynthesis.speak(utter);
-    } catch (_) {}
+    } catch (_) {
+      if (onDone) onDone();
+    }
   }
 
   supportsSpeechRecognition() {
     if (typeof window === 'undefined') return false;
     return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }
+
+  // Temporarily releases iPadOS/macOS mic session during audio playback so OS doesn't duck speaker volume!
+  _pauseSpeechForPlayback() {
+    clearTimeout(this._speechResumeTimer);
+    this._speechResumeTimer = null;
+    if (!this.speechActive || !this.speechRec) return false;
+    const rec = this.speechRec;
+    this.speechRec = null;
+    this.speechActive = false;
+    rec.onresult = null;
+    rec.onerror = null;
+    rec.onend = null;
+    try { rec.abort(); } catch (_) { try { rec.stop(); } catch (_) {} }
+    return Boolean(this._speechResumeOpts);
+  }
+
+  _resumeSpeechAfterPlayback() {
+    clearTimeout(this._speechResumeTimer);
+    const opts = this._speechResumeOpts;
+    if (!opts || this.speechActive) return;
+    this._speechResumeTimer = setTimeout(() => {
+      if (this._speechResumeOpts === opts && !this.speechActive) {
+        this.startSpeechMatch(opts);
+      }
+    }, 180);
   }
 
   startSpeechMatch({ onTranscript = () => {}, onUnsupported = () => {}, onError = () => {} } = {}) {
@@ -930,6 +987,7 @@ export class AudioEngine {
       let committed = '';
       this.speechRec = rec;
       this.speechActive = true;
+      this._speechResumeOpts = { onTranscript, onUnsupported, onError };
 
       rec.onresult = (event) => {
         if (this.speechRec !== rec) return;
@@ -973,6 +1031,9 @@ export class AudioEngine {
   }
 
   stopSpeechMatch() {
+    clearTimeout(this._speechResumeTimer);
+    this._speechResumeTimer = null;
+    this._speechResumeOpts = null;
     this.speechActive = false;
     const rec = this.speechRec;
     this.speechRec = null;
@@ -980,7 +1041,8 @@ export class AudioEngine {
       rec.onresult = null;
       rec.onerror = null;
       rec.onend = null;
-      try { rec.stop(); } catch (_) {}
+      // abort() releases iOS/macOS PlayAndRecord mic ducking immediately so full speaker volume returns!
+      try { rec.abort(); } catch (_) { try { rec.stop(); } catch (_) {} }
     }
   }
 
@@ -1155,7 +1217,9 @@ export class AudioEngine {
       return false;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true }));
       const chunks = [];
       const rec = new MediaRecorder(stream);
       this.rehearsalStream = stream;
