@@ -3769,10 +3769,17 @@ export class FarmGame3D {
           m.group.position.x = m.curX;
           m.group.position.z = m.curZ;
           const cheering = performance.now() < this.audienceCheerUntil;
+          const stageCard = BASE_CARDS[this.liveStageIdx];
+          const isFeaturedSpeaker = stageCard && m.spot.cardIds.includes(stageCard.id);
+          const stageActMap = {
+            farmer: 'act_farmer', frog: 'act_frog', owl: 'act_owl', chicken: 'act_chicken',
+            rabbit: 'act_rabbit', cow: 'act_cow', horse_pony: 'act_horse', cat_mouse: 'act_cat_mouse',
+            duck: 'act_duck', dog_goat: 'act_dog_goat', donkey_sheep: 'act_sing', pig_finale: 'act_pig_dance',
+          };
           m.group.position.y = cheering ? Math.abs(Math.sin(t * 12 + idx)) * 0.65 : 0;
           m.group.rotation.y = Math.atan2(-m.curX, -m.curZ);
           m.isMoving = false;
-          if (m.setAnim) m.setAnim(cheering ? 'dance' : 'idle');
+          if (m.setAnim) m.setAnim(cheering ? 'dance' : (isFeaturedSpeaker ? (stageActMap[m.spot.id] || 'talk') : 'idle'));
           if (m.updateMixer) m.updateMixer(dt);
           if (m.updateMasteryVisual) m.updateMasteryVisual(t);
           return;
@@ -3882,11 +3889,25 @@ export class FarmGame3D {
           }
         }
 
-        // Drive real GLB skeletal animations
+        // Drive story-matched 3D character actions when speaking!
+        const storyActionBySpot = {
+          farmer: 'act_farmer',
+          frog: 'act_frog',
+          owl: 'act_owl',
+          chicken: 'act_chicken',
+          rabbit: 'act_rabbit',
+          cow: 'act_cow',
+          horse_pony: 'act_horse',
+          cat_mouse: 'act_cat_mouse',
+          duck: 'act_duck',
+          dog_goat: 'act_dog_goat',
+          donkey_sheep: 'act_sing',
+          pig_finale: 'act_pig_dance',
+        };
         let animState = 'idle';
         if (m.isFleeing) animState = 'run';
-        else if (isDancingPig && !m.isMoving) animState = 'dance';
-        else if (isSpeaking && this.isListening) animState = 'talk';
+        else if (isSpeaking) animState = storyActionBySpot[m.spot.id] || 'talk';
+        else if (isDancingPig && !m.isMoving) animState = 'act_pig_dance';
         else if (m.isMoving) animState = 'walk';
 
         if (m.setAnim) m.setAnim(animState);

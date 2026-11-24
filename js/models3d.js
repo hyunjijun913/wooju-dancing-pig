@@ -372,29 +372,140 @@ function createCuteChibiActor(THREE, {
   let phase = Math.random() * Math.PI * 2;
   const setAnim = (s) => { animState = s || 'idle'; };
   const update = (dt) => {
-    phase += dt * (animState === 'run' ? 14 : (animState === 'dance' ? 10 : (animState === 'walk' ? 9 : (animState === 'talk' ? 8 : 2.6))));
+    const isAction = animState.startsWith('act_');
+    const speed = animState === 'run' ? 14
+      : (animState === 'dance' || animState === 'act_pig_dance' ? 10.5
+      : (animState === 'act_rabbit' || animState === 'act_cat_mouse' ? 13
+      : (isAction ? 8.5
+      : (animState === 'walk' ? 9 : (animState === 'talk' ? 8 : 2.6)))));
+    phase += dt * speed;
+
+    // Reset dynamic transforms cleanly before applying state
+    root.scale.set(scale, scale, scale);
+    root.rotation.x = 0;
+    root.rotation.y = 0;
+    root.rotation.z = 0;
+    headGroup.rotation.x = 0;
+    headGroup.rotation.y = 0;
+    headGroup.rotation.z = 0;
+
     if (animState === 'walk' || animState === 'run') {
       const amp = animState === 'run' ? 0.85 : 0.55;
       legL.rotation.x = Math.sin(phase) * amp;
       legR.rotation.x = -Math.sin(phase) * amp;
       armL.rotation.x = -Math.sin(phase) * amp * 0.8;
       armR.rotation.x = Math.sin(phase) * amp * 0.8;
+      armL.rotation.z = 0.45;
+      armR.rotation.z = -0.45;
       root.position.y = Math.abs(Math.sin(phase)) * (animState === 'run' ? 0.35 : 0.16);
       headGroup.rotation.z = Math.sin(phase) * 0.08;
-    } else if (animState === 'dance') {
-      root.position.y = Math.abs(Math.sin(phase)) * 0.36;
-      root.rotation.z = Math.sin(phase * 0.5) * 0.14;
-      armL.rotation.z = 0.9 + Math.sin(phase) * 0.55;
-      armR.rotation.z = -0.9 - Math.sin(phase) * 0.55;
-      headGroup.rotation.z = Math.sin(phase) * 0.16;
-    } else if (animState === 'talk') {
-      root.position.y = Math.abs(Math.sin(phase)) * 0.14;
-      headGroup.rotation.x = Math.sin(phase) * 0.12;
-      armL.rotation.z = 0.65 + Math.sin(phase) * 0.28;
-      armR.rotation.z = -0.65 - Math.sin(phase) * 0.28;
+    } else if (animState === 'dance' || animState === 'act_pig_dance') {
+      root.position.y = Math.abs(Math.sin(phase)) * (animState === 'act_pig_dance' ? 0.58 : 0.36);
+      root.rotation.z = Math.sin(phase * 0.5) * 0.18;
+      if (animState === 'act_pig_dance') root.rotation.y = phase * 0.55;
+      armL.rotation.z = 1.25 + Math.sin(phase) * 0.65;
+      armR.rotation.z = -1.25 - Math.sin(phase) * 0.65;
+      armL.rotation.x = 0;
+      armR.rotation.x = 0;
+      headGroup.rotation.z = Math.sin(phase) * 0.18;
+    } else if (animState === 'act_frog') {
+      // High ribbit frog leaps!
+      const hop = Math.abs(Math.sin(phase * 0.7));
+      root.position.y = hop * 0.95;
+      const sq = hop < 0.15 ? 0.84 : 1.0 + hop * 0.1;
+      root.scale.set(scale * (2 - sq), scale * sq, scale * (2 - sq));
+      armL.rotation.z = 0.3 + hop * 1.1;
+      armR.rotation.z = -0.3 - hop * 1.1;
+      legL.rotation.x = -hop * 0.6;
+      legR.rotation.x = -hop * 0.6;
+    } else if (animState === 'act_owl') {
+      // Flapping wings wide & hovering!
+      root.position.y = 0.25 + Math.sin(phase) * 0.22;
+      armL.rotation.z = 1.35 + Math.sin(phase * 1.8) * 0.75;
+      armR.rotation.z = -1.35 - Math.sin(phase * 1.8) * 0.75;
+      headGroup.rotation.z = Math.sin(phase * 0.6) * 0.18;
+    } else if (animState === 'act_chicken') {
+      // Squat down to lay an egg, then pop up flapping!
+      const cyc = Math.sin(phase * 0.65);
+      if (cyc < 0) {
+        root.position.y = 0;
+        root.scale.set(scale * 1.16, scale * 0.78, scale * 1.16);
+      } else {
+        root.position.y = cyc * 0.45;
+        root.scale.set(scale * 0.95, scale * 1.08, scale * 0.95);
+      }
+      armL.rotation.z = 1.1 + Math.sin(phase * 2.2) * 0.65;
+      armR.rotation.z = -1.1 - Math.sin(phase * 2.2) * 0.65;
+    } else if (animState === 'act_rabbit') {
+      // Lean forward & dig up a big carrot fast!
+      root.rotation.x = 0.28;
+      root.position.y = Math.abs(Math.sin(phase * 0.6)) * 0.18;
+      armL.rotation.x = -0.9 + Math.sin(phase * 1.6) * 0.65;
+      armR.rotation.x = -0.9 - Math.sin(phase * 1.6) * 0.65;
+      armL.rotation.z = 0.25;
+      armR.rotation.z = -0.25;
+      headGroup.rotation.x = 0.15 + Math.sin(phase) * 0.1;
+    } else if (animState === 'act_cow') {
+      // Warm gentle mooing nod & happy sway!
+      root.position.y = Math.abs(Math.sin(phase * 0.6)) * 0.1;
+      root.rotation.z = Math.sin(phase * 0.5) * 0.12;
+      headGroup.rotation.x = Math.sin(phase * 0.9) * 0.28;
+      armL.rotation.z = 0.6 + Math.sin(phase * 0.6) * 0.2;
+      armR.rotation.z = -0.6 - Math.sin(phase * 0.6) * 0.2;
+    } else if (animState === 'act_horse') {
+      // Stretch tall & reach up to pick corn!
+      const reach = (Math.sin(phase * 0.8) + 1) * 0.5;
+      root.position.y = reach * 0.35;
+      root.scale.set(scale * 0.96, scale * (1.0 + reach * 0.12), scale * 0.96);
+      armL.rotation.x = -1.3 - reach * 0.5;
+      armR.rotation.x = -1.3 - (1 - reach) * 0.5;
+      armL.rotation.z = 0.35;
+      armR.rotation.z = -0.35;
+      headGroup.rotation.x = -0.22 * reach;
+    } else if (animState === 'act_cat_mouse') {
+      // Playful "No, you won't!" rapid head shake + pounce arms!
+      root.position.y = Math.abs(Math.sin(phase * 0.7)) * 0.22;
+      headGroup.rotation.y = Math.sin(phase * 1.5) * 0.48;
+      armL.rotation.z = 1.15 + Math.sin(phase) * 0.4;
+      armR.rotation.z = -1.15 - Math.sin(phase) * 0.4;
+      armL.rotation.x = -0.6;
+      armR.rotation.x = -0.6;
+    } else if (animState === 'act_duck') {
+      // Stirring a big stew pot in circles!
+      root.position.y = Math.abs(Math.sin(phase)) * 0.12;
+      root.rotation.y = Math.sin(phase * 0.7) * 0.25;
+      armL.rotation.x = -0.95 + Math.cos(phase) * 0.35;
+      armR.rotation.x = -0.95 + Math.sin(phase) * 0.35;
+      armL.rotation.z = 0.35 + Math.sin(phase) * 0.35;
+      armR.rotation.z = -0.35 + Math.cos(phase) * 0.35;
+    } else if (animState === 'act_dog_goat') {
+      // Sweeping the barn left and right!
+      const sw = Math.sin(phase * 0.9);
+      root.rotation.y = sw * 0.38;
+      root.rotation.z = sw * 0.12;
+      root.position.y = Math.abs(sw) * 0.12;
+      armL.rotation.x = -0.85;
+      armR.rotation.x = -0.85;
+      armL.rotation.z = 0.2 + sw * 0.55;
+      armR.rotation.z = -0.2 + sw * 0.55;
+    } else if (animState === 'act_sing') {
+      // Singing happily with musical sway!
+      root.position.y = Math.abs(Math.sin(phase)) * 0.22;
+      root.rotation.z = Math.sin(phase * 0.5) * 0.16;
+      headGroup.rotation.x = -0.15 + Math.sin(phase) * 0.14;
+      headGroup.rotation.z = Math.sin(phase * 0.5) * 0.2;
+      armL.rotation.z = 1.45 + Math.sin(phase) * 0.3;
+      armR.rotation.z = -1.45 - Math.sin(phase) * 0.3;
+    } else if (animState === 'act_farmer' || animState === 'talk') {
+      // Expressive excited storytelling & waving!
+      root.position.y = Math.abs(Math.sin(phase)) * (animState === 'act_farmer' ? 0.26 : 0.14);
+      headGroup.rotation.x = Math.sin(phase) * 0.15;
+      armL.rotation.z = 0.85 + Math.sin(phase) * 0.45;
+      armR.rotation.z = -0.85 - Math.sin(phase) * 0.45;
+      armL.rotation.x = -0.3;
+      armR.rotation.x = -0.3;
     } else {
       root.position.y = 0;
-      root.rotation.z = 0;
       legL.rotation.x *= 0.85;
       legR.rotation.x *= 0.85;
       armL.rotation.x *= 0.85;
@@ -402,9 +513,8 @@ function createCuteChibiActor(THREE, {
       armL.rotation.z = 0.45 + Math.sin(phase) * 0.06;
       armR.rotation.z = -0.45 - Math.sin(phase) * 0.06;
       headGroup.rotation.z = Math.sin(phase * 0.7) * 0.05;
-      headGroup.rotation.x = 0;
     }
-    if (extras.tail) extras.tail.rotation.y = Math.sin(phase * 1.4) * 0.35;
+    if (extras.tail) extras.tail.rotation.y = Math.sin(phase * 1.4) * (isAction ? 0.55 : 0.35);
   };
 
   return { root, setAnim, update };
@@ -1134,48 +1244,152 @@ export function buildFarmWorld3D(THREE, scene) {
   const grassTex = createACGrassTexture(THREE);
   const pathTex = createACPathTexture(THREE);
 
-  // 0. Shimmering Turquoise Animal Crossing Island Ocean + Soft Foam Ring + Golden Sandy Beach!
-  const oceanMesh = new THREE.Mesh(
-    new THREE.CircleGeometry(105, 64),
-    new THREE.MeshStandardMaterial({ color: '#38BDF8', roughness: 0.22, metalness: 0.15 })
+  // 0. Lush Storybook Countryside Farm Pastures & Rolling Golden Harvest Hills (Mr. Brown's Farm!)
+  const pastureHorizon = new THREE.Mesh(
+    new THREE.CircleGeometry(125, 64),
+    new THREE.MeshStandardMaterial({ color: '#74C655', roughness: 0.94 })
   );
-  oceanMesh.rotation.x = -Math.PI / 2;
-  oceanMesh.position.y = -0.65;
-  scene.add(oceanMesh);
+  pastureHorizon.rotation.x = -Math.PI / 2;
+  pastureHorizon.position.y = -0.18;
+  pastureHorizon.receiveShadow = true;
+  scene.add(pastureHorizon);
 
-  const foamRing = new THREE.Mesh(
-    new THREE.RingGeometry(36.2, 38.4, 64),
-    new THREE.MeshBasicMaterial({ color: '#E0F2FE', side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
-  );
-  foamRing.rotation.x = -Math.PI / 2;
-  foamRing.position.y = -0.58;
-  scene.add(foamRing);
-
-  const beachShelf = new THREE.Mesh(
-    new THREE.CylinderGeometry(36.5, 38.0, 1.4, 64),
-    new THREE.MeshStandardMaterial({ color: '#FDE68A', roughness: 0.92 })
-  );
-  beachShelf.position.y = -0.92;
-  beachShelf.receiveShadow = true;
-  scene.add(beachShelf);
-
-  // Distant Pastel Horizon Islands for scenic depth!
-  const hillMat = new THREE.MeshStandardMaterial({ color: '#86EFAC', roughness: 0.95 });
-  [[-55, -52, 16, 8], [48, -58, 20, 10], [62, 12, 14, 7], [-60, 22, 15, 7]].forEach(([hx, hz, hr, hh]) => {
-    const hill = new THREE.Mesh(new THREE.SphereGeometry(hr, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), hillMat);
-    hill.scale.set(1, hh / hr, 1);
-    hill.position.set(hx, -0.7, hz);
+  // Golden sun-dappled countryside farmland hills surrounding the farmyard!
+  const hillGreenMat = new THREE.MeshStandardMaterial({ color: '#65BA4C', roughness: 0.95 });
+  const hillWheatMat = new THREE.MeshStandardMaterial({ color: '#EAB308', roughness: 0.92 });
+  [
+    [-54, -48, 22, 9.5, hillGreenMat],
+    [48, -54, 24, 10.5, hillWheatMat],
+    [62, 10, 20, 8.0, hillGreenMat],
+    [-60, 18, 21, 8.5, hillWheatMat],
+    [0, -68, 28, 11.5, hillGreenMat],
+    [34, 56, 18, 6.5, hillGreenMat],
+    [-38, 54, 19, 7.0, hillGreenMat],
+  ].forEach(([hx, hz, hr, hh, mat]) => {
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(hr, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat);
+    hill.scale.set(1.25, hh / hr, 1.0);
+    hill.position.set(hx, -0.3, hz);
     scene.add(hill);
   });
 
-  // 1. Spacious Sunlit Grass Island (radius 32 -> 2.7x bigger meadow!)
+  // 1. Spacious Sunlit Farmyard Meadow (radius 32.5)
   const groundMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(32.5, 34.0, 2.0, 64),
+    new THREE.CylinderGeometry(32.5, 34.5, 0.36, 64),
     new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.9 })
   );
-  groundMesh.position.y = -1.0;
+  groundMesh.position.y = -0.18;
   groundMesh.receiveShadow = true;
   scene.add(groundMesh);
+
+  // Iconic Big Red Farm Barn + Tall Silo at the North Pasture (matches "We will sweep the barn!")
+  const barnGrp = new THREE.Group();
+  const barnRedMat = new THREE.MeshStandardMaterial({ color: '#DC2626', roughness: 0.65 });
+  const barnWhiteMat = new THREE.MeshStandardMaterial({ color: '#FFFDF7', roughness: 0.55 });
+  const barnRoofMat = new THREE.MeshStandardMaterial({ color: '#7C2D12', roughness: 0.72 });
+  const barnBody = new THREE.Mesh(new THREE.BoxGeometry(8.6, 5.2, 6.4), barnRedMat);
+  barnBody.position.y = 2.6;
+  barnBody.castShadow = true;
+  barnBody.receiveShadow = true;
+  const barnRoof = new THREE.Mesh(new THREE.CylinderGeometry(4.9, 4.9, 6.8, 4), barnRoofMat);
+  barnRoof.rotation.x = Math.PI / 2;
+  barnRoof.rotation.y = Math.PI / 4;
+  barnRoof.scale.set(1.25, 0.72, 1);
+  barnRoof.position.set(0, 6.4, 0);
+  barnRoof.castShadow = true;
+  // Classic white X-crossed barn double doors + hayloft window
+  const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(3.2, 3.0, 0.16), barnWhiteMat);
+  doorFrame.position.set(0, 1.5, 3.22);
+  const doorInner = new THREE.Mesh(new THREE.BoxGeometry(2.85, 2.7, 0.18), barnRedMat);
+  doorInner.position.set(0, 1.5, 3.24);
+  const cross1 = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.22, 0.22), barnWhiteMat);
+  cross1.position.set(0, 1.5, 3.26);
+  cross1.rotation.z = 0.72;
+  const cross2 = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.22, 0.22), barnWhiteMat);
+  cross2.position.set(0, 1.5, 3.26);
+  cross2.rotation.z = -0.72;
+  const loftWin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 0.18), barnWhiteMat);
+  loftWin.position.set(0, 4.1, 3.22);
+  // Tall Countryside Silo right beside the barn!
+  const siloTower = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.65, 8.2, 18), barnWhiteMat);
+  siloTower.position.set(5.6, 4.1, -0.6);
+  siloTower.castShadow = true;
+  const siloDome = new THREE.Mesh(new THREE.SphereGeometry(1.58, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), barnRedMat);
+  siloDome.position.set(5.6, 8.15, -0.6);
+  barnGrp.add(barnBody, barnRoof, doorFrame, doorInner, cross1, cross2, loftWin, siloTower, siloDome);
+  barnGrp.position.set(-1.5, 0, -30.5);
+  scene.add(barnGrp);
+
+  // Story-Matched Farm Crop Patches: Carrot Patch (near Rabbit), Golden Cornfield (near Horse & Pony), Wheat Field!
+  const soilMat = new THREE.MeshStandardMaterial({ color: '#854D0E', roughness: 0.95 });
+  const leafGreenMat = new THREE.MeshStandardMaterial({ color: '#16A34A', roughness: 0.7 });
+  const carrotMat = new THREE.MeshStandardMaterial({ color: '#F97316', roughness: 0.5 });
+  const cornMat = new THREE.MeshStandardMaterial({ color: '#FACC15', roughness: 0.5 });
+
+  // 🥕 Carrot Garden Patch near Rabbit (-19.2, -12.0)
+  const carrotPatch = new THREE.Group();
+  const cBed = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.16, 4.2), soilMat);
+  cBed.position.y = 0.08;
+  cBed.receiveShadow = true;
+  carrotPatch.add(cBed);
+  for (let r = -1; r <= 1; r++) {
+    for (let c = -2; c <= 2; c++) {
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.34, 8), carrotMat);
+      tip.rotation.x = Math.PI;
+      tip.position.set(c * 0.95, 0.24, r * 1.15);
+      const top = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.42, 6), leafGreenMat);
+      top.position.set(c * 0.95, 0.52, r * 1.15);
+      carrotPatch.add(tip, top);
+    }
+  }
+  carrotPatch.position.set(-20.2, 0, -12.2);
+  carrotPatch.rotation.y = 0.32;
+  scene.add(carrotPatch);
+
+  // 🌽 Golden Cornfield near Horse & Pony (6.5, -22.5)
+  const cornPatch = new THREE.Group();
+  const cornBed = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.16, 4.2), soilMat);
+  cornBed.position.y = 0.08;
+  cornBed.receiveShadow = true;
+  cornPatch.add(cornBed);
+  for (let r = -1; r <= 1; r++) {
+    for (let c = -2; c <= 2; c++) {
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, 2.0, 6), leafGreenMat);
+      stalk.position.set(c * 1.05, 1.05, r * 1.15);
+      const cob = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.32, 5, 8), cornMat);
+      cob.position.set(c * 1.05 + 0.14, 1.35, r * 1.15 + 0.08);
+      cob.rotation.z = -0.35;
+      cornPatch.add(stalk, cob);
+    }
+  }
+  cornPatch.position.set(6.8, 0, -22.2);
+  cornPatch.rotation.y = -0.22;
+  scene.add(cornPatch);
+
+  // 🚜 Cute Red Farm Tractor parked near the sunny farm entrance (11.5, 20.8)
+  const tractor = new THREE.Group();
+  const trBody = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.1, 2.7), barnRedMat);
+  trBody.position.set(0, 1.15, 0);
+  trBody.castShadow = true;
+  const trCab = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.15, 1.3), new THREE.MeshStandardMaterial({ color: '#FEF08A', roughness: 0.4 }));
+  trCab.position.set(0, 2.15, -0.45);
+  trCab.castShadow = true;
+  const trRoof = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.18, 1.5), barnRedMat);
+  trRoof.position.set(0, 2.78, -0.45);
+  const wheelMat = new THREE.MeshStandardMaterial({ color: '#1E293B', roughness: 0.85 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: '#FACC15', roughness: 0.4 });
+  [[-0.95, 0.72, -0.7, 0.72], [0.95, 0.72, -0.7, 0.72], [-0.9, 0.48, 0.9, 0.48], [0.9, 0.48, 0.9, 0.48]].forEach(([wx, wy, wz, wr]) => {
+    const wh = new THREE.Mesh(new THREE.CylinderGeometry(wr, wr, 0.42, 16), wheelMat);
+    wh.rotation.z = Math.PI / 2;
+    wh.position.set(wx, wy, wz);
+    const rm = new THREE.Mesh(new THREE.CylinderGeometry(wr * 0.45, wr * 0.45, 0.46, 12), rimMat);
+    rm.rotation.z = Math.PI / 2;
+    rm.position.set(wx, wy, wz);
+    tractor.add(wh, rm);
+  });
+  tractor.add(trBody, trCab, trRoof);
+  tractor.position.set(11.8, 0, 20.6);
+  tractor.rotation.y = -0.55;
+  scene.add(tractor);
 
   // Cobblestone circular village promenade + central plaza + cross walkways
   const pathRing = new THREE.Mesh(
@@ -1370,9 +1584,15 @@ export function buildFarmWorld3D(THREE, scene) {
     }).catch(() => {});
   };
 
-  // Base Cozy Farm Props
-  placeProp('assets/models/quaternius/Hay.glb', 1.5, -10.5, -22.5, 0.4);
-  placeProp('assets/models/quaternius/Hay.glb', 1.3, -9.0, -21.5, -0.3);
+  // Base Cozy Farm Props (Hay bales, wooden farm cart, windmill, stable, well & pond bridge!)
+  placeProp('assets/models/quaternius/Hay.glb', 1.6, -10.5, -22.5, 0.4);
+  placeProp('assets/models/quaternius/Hay.glb', 1.4, -9.0, -21.5, -0.3);
+  placeProp('assets/models/quaternius/Hay.glb', 1.5, -12.0, -21.2, 0.9);
+  placeProp('assets/models/quaternius/Hay.glb', 1.5, 19.5, 14.5, 0.2);
+  placeProp('assets/models/quaternius/Stable.glb', 4.6, -24.5, -2.5, 1.3);
+  placeProp('assets/models/fantasy-town/windmill.glb', 7.2, 23.5, -23.5, -0.5);
+  placeProp('assets/models/fantasy-town/cart.glb', 1.9, -15.5, 15.8, 0.7);
+  placeProp('assets/models/quaternius/Well.glb', 2.4, 21.8, 5.5, 0.3);
   placeProp('assets/models/nature/sign.glb', 2.0, 3.2, 20.8, -0.3);
   placeProp('assets/models/nature/bridge_woodRound.glb', 1.6, 17.2, -15.8, 0.6);
   placeProp('assets/models/nature/lily_large.glb', 0.18, 15.6, -14.8, 0);
