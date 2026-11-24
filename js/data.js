@@ -1018,26 +1018,160 @@ export function buildListenQuestion(cardPool = BASE_CARDS, rng = Math.random) {
   return { targetCard, choices };
 }
 
-// --- v3: 3D Farm RPG Mastery, Collection & Wooju 3D Avatar Gear ---
+// --- v3/v4: 3D Farm RPG Mastery, 12 Village Buildings, 24 Treasures, 15 Gear & 16 Achievements ---
 export const FARM_STORAGE_KEY = 'wooju_farm_rpg_v3';
 
+// 12 Unlockable 3D Village Buildings / Landmarks (built permanently as Wooju speaks English!)
+export const VILLAGE_BUILDINGS = [
+  { id: 'garden_arch',   name: '꽃길 정원',        emoji: '🌷', reqSpeaks: 3,   desc: '따라 말하기 3회' },
+  { id: 'magic_well',    name: '소원 우물',        emoji: '🪣', reqSpeaks: 6,   desc: '따라 말하기 6회' },
+  { id: 'green_stall',   name: '초록 과일 가게',   emoji: '🍏', reqSpeaks: 10,  desc: '따라 말하기 10회' },
+  { id: 'red_stall',     name: '빨간 간식 가게',   emoji: '🍿', reqSpeaks: 15,  desc: '따라 말하기 15회' },
+  { id: 'fountain',      name: '반짝이 분수 광장', emoji: '⛲', reqSpeaks: 20,  desc: '따라 말하기 20회' },
+  { id: 'wooju_house',   name: '우주의 오두막',    emoji: '🏡', reqSpeaks: 26,  desc: '따라 말하기 26회' },
+  { id: 'friend_villa',  name: '동물 친구 별장',   emoji: '🏠', reqSpeaks: 32,  desc: '따라 말하기 32회' },
+  { id: 'gold_windmill', name: '돌아가는 황금 풍차', emoji: '🌬️', reqSpeaks: 40, desc: '따라 말하기 40회' },
+  { id: 'star_gazebo',   name: '별빛 정자',        emoji: '🏛️', reqSpeaks: 50,  desc: '따라 말하기 50회' },
+  { id: 'royal_barn',    name: '황금 헛간 성',     emoji: '🏰', reqSpeaks: 62,  desc: '따라 말하기 62회' },
+  { id: 'rocket_pad',    name: '우주 로켓 발사대', emoji: '🚀', reqSpeaks: 75,  desc: '따라 말하기 75회' },
+  { id: 'rainbow_arch',  name: '전설의 무지개 다리', emoji: '🌈', reqSpeaks: 100, desc: '따라 말하기 100회!' },
+];
+
+// 24 Collectible Treasures (dropped from Treasure Chests on "💎 토씨 안 틀림!!" or every 5 speaks!)
+export const TREASURE_ITEMS = [
+  // Common (8)
+  { id: 'tr_gold_egg',     name: '황금 달걀',       emoji: '🥚', rarity: 'common',    cat: '음식' },
+  { id: 'tr_big_carrot',   name: '무지개 당근',     emoji: '🥕', rarity: 'common',    cat: '음식' },
+  { id: 'tr_clover',       name: '네잎클로버',      emoji: '🍀', rarity: 'common',    cat: '자연' },
+  { id: 'tr_acorn',        name: '황금 도토리',     emoji: '🌰', rarity: 'common',    cat: '자연' },
+  { id: 'tr_broom',        name: '은빛 빗자루',     emoji: '🧹', rarity: 'common',    cat: '농장' },
+  { id: 'tr_apple_pie',    name: '꿀사과 파이',     emoji: '🥧', rarity: 'common',    cat: '음식' },
+  { id: 'tr_sunflower',    name: '햇살 해바라기',   emoji: '🌻', rarity: 'common',    cat: '자연' },
+  { id: 'tr_bell',         name: '딸랑이 종',       emoji: '🔔', rarity: 'common',    cat: '농장' },
+  // Rare (7)
+  { id: 'tr_galaxy_milk',  name: '은하수 우유',     emoji: '🥛', rarity: 'rare',      cat: '음식' },
+  { id: 'tr_dia_corn',     name: '다이아 옥수수',   emoji: '🌽', rarity: 'rare',      cat: '음식' },
+  { id: 'tr_star_mush',    name: '별빛 버섯',       emoji: '🍄', rarity: 'rare',      cat: '자연' },
+  { id: 'tr_magic_rod',    name: '마법 낚싯대',     emoji: '🎣', rarity: 'rare',      cat: '농장' },
+  { id: 'tr_gold_note',    name: '황금 음표',       emoji: '🎵', rarity: 'rare',      cat: '농장' },
+  { id: 'tr_crystal_flw',  name: '크리스탈 꽃',     emoji: '🌺', rarity: 'rare',      cat: '자연' },
+  { id: 'tr_magic_stew',   name: '오리의 마법 스튜', emoji: '🍲', rarity: 'rare',     cat: '음식' },
+  // Epic (5)
+  { id: 'tr_legend_fish',  name: '전설의 황금 잉어', emoji: '🐟', rarity: 'epic',     cat: '음식' },
+  { id: 'tr_dance_shoes',  name: '춤추는 마법 구두', emoji: '👟', rarity: 'epic',     cat: '농장' },
+  { id: 'tr_farmer_hat',   name: '브라운 황금 모자', emoji: '🤠', rarity: 'epic',     cat: '농장' },
+  { id: 'tr_meteor',       name: '미니 운석',       emoji: '☄️', rarity: 'epic',      cat: '우주' },
+  { id: 'tr_saturn_ring',  name: '토성 반지',       emoji: '🪐', rarity: 'epic',      cat: '우주' },
+  // Legendary (4)
+  { id: 'tr_pig_trophy',   name: '춤추는 돼지 트로피', emoji: '🏆', rarity: 'legendary', cat: '전설' },
+  { id: 'tr_star_compass', name: '은하 나침반',     emoji: '🧭', rarity: 'legendary', cat: '우주' },
+  { id: 'tr_rocket_key',   name: '우주선 황금 열쇠', emoji: '🔑', rarity: 'legendary', cat: '우주' },
+  { id: 'tr_wooju_medal',  name: '우주 대왕 메달',  emoji: '🥇', rarity: 'legendary', cat: '전설' },
+];
+
+// 15 Unlockable 3D Wooju Avatar Gear Items across 3 simultaneous slots ('head' | 'back' | 'aura')
 export const WOOJU_GEAR = [
-  { id: 'star_hat',    name: '별빛 꼬깔 모자', emoji: '🎩', reqType: 'stars',   reqCount: 4,  desc: '별 4개 모으기' },
-  { id: 'hero_cape',   name: '히어로 망토',    emoji: '🦸', reqType: 'stars',   reqCount: 10, desc: '별 10개 모으기' },
-  { id: 'gold_crown',  name: '황금 왕관',      emoji: '👑', reqType: 'masters', reqCount: 3,  desc: '혼자 외우기 3마리' },
-  { id: 'jetpack',     name: '로켓 제트팩',    emoji: '🚀', reqType: 'masters', reqCount: 6,  desc: '혼자 외우기 6마리' },
-  { id: 'rainbow_mic', name: '무지개 마이크',  emoji: '🎤', reqType: 'masters', reqCount: 12, desc: '12마리 모두 외우기!' },
+  // Head (5)
+  { id: 'star_hat',      slot: 'head', name: '별빛 꼬깔 모자', emoji: '🎩', reqType: 'stars',     reqCount: 4,  desc: '별 4개 모으기' },
+  { id: 'cowboy_hat',    slot: 'head', name: '농부 카우보이 모자', emoji: '🤠', reqType: 'speaks', reqCount: 8,  desc: '말하기 8회' },
+  { id: 'unicorn_horn',  slot: 'head', name: '유니콘 반짝이 뿔', emoji: '🦄', reqType: 'perfects', reqCount: 3, desc: '토씨 안 틀림 3회' },
+  { id: 'gold_crown',    slot: 'head', name: '황금 왕관',      emoji: '👑', reqType: 'masters',   reqCount: 3,  desc: '혼자 외우기 3마리' },
+  { id: 'astro_helmet',  slot: 'head', name: '우주 비행사 헬멧', emoji: '👩‍🚀', reqType: 'treasures', reqCount: 10, desc: '보물 10개 수집' },
+  // Back (5)
+  { id: 'hero_cape',     slot: 'back', name: '히어로 망토',    emoji: '🦸', reqType: 'stars',     reqCount: 10, desc: '별 10개 모으기' },
+  { id: 'fairy_wings',   slot: 'back', name: '요정 나비 날개', emoji: '🦋', reqType: 'speaks',    reqCount: 15, desc: '말하기 15회' },
+  { id: 'angel_wings',   slot: 'back', name: '천사 날개',      emoji: '🪽', reqType: 'perfects',  reqCount: 6,  desc: '토씨 안 틀림 6회' },
+  { id: 'jetpack',       slot: 'back', name: '로켓 제트팩',    emoji: '🚀', reqType: 'masters',   reqCount: 6,  desc: '혼자 외우기 6마리' },
+  { id: 'dragon_wings',  slot: 'back', name: '황금 드래곤 날개', emoji: '🐉', reqType: 'treasures', reqCount: 18, desc: '보물 18개 수집' },
+  // Aura / Hand (5)
+  { id: 'magic_wand',    slot: 'aura', name: '별빛 마법봉',    emoji: '🪄', reqType: 'speaks',    reqCount: 5,  desc: '말하기 5회' },
+  { id: 'star_aura',     slot: 'aura', name: '황금 별 오라',   emoji: '✨', reqType: 'perfects',  reqCount: 1,  desc: '첫 토씨 안 틀림!' },
+  { id: 'fire_aura',     slot: 'aura', name: '불꽃 슈퍼스타',  emoji: '🔥', reqType: 'speaks',    reqCount: 30, desc: '말하기 30회' },
+  { id: 'rainbow_ring',  slot: 'aura', name: '무지개 발자국',  emoji: '🌈', reqType: 'masters',   reqCount: 9,  desc: '혼자 외우기 9마리' },
+  { id: 'rainbow_mic',   slot: 'aura', name: '전설의 무지개 마이크', emoji: '🎤', reqType: 'masters', reqCount: 12, desc: '12마리 모두 외우기!' },
+];
+
+// 16 Nook-Miles style Achievements
+export const FARM_ACHIEVEMENTS = [
+  { id: 'ach_speak_1',    name: '첫 영어 주문!',     emoji: '🗣️', reqType: 'speaks',    reqCount: 1,   desc: '영어로 처음 말하기' },
+  { id: 'ach_speak_10',   name: '수다쟁이 꼬마',     emoji: '🦜', reqType: 'speaks',    reqCount: 10,  desc: '영어로 10번 말하기' },
+  { id: 'ach_speak_30',   name: '영어 마법사',       emoji: '🪄', reqType: 'speaks',    reqCount: 30,  desc: '영어로 30번 말하기' },
+  { id: 'ach_speak_60',   name: '농장 대장님',       emoji: '🏅', reqType: 'speaks',    reqCount: 60,  desc: '영어로 60번 말하기' },
+  { id: 'ach_speak_100',  name: '100번의 기적!',     emoji: '💯', reqType: 'speaks',    reqCount: 100, desc: '영어로 100번 말하기' },
+  { id: 'ach_perf_1',     name: '첫 퍼펙트!',        emoji: '💎', reqType: 'perfects',  reqCount: 1,   desc: '토씨 안 틀림 1회' },
+  { id: 'ach_perf_5',     name: '완벽 암기왕',       emoji: '🌟', reqType: 'perfects',  reqCount: 5,   desc: '토씨 안 틀림 5회' },
+  { id: 'ach_perf_15',    name: '다이아 혀 마법사',  emoji: '👑', reqType: 'perfects',  reqCount: 15,  desc: '토씨 안 틀림 15회' },
+  { id: 'ach_build_1',    name: '첫 건물 건설!',     emoji: '🏗️', reqType: 'buildings', reqCount: 1,   desc: '마을 건물 1개 건설' },
+  { id: 'ach_build_6',    name: '마을 시장님',       emoji: '🏡', reqType: 'buildings', reqCount: 6,   desc: '마을 건물 6개 건설' },
+  { id: 'ach_build_12',   name: '전설의 왕국 완성',  emoji: '🏰', reqType: 'buildings', reqCount: 12,  desc: '12개 건물 모두 완성' },
+  { id: 'ach_master_3',   name: '미니 동물 기차',    emoji: '🐾', reqType: 'masters',   reqCount: 3,   desc: '3성 동물 3마리' },
+  { id: 'ach_master_12',  name: '12마리 대퍼레이드', emoji: '🎪', reqType: 'masters',   reqCount: 12,  desc: '12마리 모두 3성!' },
+  { id: 'ach_tr_5',       name: '보물 사냥꾼',       emoji: '🎁', reqType: 'treasures', reqCount: 5,   desc: '보물 5개 수집' },
+  { id: 'ach_tr_12',      name: '보물 창고 주인',    emoji: '💰', reqType: 'treasures', reqCount: 12,  desc: '보물 12개 수집' },
+  { id: 'ach_tr_24',      name: '전설의 컬렉터!',    emoji: '🏆', reqType: 'treasures', reqCount: 24,  desc: '24개 보물 올클리어!' },
 ];
 
 export function countMasteredSpots(masteryMap = {}) {
   return FARM_SPOTS.filter(s => (masteryMap[s.id] || 0) >= 3).length;
 }
 
-export function getUnlockedGear(masteryMap = {}, totalStars = 0) {
-  const masters = countMasteredSpots(masteryMap);
-  return WOOJU_GEAR.filter(g => (
-    g.reqType === 'stars' ? totalStars >= g.reqCount : masters >= g.reqCount
-  )).map(g => g.id);
+export function getUnlockedBuildings(speakCount = 0) {
+  return VILLAGE_BUILDINGS.filter(b => speakCount >= b.reqSpeaks).map(b => b.id);
+}
+
+export function getNextBuildingGoal(speakCount = 0) {
+  return VILLAGE_BUILDINGS.find(b => speakCount < b.reqSpeaks) || null;
+}
+
+function meetsRequirement(reqType, reqCount, stats) {
+  switch (reqType) {
+    case 'stars':     return (stats.totalStars || 0) >= reqCount;
+    case 'masters':   return (stats.masters || 0) >= reqCount;
+    case 'speaks':    return (stats.speakCount || 0) >= reqCount;
+    case 'perfects':  return (stats.perfectCount || 0) >= reqCount;
+    case 'treasures': return (stats.treasureCount || 0) >= reqCount;
+    case 'buildings': return (stats.buildingCount || 0) >= reqCount;
+    default:          return false;
+  }
+}
+
+export function getUnlockedGear(masteryMap = {}, totalStars = 0, extra = {}) {
+  const stats = {
+    totalStars,
+    masters: countMasteredSpots(masteryMap),
+    speakCount: extra.speakCount || 0,
+    perfectCount: extra.perfectCount || 0,
+    treasureCount: Array.isArray(extra.treasures) ? extra.treasures.length : (extra.treasureCount || 0),
+    buildingCount: getUnlockedBuildings(extra.speakCount || 0).length,
+  };
+  return WOOJU_GEAR.filter(g => meetsRequirement(g.reqType, g.reqCount, stats)).map(g => g.id);
+}
+
+export function getUnlockedAchievements(masteryMap = {}, totalStars = 0, extra = {}) {
+  const stats = {
+    totalStars,
+    masters: countMasteredSpots(masteryMap),
+    speakCount: extra.speakCount || 0,
+    perfectCount: extra.perfectCount || 0,
+    treasureCount: Array.isArray(extra.treasures) ? extra.treasures.length : (extra.treasureCount || 0),
+    buildingCount: getUnlockedBuildings(extra.speakCount || 0).length,
+  };
+  return FARM_ACHIEVEMENTS.filter(a => meetsRequirement(a.reqType, a.reqCount, stats)).map(a => a.id);
+}
+
+export function rollTreasureDrop(ownedIds = [], { preferHigherRarity = false, rng = Math.random } = {}) {
+  const ownedSet = new Set(ownedIds);
+  const unowned = TREASURE_ITEMS.filter(t => !ownedSet.has(t.id));
+  if (unowned.length === 0) {
+    // All 24 collected! Return a random legendary bonus repeat
+    const legs = TREASURE_ITEMS.filter(t => t.rarity === 'legendary');
+    return { item: legs[Math.floor(rng() * legs.length)], isDuplicate: true };
+  }
+  const pool = preferHigherRarity
+    ? (unowned.filter(t => t.rarity !== 'common').length > 0 ? unowned.filter(t => t.rarity !== 'common') : unowned)
+    : unowned;
+  const picked = pool[Math.floor(rng() * pool.length)];
+  return { item: picked, isDuplicate: false };
 }
 
 export function computeFarmProgress(masteryMap = {}) {
@@ -1057,15 +1191,15 @@ export function computeFarmProgress(masteryMap = {}) {
   return { metCount, masteredCount, totalMasteryStars, nextSpotIndex };
 }
 
-export function applySpotMastery(masteryMap = {}, spotId, targetTier = 1) {
-  const clamped = Math.max(1, Math.min(3, targetTier));
+export function applySpotMastery(masteryMap = {}, spotId, targetTier = 1, { isPerfect = false } = {}) {
+  const clamped = Math.max(1, Math.min(3, isPerfect ? 3 : targetTier));
   const prev = Math.max(0, Math.min(3, masteryMap[spotId] || 0));
   const nextVal = Math.max(prev, clamped);
   const nextMastery = { ...masteryMap, [spotId]: nextVal };
   const upgraded = nextVal > prev;
   const newlyMet = prev === 0 && nextVal >= 1;
   const newlyMastered = prev < 3 && nextVal === 3;
-  // Reward stars generously: +2 on new 3-star mastery, +1 on new tier or repeat practice
-  const starDelta = newlyMastered ? Math.max(2, nextVal - prev + 1) : (upgraded ? (nextVal - prev) : 1);
-  return { nextMastery, prevTier: prev, nextTier: nextVal, upgraded, newlyMet, newlyMastered, starDelta };
+  const baseDelta = newlyMastered ? Math.max(2, nextVal - prev + 1) : (upgraded ? (nextVal - prev) : 1);
+  const starDelta = isPerfect ? baseDelta + 2 : baseDelta;
+  return { nextMastery, prevTier: prev, nextTier: nextVal, upgraded, newlyMet, newlyMastered, isPerfect, starDelta };
 }

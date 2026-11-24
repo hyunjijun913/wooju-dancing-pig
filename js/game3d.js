@@ -1,14 +1,21 @@
-// 0단계 (v3): Living 3D Farm RPG — Speak English to Grow Your Farm, Collect 3-Star Crowns,
-// Lead a 3D Animal Parade, and Unlock & Equip 3D Wooju Avatar Gear!
+// 0단계 (v4): Living 3D Farm Collector RPG — 12 Village Buildings, 24 Treasure Drops,
+// 15 3D Wooju Gear Cosmetics, 16 Achievements & 3-Star Animal Parade!
 import {
   FARM_SPOTS,
   BASE_CARDS,
+  VILLAGE_BUILDINGS,
+  TREASURE_ITEMS,
   WOOJU_GEAR,
+  FARM_ACHIEVEMENTS,
   FARM_STORAGE_KEY,
   resolveSpotInteraction,
   computeFarmProgress,
   applySpotMastery,
+  getUnlockedBuildings,
+  getNextBuildingGoal,
   getUnlockedGear,
+  getUnlockedAchievements,
+  rollTreasureDrop,
   countMasteredSpots,
 } from './data.js';
 import {
@@ -16,6 +23,7 @@ import {
   buildSpotCharacter3D,
   buildFarmWorld3D,
   buildPartyRewards3D,
+  buildVillageBuildings3D,
 } from './models3d.js';
 
 let THREE_MOD = null;
@@ -75,12 +83,16 @@ export class FarmGame3D {
     this.scene = null;
     this.camera = null;
 
-    // v3 Persistent RPG state
+    // v3/v4 Persistent RPG state
     this.mastery = {}; // { [spotId]: 0..3 }
     this.equippedGear = {}; // { [gearId]: boolean }
+    this.speakCount = 0;
+    this.perfectCount = 0;
+    this.treasures = []; // owned treasure IDs (up to 24)
     this.paradeEnabled = true;
-    this.bagTab = 'collection'; // 'collection' | 'wardrobe'
-    this.hasNewGearBadge = false;
+    this.bagTab = 'collection'; // 'collection' | 'buildings' | 'treasures' | 'wardrobe' | 'achievements'
+    this.hasNewBadge = false;
+    this.pendingChest = null;
 
     // Runtime dialogue & navigation state
     this.currentSpotIndex = 0;
@@ -103,6 +115,7 @@ export class FarmGame3D {
     this.THREE = null;
     this.wooju = null;
     this.partyRewards = null;
+    this.villageBuildings = null;
     this.spotEntries = [];
     this.clouds = [];
     this.activeRing = null;
@@ -126,10 +139,16 @@ export class FarmGame3D {
         const parsed = JSON.parse(raw);
         this.mastery = parsed.mastery && typeof parsed.mastery === 'object' ? parsed.mastery : {};
         this.equippedGear = parsed.equippedGear && typeof parsed.equippedGear === 'object' ? parsed.equippedGear : {};
+        this.speakCount = Number.isFinite(parsed.speakCount) ? parsed.speakCount : 0;
+        this.perfectCount = Number.isFinite(parsed.perfectCount) ? parsed.perfectCount : 0;
+        this.treasures = Array.isArray(parsed.treasures) ? parsed.treasures : [];
       }
     } catch (_) {
       this.mastery = {};
       this.equippedGear = {};
+      this.speakCount = 0;
+      this.perfectCount = 0;
+      this.treasures = [];
     }
     const prog = computeFarmProgress(this.mastery);
     this.currentSpotIndex = prog.nextSpotIndex;
@@ -140,8 +159,19 @@ export class FarmGame3D {
       localStorage.setItem(FARM_STORAGE_KEY, JSON.stringify({
         mastery: this.mastery,
         equippedGear: this.equippedGear,
+        speakCount: this.speakCount,
+        perfectCount: this.perfectCount,
+        treasures: this.treasures,
       }));
     } catch (_) {}
+  }
+
+  _getExtraStats() {
+    return {
+      speakCount: this.speakCount,
+      perfectCount: this.perfectCount,
+      treasures: this.treasures,
+    };
   }
 
   async mount(containerEl) {
@@ -221,18 +251,22 @@ export class FarmGame3D {
     this.dashedTrail = [];
     this.clouds = [];
     this.partyRewards = null;
+    this.villageBuildings = null;
     this.scene = null;
     this.camera = null;
   }
 
   resetProgress(skipConfirm = false) {
     if (!skipConfirm && typeof window !== 'undefined' && window.confirm) {
-      const ok = window.confirm('지금까지 모은 3D 농장 선물과 3성 왕관 기록을 처음부터 다시 시작할까요?');
+      const ok = window.confirm('지금까지 모은 3D 농장 건물·보물·3성 왕관 기록을 처음부터 다시 시작할까요?');
       if (!ok) return;
     }
     this.audio.stopAll();
     this.mastery = {};
     this.equippedGear = {};
+    this.speakCount = 0;
+    this.perfectCount = 0;
+    this.treasures = [];
     this.currentSpotIndex = 0;
     this._saveRpgState();
 
@@ -249,6 +283,7 @@ export class FarmGame3D {
       this.wooju.setGear(this.equippedGear);
     }
     if (this.partyRewards) this.partyRewards.syncMastery(this.mastery);
+    if (this.villageBuildings) this.villageBuildings.syncBuildings([]);
 
     this.spotEntries.forEach((m) => {
       m.curX = m.homeX;
@@ -291,6 +326,7 @@ export class FarmGame3D {
         </div>
 
         <div class="farm-guide-pill" id="farmGuidePill">👆 노란 점선 길을 따라 반짝이는 친구에게 가보세요!</div>
+        <div class="farm-goal-pill" id="farmGoalPill">🗣️ 0회 · 다음 건물: 🌷 꽃길 정원 (3회)</div>
 
         <!-- Floating Speech Bubble projected right above a nearby 3D villager -->
         <button class="farm-hover-bubble" id="farmHoverBubble" style="display:none;">
@@ -357,36 +393,44 @@ export class FarmGame3D {
             <span class="magic-pct" id="farmMagicPct">0%</span>
           </div>
 
-          <!-- Hybrid Judge / Reward Buttons -->
-          <div class="farm-judge-row">
+          <!-- Hybrid Judge / Reward Buttons (3-way: Repeat/Hint, Solo 3★, Perfect Treasure!) -->
+          <div class="farm-judge-row farm-judge-row-3">
             <button class="big-btn btn-star farm-judge-btn" id="farmJudgeNormalBtn">⭐ 따라 말했어요!</button>
-            <button class="big-btn btn-crown farm-judge-btn" id="farmJudgeCrownBtn">👑 혼자 다 외웠어요!</button>
+            <button class="big-btn btn-crown farm-judge-btn" id="farmJudgeCrownBtn">👑 혼자 외웠어요!</button>
+            <button class="big-btn btn-perfect farm-judge-btn" id="farmJudgePerfectBtn">💎 토씨 안 틀림!!</button>
           </div>
         </div>
 
-        <!-- 🎒 Collection Codex + 👕 Wooju 3D Wardrobe Modal -->
+        <!-- 🎁 Interactive Treasure Chest Pop-up Modal -->
+        <div class="farm-chest-modal" id="farmChestModal" style="display:none;">
+          <div class="farm-chest-card" id="farmChestCard">
+            <div class="chest-title" id="chestTitle">💎 퍼펙트 보물상자 도착!!</div>
+            <button class="chest-box-btn" id="chestBoxBtn" aria-label="보물상자 열기">🎁</button>
+            <div class="chest-sub" id="chestSub">반짝이는 상자를 톡! 눌러서 열어보세요!</div>
+            <div class="chest-reveal" id="chestReveal" style="display:none;">
+              <div class="chest-rarity" id="chestRarity">✨ 희귀 보물</div>
+              <div class="chest-item-ico" id="chestItemIco">🏆</div>
+              <div class="chest-item-name" id="chestItemName">춤추는 돼지 트로피</div>
+              <button class="big-btn btn-star" id="chestCloseBtn" style="margin-top:10px;width:100%;">🎒 도감에 쏙 넣기!</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 🎒 5-Tab Collection Codex + Buildings + Treasures + Wardrobe + Achievements -->
         <div class="farm-bag-modal" id="farmBagModal" style="display:none;">
           <div class="farm-bag-sheet">
             <div class="modal-head">
-              <h2>🎒 우주의 농장 도감 &amp; 옷장</h2>
+              <h2>🎒 우주의 대모험 컬렉션</h2>
               <button class="close-btn" id="farmBagCloseBtn">✕</button>
             </div>
-            <div class="bag-tab-bar">
-              <button class="bag-tab active" data-bag-tab="collection" id="bagTabCollection">🎒 3성 도감 (<span id="farmBagModalCount">0/12</span>)</button>
-              <button class="bag-tab" data-bag-tab="wardrobe" id="bagTabWardrobe">👕 우주 옷장 (<span id="farmGearModalCount">0/5</span>)</button>
+            <div class="bag-tab-bar bag-tab-bar-5">
+              <button class="bag-tab active" data-bag-tab="collection">🐾 도감 <span id="farmBagModalCount">0/12</span></button>
+              <button class="bag-tab" data-bag-tab="buildings">🏗️ 건물 <span id="farmBuildModalCount">0/12</span></button>
+              <button class="bag-tab" data-bag-tab="treasures">💎 보물 <span id="farmTrModalCount">0/24</span></button>
+              <button class="bag-tab" data-bag-tab="wardrobe">👕 옷장 <span id="farmGearModalCount">0/15</span></button>
+              <button class="bag-tab" data-bag-tab="achievements">🏆 업적 <span id="farmAchModalCount">0/16</span></button>
             </div>
-            <div id="farmBagCollectionView">
-              <p class="bag-hint">
-                선물을 톡! 누르면 그 친구의 영어 이야기를 들려줘요. <b>👑 3성(혼자 외우기)</b>을 달성하면 동물 친구가 우주 뒤를 기차처럼 따라다녀요!
-              </p>
-              <div class="farm-bag-grid" id="farmBagGrid"></div>
-            </div>
-            <div id="farmBagWardrobeView" style="display:none;">
-              <p class="bag-hint">
-                별과 👑 혼자 외우기를 모으면 3D 우주 캐릭터에 직접 장착하는 멋진 장비가 열려요!
-              </p>
-              <div class="farm-gear-grid" id="farmGearGrid"></div>
-            </div>
+            <div id="farmBagContent"></div>
           </div>
         </div>
 
@@ -410,6 +454,8 @@ export class FarmGame3D {
     this.container.querySelector('#farmBagBtn').addEventListener('click', () => this._openBagModal());
     this.container.querySelector('#farmBagCloseBtn').addEventListener('click', () => this._closeBagModal());
     this.container.querySelector('#farmDlgCloseBtn').addEventListener('click', () => this._hideDialogue());
+    this.container.querySelector('#chestBoxBtn').addEventListener('click', () => this._revealPendingChest());
+    this.container.querySelector('#chestCloseBtn').addEventListener('click', () => this._closeChestModal());
 
     this.container.querySelector('#farmParadeBtn').addEventListener('click', () => {
       this.paradeEnabled = !this.paradeEnabled;
@@ -461,24 +507,35 @@ export class FarmGame3D {
 
   _updateBagBadge() {
     const prog = computeFarmProgress(this.mastery);
-    const unlockedGear = getUnlockedGear(this.mastery, this.getTotalStars());
-    const countText = `${prog.metCount}/${FARM_SPOTS.length}`;
-    const countEl = this.container?.querySelector('#farmBagCount');
-    const modalCountEl = this.container?.querySelector('#farmBagModalCount');
-    const gearCountEl = this.container?.querySelector('#farmGearModalCount');
-    const previewEl = this.container?.querySelector('#farmBagPreview');
-    const newDot = this.container?.querySelector('#farmGearNewDot');
+    const extra = this._getExtraStats();
+    const unlockedBuildings = getUnlockedBuildings(this.speakCount);
+    const unlockedGear = getUnlockedGear(this.mastery, this.getTotalStars(), extra);
+    const unlockedAch = getUnlockedAchievements(this.mastery, this.getTotalStars(), extra);
 
-    if (countEl) countEl.textContent = countText;
-    if (modalCountEl) modalCountEl.textContent = countText;
-    if (gearCountEl) gearCountEl.textContent = `${unlockedGear.length}/${WOOJU_GEAR.length}`;
-    if (previewEl) {
-      previewEl.textContent = prog.masteredCount > 0
-        ? `👑 ${prog.masteredCount} · 👕 ${unlockedGear.length}`
-        : `⭐ ${prog.totalMasteryStars} · 👕 ${unlockedGear.length}`;
-    }
-    if (newDot) {
-      newDot.style.display = this.hasNewGearBadge ? 'inline-block' : 'none';
+    const setTxt = (sel, txt) => {
+      const el = this.container?.querySelector(sel);
+      if (el) el.textContent = txt;
+    };
+    setTxt('#farmBagCount', `${prog.metCount}/${FARM_SPOTS.length}`);
+    setTxt('#farmBagModalCount', `${prog.metCount}/${FARM_SPOTS.length}`);
+    setTxt('#farmBuildModalCount', `${unlockedBuildings.length}/${VILLAGE_BUILDINGS.length}`);
+    setTxt('#farmTrModalCount', `${this.treasures.length}/${TREASURE_ITEMS.length}`);
+    setTxt('#farmGearModalCount', `${unlockedGear.length}/${WOOJU_GEAR.length}`);
+    setTxt('#farmAchModalCount', `${unlockedAch.length}/${FARM_ACHIEVEMENTS.length}`);
+    setTxt('#farmBagPreview', `🏗️${unlockedBuildings.length} · 💎${this.treasures.length} · 👕${unlockedGear.length}`);
+
+    const newDot = this.container?.querySelector('#farmGearNewDot');
+    if (newDot) newDot.style.display = this.hasNewBadge ? 'inline-block' : 'none';
+
+    const goalPill = this.container?.querySelector('#farmGoalPill');
+    if (goalPill) {
+      const nextB = getNextBuildingGoal(this.speakCount);
+      if (nextB) {
+        const rem = nextB.reqSpeaks - this.speakCount;
+        goalPill.textContent = `🗣️ 말하기 ${this.speakCount}회 · 다음 건물: ${nextB.emoji} ${nextB.name} (${rem}번 남음!)`;
+      } else {
+        goalPill.textContent = `🏆 12개 마을 건물 올클리어!! (말하기 ${this.speakCount}회 · 💎 보물 ${this.treasures.length}/24)`;
+      }
     }
   }
 
@@ -513,8 +570,7 @@ export class FarmGame3D {
 
   _openBagModal(initialTab = null) {
     if (initialTab) this.bagTab = initialTab;
-    else if (this.hasNewGearBadge) this.bagTab = 'wardrobe';
-    this.hasNewGearBadge = false;
+    this.hasNewBadge = false;
     this._updateBagBadge();
     this._renderBagModalContent();
     const modal = this.container?.querySelector('#farmBagModal');
@@ -522,35 +578,53 @@ export class FarmGame3D {
   }
 
   _renderBagModalContent() {
-    const colView = this.container?.querySelector('#farmBagCollectionView');
-    const warView = this.container?.querySelector('#farmBagWardrobeView');
-    const colTab = this.container?.querySelector('#bagTabCollection');
-    const warTab = this.container?.querySelector('#bagTabWardrobe');
-    if (!colView || !warView) return;
+    const contentEl = this.container?.querySelector('#farmBagContent');
+    if (!contentEl) return;
 
-    const isWardrobe = this.bagTab === 'wardrobe';
-    colView.style.display = isWardrobe ? 'none' : 'block';
-    warView.style.display = isWardrobe ? 'block' : 'none';
-    colTab?.classList.toggle('active', !isWardrobe);
-    warTab?.classList.toggle('active', isWardrobe);
+    this.container.querySelectorAll('.bag-tab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.bagTab === this.bagTab);
+    });
 
-    const grid = this.container?.querySelector('#farmBagGrid');
-    if (grid && !isWardrobe) {
-      grid.innerHTML = FARM_SPOTS.map((spot, idx) => {
-        const tier = this.mastery[spot.id] || 0;
-        const got = tier >= 1;
-        const starStr = tier === 3 ? '👑👑👑' : (tier === 2 ? '⭐⭐☆' : (tier === 1 ? '⭐☆☆' : '☆☆☆'));
-        return `
-          <button class="bag-slot ${got ? 'got' : ''} ${tier >= 3 ? 'mastered' : ''}" data-bag-idx="${idx}" ${got ? '' : 'disabled'}>
-            <div class="bag-slot-stars">${starStr}</div>
-            <div class="bag-slot-ico">${got ? spot.itemEmoji : '❓'}</div>
-            <div class="bag-slot-name">${got ? spot.itemLabel : `${idx + 1}번 선물`}</div>
-            <div class="bag-slot-who">${got ? `${spot.emoji} ${spot.name}` : '아직 못 만났어요'}</div>
-          </button>
-        `;
-      }).join('');
+    const totalStars = this.getTotalStars();
+    const extra = this._getExtraStats();
+    const masters = countMasteredSpots(this.mastery);
+    const unlockedBuildings = new Set(getUnlockedBuildings(this.speakCount));
+    const ownedTreasures = new Set(this.treasures);
+    const unlockedGear = new Set(getUnlockedGear(this.mastery, totalStars, extra));
+    const unlockedAch = new Set(getUnlockedAchievements(this.mastery, totalStars, extra));
 
-      grid.querySelectorAll('.bag-slot.got').forEach(btn => {
+    const getProgressVal = (reqType) => {
+      switch (reqType) {
+        case 'stars': return totalStars;
+        case 'masters': return masters;
+        case 'speaks': return this.speakCount;
+        case 'perfects': return this.perfectCount;
+        case 'treasures': return this.treasures.length;
+        case 'buildings': return unlockedBuildings.size;
+        default: return 0;
+      }
+    };
+
+    if (this.bagTab === 'collection') {
+      contentEl.innerHTML = `
+        <p class="bag-hint">선물을 톡! 누르면 영어 이야기를 들려줘요. <b>👑 3성(혼자 외우기)</b>을 달성하면 동물 친구가 우주 뒤를 기차처럼 따라다녀요!</p>
+        <div class="farm-bag-grid">
+          ${FARM_SPOTS.map((spot, idx) => {
+            const tier = this.mastery[spot.id] || 0;
+            const got = tier >= 1;
+            const starStr = tier === 3 ? '👑👑👑' : (tier === 2 ? '⭐⭐☆' : (tier === 1 ? '⭐☆☆' : '☆☆☆'));
+            return `
+              <button class="bag-slot ${got ? 'got' : ''} ${tier >= 3 ? 'mastered' : ''}" data-bag-idx="${idx}" ${got ? '' : 'disabled'}>
+                <div class="bag-slot-stars">${starStr}</div>
+                <div class="bag-slot-ico">${got ? spot.itemEmoji : '❓'}</div>
+                <div class="bag-slot-name">${got ? spot.itemLabel : `${idx + 1}번 선물`}</div>
+                <div class="bag-slot-who">${got ? `${spot.emoji} ${spot.name}` : '아직 못 만났어요'}</div>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+      contentEl.querySelectorAll('.bag-slot.got').forEach(btn => {
         btn.addEventListener('click', () => {
           const idx = parseInt(btn.dataset.bagIdx, 10);
           const spot = FARM_SPOTS[idx];
@@ -562,47 +636,181 @@ export class FarmGame3D {
           }
         });
       });
+      return;
     }
 
-    const gearGrid = this.container?.querySelector('#farmGearGrid');
-    if (gearGrid && isWardrobe) {
-      const totalStars = this.getTotalStars();
-      const masters = countMasteredSpots(this.mastery);
-      const unlockedSet = new Set(getUnlockedGear(this.mastery, totalStars));
+    if (this.bagTab === 'buildings') {
+      contentEl.innerHTML = `
+        <p class="bag-hint">영어로 누적 말하기 횟수가 쌓일 때마다 <b>3D 농장에 진짜 건물과 랜드마크</b>가 지어져요! (현재 누적: <b>${this.speakCount}회</b>)</p>
+        <div class="farm-bag-grid">
+          ${VILLAGE_BUILDINGS.map((b) => {
+            const built = unlockedBuildings.has(b.id);
+            return `
+              <div class="bag-slot ${built ? 'got mastered' : ''}">
+                <div class="bag-slot-stars">${built ? '🏗️ 완성!' : `${Math.min(this.speakCount, b.reqSpeaks)}/${b.reqSpeaks}회`}</div>
+                <div class="bag-slot-ico">${built ? b.emoji : '🔒'}</div>
+                <div class="bag-slot-name">${b.name}</div>
+                <div class="bag-slot-who">${b.desc}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+      return;
+    }
 
-      gearGrid.innerHTML = WOOJU_GEAR.map((g) => {
-        const unlocked = unlockedSet.has(g.id);
-        const equipped = unlocked && Boolean(this.equippedGear[g.id]);
-        const curVal = g.reqType === 'stars' ? totalStars : masters;
-        const progText = unlocked
-          ? (equipped ? '✨ 장착 중!' : '👆 눌러서 장착!')
-          : `${g.desc} (${Math.min(curVal, g.reqCount)}/${g.reqCount})`;
-        return `
-          <button class="gear-card ${unlocked ? 'unlocked' : 'locked'} ${equipped ? 'equipped' : ''}" data-gear-id="${g.id}" ${unlocked ? '' : 'disabled'}>
-            <div class="gear-ico">${unlocked ? g.emoji : '🔒'}</div>
-            <div class="gear-name">${g.name}</div>
-            <div class="gear-status">${progText}</div>
-          </button>
-        `;
-      }).join('');
+    if (this.bagTab === 'treasures') {
+      const rarityLbl = { common: '일반', rare: '희귀', epic: '영웅', legendary: '전설' };
+      contentEl.innerHTML = `
+        <p class="bag-hint"><b>💎 토씨 안 틀림!!</b>을 달성하거나 영어로 <b>5번 말할 때마다</b> 보물상자가 나와요! 24개 희귀 보물을 모두 모아보세요!</p>
+        <div class="farm-bag-grid">
+          ${TREASURE_ITEMS.map((tr) => {
+            const got = ownedTreasures.has(tr.id);
+            return `
+              <div class="bag-slot ${got ? `got rarity-${tr.rarity}` : ''}">
+                <div class="bag-slot-stars">${got ? rarityLbl[tr.rarity] : '???'}</div>
+                <div class="bag-slot-ico">${got ? tr.emoji : '🎁'}</div>
+                <div class="bag-slot-name">${got ? tr.name : '숨겨진 보물'}</div>
+                <div class="bag-slot-who">${got ? tr.cat : '상자를 열어보세요'}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+      return;
+    }
 
-      gearGrid.querySelectorAll('.gear-card.unlocked').forEach(btn => {
+    if (this.bagTab === 'wardrobe') {
+      const slots = [
+        { key: 'head', title: '🎩 머리·모자 (5종)' },
+        { key: 'back', title: '🦋 날개·망토·제트팩 (5종)' },
+        { key: 'aura', title: '🪄 마법봉·오라·마이크 (5종)' },
+      ];
+      contentEl.innerHTML = `
+        <p class="bag-hint">머리·날개·오라를 <b>동시에 3개까지 장착</b>할 수 있어요! 해금된 장비를 톡! 눌러서 입어보세요!</p>
+        ${slots.map(sl => `
+          <div class="wardrobe-slot-title">${sl.title}</div>
+          <div class="farm-gear-grid">
+            ${WOOJU_GEAR.filter(g => g.slot === sl.key).map(g => {
+              const unlocked = unlockedGear.has(g.id);
+              const equipped = unlocked && Boolean(this.equippedGear[g.id]);
+              const curVal = getProgressVal(g.reqType);
+              const progText = unlocked
+                ? (equipped ? '✨ 장착 중!' : '👆 눌러서 장착!')
+                : `${g.desc} (${Math.min(curVal, g.reqCount)}/${g.reqCount})`;
+              return `
+                <button class="gear-card ${unlocked ? 'unlocked' : 'locked'} ${equipped ? 'equipped' : ''}" data-gear-id="${g.id}" data-gear-slot="${g.slot}" ${unlocked ? '' : 'disabled'}>
+                  <div class="gear-ico">${unlocked ? g.emoji : '🔒'}</div>
+                  <div class="gear-name">${g.name}</div>
+                  <div class="gear-status">${progText}</div>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        `).join('')}
+      `;
+
+      contentEl.querySelectorAll('.gear-card.unlocked').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = btn.dataset.gearId;
-          this.equippedGear[id] = !this.equippedGear[id];
+          const slot = btn.dataset.gearSlot;
+          const willEquip = !this.equippedGear[id];
+          // Unequip other items in the same slot so Wooju wears 1 clean item per slot (head/back/aura)
+          if (willEquip) {
+            WOOJU_GEAR.filter(x => x.slot === slot).forEach(x => { this.equippedGear[x.id] = false; });
+          }
+          this.equippedGear[id] = willEquip;
           this._saveRpgState();
           if (this.wooju?.setGear) this.wooju.setGear(this.equippedGear);
           this.audio.playChimeSFX();
           const g = WOOJU_GEAR.find(x => x.id === id);
           if (g) {
-            this.onToast(this.equippedGear[id]
-              ? `${g.emoji} ${g.name} 장착 완료! 우주 캐릭터를 보세요!`
+            this.onToast(willEquip
+              ? `${g.emoji} ${g.name} 장착 완료! 3D 우주 캐릭터를 보세요!`
               : `${g.emoji} ${g.name}을 벗었어요!`);
           }
           this._renderBagModalContent();
         });
       });
+      return;
     }
+
+    if (this.bagTab === 'achievements') {
+      contentEl.innerHTML = `
+        <p class="bag-hint">우주의 영어 모험 기록! 16개 업적 뱃지를 모두 빛나게 채워보세요!</p>
+        <div class="farm-gear-grid">
+          ${FARM_ACHIEVEMENTS.map(a => {
+            const done = unlockedAch.has(a.id);
+            const curVal = getProgressVal(a.reqType);
+            return `
+              <div class="gear-card ${done ? 'unlocked equipped' : 'locked'}">
+                <div class="gear-ico">${done ? a.emoji : '🔒'}</div>
+                <div class="gear-name">${a.name}</div>
+                <div class="gear-status">${done ? '🏆 달성 완료!' : `${a.desc} (${Math.min(curVal, a.reqCount)}/${a.reqCount})`}</div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+    }
+  }
+
+  _openChestModal(reasonTitle, { preferHigherRarity = false } = {}) {
+    const drop = rollTreasureDrop(this.treasures, { preferHigherRarity });
+    this.pendingChest = drop;
+
+    const modal = this.container?.querySelector('#farmChestModal');
+    const titleEl = this.container?.querySelector('#chestTitle');
+    const boxBtn = this.container?.querySelector('#chestBoxBtn');
+    const subEl = this.container?.querySelector('#chestSub');
+    const revealEl = this.container?.querySelector('#chestReveal');
+    if (!modal || !boxBtn || !revealEl) return;
+
+    titleEl.textContent = reasonTitle || '🎁 반짝이는 보물상자 도착!!';
+    boxBtn.style.display = 'inline-grid';
+    subEl.style.display = 'block';
+    revealEl.style.display = 'none';
+    modal.style.display = 'flex';
+  }
+
+  _revealPendingChest() {
+    if (!this.pendingChest) return;
+    const { item, isDuplicate } = this.pendingChest;
+    this.pendingChest = null;
+
+    if (!isDuplicate && !this.treasures.includes(item.id)) {
+      this.treasures.push(item.id);
+      this.hasNewBadge = true;
+      this._saveRpgState();
+    }
+
+    const boxBtn = this.container?.querySelector('#chestBoxBtn');
+    const subEl = this.container?.querySelector('#chestSub');
+    const revealEl = this.container?.querySelector('#chestReveal');
+    const rarityEl = this.container?.querySelector('#chestRarity');
+    const icoEl = this.container?.querySelector('#chestItemIco');
+    const nameEl = this.container?.querySelector('#chestItemName');
+    const rarityNames = { common: '⭐ 일반 보물', rare: '💙 희귀 보물!', epic: '💜 영웅 보물!!', legendary: '🌈 전설의 보물!!!' };
+
+    if (boxBtn) boxBtn.style.display = 'none';
+    if (subEl) subEl.style.display = 'none';
+    if (rarityEl) {
+      rarityEl.textContent = isDuplicate ? '✨ 보너스 전설 보물! (별 +3!)' : rarityNames[item.rarity];
+      rarityEl.className = `chest-rarity rarity-${item.rarity}`;
+    }
+    if (icoEl) icoEl.textContent = item.emoji;
+    if (nameEl) nameEl.textContent = item.name;
+    if (revealEl) revealEl.style.display = 'flex';
+
+    if (isDuplicate) this.onRewardStar(3);
+    this.audio.playFanfareSFX();
+    this.onConfetti(90);
+    this._updateBagBadge();
+  }
+
+  _closeChestModal() {
+    const modal = this.container?.querySelector('#farmChestModal');
+    if (modal) modal.style.display = 'none';
   }
 
   _closeBagModal() {
@@ -757,9 +965,11 @@ export class FarmGame3D {
     this.groundMesh = world.groundMesh;
     this.clouds = world.clouds;
 
-    // 1b. v3 Living Party Feast & 3D Farm Rewards (syncs immediately with saved mastery!)
+    // 1b. v3/v4 Living Party Feast & 12 Unlockable Village Buildings
     this.partyRewards = buildPartyRewards3D(THREE, this.scene);
     this.partyRewards.syncMastery(this.mastery);
+    this.villageBuildings = buildVillageBuildings3D(THREE, this.scene);
+    this.villageBuildings.syncBuildings(getUnlockedBuildings(this.speakCount));
 
     // 2. 100% 3D Wooju Explorer Avatar + Equipped 3D Gear
     this.wooju = buildWooju3D(THREE);
@@ -1023,6 +1233,7 @@ export class FarmGame3D {
     const chunkBtn = this.container.querySelector('#farmDlgChunkBtn');
     const normalBtn = this.container.querySelector('#farmJudgeNormalBtn');
     const crownBtn = this.container.querySelector('#farmJudgeCrownBtn');
+    const perfectBtn = this.container.querySelector('#farmJudgePerfectBtn');
 
     portrait.src = spot.portrait;
     nameEl.textContent = `${spot.emoji} ${spot.name} (${spotIdx + 1}/12)`;
@@ -1165,49 +1376,79 @@ export class FarmGame3D {
 
     normalBtn.onclick = () => {
       const tier = this.dialogueMode === 'hint' ? 2 : 1;
-      this._claimSpotReward(spotIdx, tier);
+      this._claimSpotReward(spotIdx, tier, { isPerfect: false });
     };
 
     crownBtn.onclick = () => {
-      this._claimSpotReward(spotIdx, 3);
+      this._claimSpotReward(spotIdx, 3, { isPerfect: false });
     };
+
+    if (perfectBtn) {
+      perfectBtn.onclick = () => {
+        this._claimSpotReward(spotIdx, 3, { isPerfect: true });
+      };
+    }
 
     dlg.style.display = 'flex';
     runChallengeMode(this.dialogueMode);
   }
 
-  _claimSpotReward(spotIdx, targetTier) {
+  _claimSpotReward(spotIdx, targetTier, { isPerfect = false } = {}) {
     const spot = FARM_SPOTS[spotIdx];
-    const prevUnlocked = new Set(getUnlockedGear(this.mastery, this.getTotalStars()));
-    const result = applySpotMastery(this.mastery, spot.id, targetTier);
+    const prevBuildings = new Set(getUnlockedBuildings(this.speakCount));
+    const prevUnlockedGear = new Set(getUnlockedGear(this.mastery, this.getTotalStars(), this._getExtraStats()));
+    const prevAch = new Set(getUnlockedAchievements(this.mastery, this.getTotalStars(), this._getExtraStats()));
 
+    const result = applySpotMastery(this.mastery, spot.id, targetTier, { isPerfect });
     this.mastery = result.nextMastery;
+    this.speakCount += 1;
+    if (isPerfect) this.perfectCount += 1;
+
     const prog = computeFarmProgress(this.mastery);
     this.currentSpotIndex = prog.nextSpotIndex;
 
     this._hideDialogue();
     this.onRewardStar(result.starDelta);
 
-    // Check if any new 3D Wooju Gear unlocked!
-    const nextUnlocked = getUnlockedGear(this.mastery, this.getTotalStars());
-    const newlyUnlockedGear = nextUnlocked.filter(id => !prevUnlocked.has(id));
+    // 1. Check newly built 3D Village Buildings!
+    const nextBuildings = getUnlockedBuildings(this.speakCount);
+    const newlyBuilt = nextBuildings.filter(id => !prevBuildings.has(id));
+    if (this.villageBuildings) {
+      this.villageBuildings.syncBuildings(nextBuildings, newlyBuilt[0] || null);
+    }
+
+    // 2. Check newly unlocked 3D Wooju Gear (auto-equips into its slot!)
+    const extra = this._getExtraStats();
+    const nextGear = getUnlockedGear(this.mastery, this.getTotalStars(), extra);
+    const newlyUnlockedGear = nextGear.filter(id => !prevUnlockedGear.has(id));
     if (newlyUnlockedGear.length > 0) {
-      newlyUnlockedGear.forEach(id => { this.equippedGear[id] = true; });
-      this.hasNewGearBadge = true;
+      newlyUnlockedGear.forEach(id => {
+        const gObj = WOOJU_GEAR.find(x => x.id === id);
+        if (gObj) {
+          WOOJU_GEAR.filter(x => x.slot === gObj.slot).forEach(x => { this.equippedGear[x.id] = false; });
+          this.equippedGear[id] = true;
+        }
+      });
+      this.hasNewBadge = true;
       if (this.wooju?.setGear) this.wooju.setGear(this.equippedGear);
     }
 
+    // 3. Check newly unlocked Achievements!
+    const nextAch = getUnlockedAchievements(this.mastery, this.getTotalStars(), extra);
+    const newlyUnlockedAch = nextAch.filter(id => !prevAch.has(id));
+    if (newlyUnlockedAch.length > 0) this.hasNewBadge = true;
+
     this._saveRpgState();
 
-    // Trigger 3D living farm prop pop-in & animal crown/aura!
+    // 4. Trigger 3D living farm party prop pop-in & animal crown/aura!
     if (this.partyRewards) {
       this.partyRewards.syncMastery(this.mastery, result.newlyMet ? spot.id : null);
     }
 
-    if (result.newlyMastered) {
+    if (isPerfect || result.newlyMastered || newlyBuilt.length > 0) {
       this.audio.playFanfareSFX();
-      this.onConfetti(75);
-      this._animateItemToBag('👑');
+      this.onConfetti(85);
+      this._animateItemToBag(isPerfect ? '💎' : (newlyBuilt.length > 0 ? '🏗️' : '👑'));
     } else {
       this.audio.playStarSFX();
       this.onConfetti(42);
@@ -1219,13 +1460,18 @@ export class FarmGame3D {
     this._renderRibbon();
     this._updateSpotVisuals();
 
-    // Celebrate new gear unlock or story milestone
-    if (newlyUnlockedGear.length > 0) {
+    // 5. Priority Celebration Toasts + Interactive Treasure Chest Drop!
+    if (newlyBuilt.length > 0) {
+      const b = VILLAGE_BUILDINGS.find(x => x.id === newlyBuilt[0]);
+      if (b) this.onToast(`🏗️ 새 3D 건물 완성!! ${b.emoji} ${b.name}이(가) 농장에 지어졌어요!!`);
+    } else if (newlyUnlockedGear.length > 0) {
       const g = WOOJU_GEAR.find(x => x.id === newlyUnlockedGear[0]);
-      if (g) {
-        this.audio.playFanfareSFX();
-        this.onToast(`🎉 새 3D 장비 해금! ${g.emoji} ${g.name}을(를) 바로 장착했어요!`);
-      }
+      if (g) this.onToast(`🎉 새 3D 장비 해금! ${g.emoji} ${g.name}을(를) 바로 장착했어요!`);
+    } else if (newlyUnlockedAch.length > 0) {
+      const a = FARM_ACHIEVEMENTS.find(x => x.id === newlyUnlockedAch[0]);
+      if (a) this.onToast(`🏆 업적 달성! ${a.emoji} ${a.name}!`);
+    } else if (isPerfect) {
+      this.onToast(`💎 토씨 하나 안 틀림!! 퍼펙트 보물상자 도착!!`);
     } else if (result.newlyMastered) {
       this.onToast(`👑 ${spot.emoji} ${spot.name} 혼자 외우기 성공! 황금 왕관을 쓰고 우주 뒤를 따라와요!`);
     } else if (result.newlyMet) {
@@ -1236,9 +1482,20 @@ export class FarmGame3D {
         this.onToast(`✨ 3D 농장에 ${spot.itemEmoji} ${spot.itemLabel}이(가) 생겼어요! 다음은 ${next.emoji} ${next.name}!`);
       }
     } else if (result.upgraded) {
-      this.onToast(`⭐⭐ ${spot.emoji} ${spot.name} 레벨 업! 다음엔 👑 혼자 외우기에 도전해요!`);
+      this.onToast(`⭐⭐ ${spot.emoji} ${spot.name} 레벨 업! 다음엔 👑/💎 퍼펙트에 도전해요!`);
     } else {
-      this.onToast(`⭐ ${spot.emoji} ${spot.name} 복습 최고! 별 +1!`);
+      this.onToast(`🗣️ 말하기 ${this.speakCount}회 달성! 별 +1!`);
+    }
+
+    // Trigger Interactive Treasure Chest on Perfect OR every 5th cumulative speak!
+    if (isPerfect) {
+      setTimeout(() => {
+        if (this.mounted) this._openChestModal('💎 토씨 하나 안 틀림!! 퍼펙트 보물상자!', { preferHigherRarity: true });
+      }, 420);
+    } else if (this.speakCount % 5 === 0) {
+      setTimeout(() => {
+        if (this.mounted) this._openChestModal(`🎁 말하기 ${this.speakCount}회 보너스 보물상자!`, { preferHigherRarity: false });
+      }, 420);
     }
   }
 
@@ -1293,8 +1550,9 @@ export class FarmGame3D {
         if (c.position.x > 26) c.position.x = -26;
       });
 
-      // Animate v3 Living Farm 3D Party Rewards (pop-in, steam, floating notes, spotlight)
+      // Animate v3/v4 Living Farm 3D Party Rewards & Village Buildings
       if (this.partyRewards) this.partyRewards.update(t, dt);
+      if (this.villageBuildings) this.villageBuildings.update(t, dt);
 
       // 1. Wooju 3D Avatar Movement & Walking Limb Animation
       let moving = false;
