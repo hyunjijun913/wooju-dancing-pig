@@ -1203,3 +1203,120 @@ export function applySpotMastery(masteryMap = {}, spotId, targetTier = 1, { isPe
   const starDelta = isPerfect ? baseDelta + 2 : baseDelta;
   return { nextMastery, prevTier: prev, nextTier: nextVal, upgraded, newlyMet, newlyMastered, isPerfect, starDelta };
 }
+
+// --- v5: 14-Day Attendance Check-in Event & Daily Missions ---
+export const ATTENDANCE_REWARDS = [
+  { day: 1,  emoji: '⭐', label: '별 +3',          stars: 3, chest: false },
+  { day: 2,  emoji: '🌟', label: '별 +4',          stars: 4, chest: false },
+  { day: 3,  emoji: '🎁', label: '보물상자!',       stars: 2, chest: true,  highRarity: false },
+  { day: 4,  emoji: '⭐', label: '별 +5',          stars: 5, chest: false },
+  { day: 5,  emoji: '🎁', label: '희귀 상자!',      stars: 3, chest: true,  highRarity: true },
+  { day: 6,  emoji: '🌟', label: '별 +5',          stars: 5, chest: false },
+  { day: 7,  emoji: '👑', label: '7일 대보물!',     stars: 6, chest: true,  highRarity: true },
+  { day: 8,  emoji: '⭐', label: '별 +5',          stars: 5, chest: false },
+  { day: 9,  emoji: '🌟', label: '별 +6',          stars: 6, chest: false },
+  { day: 10, emoji: '🎁', label: '10일 보물!',      stars: 4, chest: true,  highRarity: true },
+  { day: 11, emoji: '⭐', label: '별 +6',          stars: 6, chest: false },
+  { day: 12, emoji: '🎁', label: '희귀 상자!',      stars: 5, chest: true,  highRarity: true },
+  { day: 13, emoji: '🌟', label: '별 +7',          stars: 7, chest: false },
+  { day: 14, emoji: '🏆', label: '발표회 대선물!',   stars: 10, chest: true, highRarity: true },
+];
+
+export const DAILY_QUESTS = [
+  { id: 'dq_speak_3',  emoji: '🗣️', title: '오늘 영어로 3번 말하기',            metric: 'speaksToday',          target: 3, rewardText: '⭐ 별 +3',          stars: 3, chest: false },
+  { id: 'dq_spots_3',  emoji: '🐾', title: '오늘 동물 친구 3마리 만나기',        metric: 'uniqueSpotsCount',     target: 3, rewardText: '⭐ 별 +4',          stars: 4, chest: false },
+  { id: 'dq_master_1', emoji: '👑', title: '혼자 외우기 또는 💎 퍼펙트 1번!',    metric: 'perfectOrMasterToday', target: 1, rewardText: '🎁 보물상자 1개!',   stars: 2, chest: true, highRarity: false },
+];
+
+export function getLocalDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function normalizeDailyState(dailyState, todayKey) {
+  if (dailyState && dailyState.date === todayKey) {
+    return {
+      date: todayKey,
+      speaksToday: Number.isFinite(dailyState.speaksToday) ? dailyState.speaksToday : 0,
+      perfectOrMasterToday: Number.isFinite(dailyState.perfectOrMasterToday) ? dailyState.perfectOrMasterToday : 0,
+      uniqueSpotsToday: Array.isArray(dailyState.uniqueSpotsToday) ? [...dailyState.uniqueSpotsToday] : [],
+      claimedMissions: Array.isArray(dailyState.claimedMissions) ? [...dailyState.claimedMissions] : [],
+      allClearClaimed: Boolean(dailyState.allClearClaimed),
+    };
+  }
+  return {
+    date: todayKey,
+    speaksToday: 0,
+    perfectOrMasterToday: 0,
+    uniqueSpotsToday: [],
+    claimedMissions: [],
+    allClearClaimed: false,
+  };
+}
+
+export function recordDailyActivity(dailyState, todayKey, { spotId, tier = 1, isPerfect = false } = {}) {
+  const next = normalizeDailyState(dailyState, todayKey);
+  next.speaksToday += 1;
+  if (tier >= 3 || isPerfect) next.perfectOrMasterToday += 1;
+  if (spotId && !next.uniqueSpotsToday.includes(spotId)) {
+    next.uniqueSpotsToday.push(spotId);
+  }
+  return next;
+}
+
+export function evaluateDailyQuests(dailyState) {
+  const s = dailyState || { speaksToday: 0, perfectOrMasterToday: 0, uniqueSpotsToday: [], claimedMissions: [], allClearClaimed: false };
+  const claimedSet = new Set(s.claimedMissions || []);
+  const metrics = {
+    speaksToday: s.speaksToday || 0,
+    perfectOrMasterToday: s.perfectOrMasterToday || 0,
+    uniqueSpotsCount: Array.isArray(s.uniqueSpotsToday) ? s.uniqueSpotsToday.length : 0,
+  };
+
+  const quests = DAILY_QUESTS.map(q => {
+    const progress = Math.min(q.target, metrics[q.metric] || 0);
+    const completed = progress >= q.target;
+    const claimed = claimedSet.has(q.id);
+    return { ...q, progress, completed, claimed, canClaim: completed && !claimed };
+  });
+
+  const allCompleted = quests.every(q => q.completed);
+  const allClaimed = Boolean(s.allClearClaimed);
+  const canClaimAllClear = allCompleted && !allClaimed;
+  const claimableCount = quests.filter(q => q.canClaim).length + (canClaimAllClear ? 1 : 0);
+
+  return { quests, allCompleted, allClaimed, canClaimAllClear, claimableCount };
+}
+
+export function claimDailyAttendance(attendanceState, todayKey) {
+  const prev = attendanceState && typeof attendanceState === 'object'
+    ? {
+        days: Array.isArray(attendanceState.days) ? [...attendanceState.days] : [],
+        lastClaimDate: attendanceState.lastClaimDate || null,
+        streak: Number.isFinite(attendanceState.streak) ? attendanceState.streak : 0,
+      }
+    : { days: [], lastClaimDate: null, streak: 0 };
+
+  if (prev.lastClaimDate === todayKey || prev.days.includes(todayKey)) {
+    const dayNum = Math.min(ATTENDANCE_REWARDS.length, Math.max(1, prev.days.length));
+    return { nextAttendance: prev, claimedDay: dayNum, reward: ATTENDANCE_REWARDS[dayNum - 1], alreadyClaimed: true };
+  }
+
+  // Compute consecutive streak by checking if lastClaimDate was yesterday
+  let nextStreak = 1;
+  if (prev.lastClaimDate) {
+    const prevDate = new Date(`${prev.lastClaimDate}T00:00:00`);
+    const curDate = new Date(`${todayKey}T00:00:00`);
+    const diffDays = Math.round((curDate - prevDate) / 86400000);
+    if (diffDays === 1) nextStreak = prev.streak + 1;
+  }
+
+  const nextDays = [...prev.days, todayKey];
+  const cycleDay = ((nextDays.length - 1) % ATTENDANCE_REWARDS.length) + 1;
+  const reward = ATTENDANCE_REWARDS[cycleDay - 1];
+  const nextAttendance = { days: nextDays, lastClaimDate: todayKey, streak: nextStreak };
+
+  return { nextAttendance, claimedDay: cycleDay, reward, alreadyClaimed: false };
+}

@@ -7,6 +7,7 @@ import {
   TREASURE_ITEMS,
   WOOJU_GEAR,
   FARM_ACHIEVEMENTS,
+  ATTENDANCE_REWARDS,
   FARM_STORAGE_KEY,
   resolveSpotInteraction,
   computeFarmProgress,
@@ -17,6 +18,11 @@ import {
   getUnlockedAchievements,
   rollTreasureDrop,
   countMasteredSpots,
+  getLocalDateKey,
+  normalizeDailyState,
+  recordDailyActivity,
+  evaluateDailyQuests,
+  claimDailyAttendance,
 } from './data.js';
 import {
   buildWooju3D,
@@ -89,6 +95,8 @@ export class FarmGame3D {
     this.speakCount = 0;
     this.perfectCount = 0;
     this.treasures = []; // owned treasure IDs (up to 24)
+    this.attendance = { days: [], lastClaimDate: null, streak: 0 };
+    this.daily = normalizeDailyState(null, getLocalDateKey());
     this.paradeEnabled = true;
     this.bagTab = 'collection'; // 'collection' | 'buildings' | 'treasures' | 'wardrobe' | 'achievements'
     this.hasNewBadge = false;
@@ -142,6 +150,10 @@ export class FarmGame3D {
         this.speakCount = Number.isFinite(parsed.speakCount) ? parsed.speakCount : 0;
         this.perfectCount = Number.isFinite(parsed.perfectCount) ? parsed.perfectCount : 0;
         this.treasures = Array.isArray(parsed.treasures) ? parsed.treasures : [];
+        this.attendance = parsed.attendance && typeof parsed.attendance === 'object'
+          ? parsed.attendance
+          : { days: [], lastClaimDate: null, streak: 0 };
+        this.daily = normalizeDailyState(parsed.daily, getLocalDateKey());
       }
     } catch (_) {
       this.mastery = {};
@@ -149,6 +161,8 @@ export class FarmGame3D {
       this.speakCount = 0;
       this.perfectCount = 0;
       this.treasures = [];
+      this.attendance = { days: [], lastClaimDate: null, streak: 0 };
+      this.daily = normalizeDailyState(null, getLocalDateKey());
     }
     const prog = computeFarmProgress(this.mastery);
     this.currentSpotIndex = prog.nextSpotIndex;
@@ -162,6 +176,8 @@ export class FarmGame3D {
         speakCount: this.speakCount,
         perfectCount: this.perfectCount,
         treasures: this.treasures,
+        attendance: this.attendance,
+        daily: this.daily,
       }));
     } catch (_) {}
   }
@@ -321,6 +337,10 @@ export class FarmGame3D {
         <div class="farm-float-top">
           <button class="farm-pill-btn farm-exit-btn" id="farmExitBtn">⬅️ 학습 메뉴</button>
           <div class="farm-ribbon" id="farmRibbon" aria-label="스토리 순서 띠"></div>
+          <button class="farm-pill-btn farm-event-btn" id="farmEventBtn" title="출석체크 &amp; 일일 미션">
+            🎁 출석·미션
+            <span class="event-badge-dot" id="farmEventBadge" style="display:none;">!</span>
+          </button>
           <button class="farm-pill-btn farm-parade-btn" id="farmParadeBtn" title="3성 동물 기차" style="display:none;">🐾 기차 ON</button>
           <button class="farm-pill-btn farm-reset-btn" id="farmResetBtn" title="처음부터">🔄</button>
         </div>
@@ -401,6 +421,17 @@ export class FarmGame3D {
           </div>
         </div>
 
+        <!-- 🎁 14-Day Attendance Check-in & Daily Missions Event Modal -->
+        <div class="farm-bag-modal" id="farmEventModal" style="display:none;">
+          <div class="farm-bag-sheet">
+            <div class="modal-head">
+              <h2>🎁 매일 출석체크 &amp; 일일 미션</h2>
+              <button class="close-btn" id="farmEventCloseBtn">✕</button>
+            </div>
+            <div id="farmEventBody"></div>
+          </div>
+        </div>
+
         <!-- 🎁 Interactive Treasure Chest Pop-up Modal -->
         <div class="farm-chest-modal" id="farmChestModal" style="display:none;">
           <div class="farm-chest-card" id="farmChestCard">
@@ -453,6 +484,8 @@ export class FarmGame3D {
     this.container.querySelector('#farmResetBtn').addEventListener('click', () => this.resetProgress(false));
     this.container.querySelector('#farmBagBtn').addEventListener('click', () => this._openBagModal());
     this.container.querySelector('#farmBagCloseBtn').addEventListener('click', () => this._closeBagModal());
+    this.container.querySelector('#farmEventBtn').addEventListener('click', () => this._openEventModal());
+    this.container.querySelector('#farmEventCloseBtn').addEventListener('click', () => this._closeEventModal());
     this.container.querySelector('#farmDlgCloseBtn').addEventListener('click', () => this._hideDialogue());
     this.container.querySelector('#chestBoxBtn').addEventListener('click', () => this._revealPendingChest());
     this.container.querySelector('#chestCloseBtn').addEventListener('click', () => this._closeChestModal());
@@ -484,10 +517,14 @@ export class FarmGame3D {
       this.entered = true;
       const overlay = this.container.querySelector('#farmEntryOverlay');
       if (overlay) overlay.style.display = 'none';
-      if (this.currentSpotIndex === 0) {
+      const todayKey = getLocalDateKey();
+      const attendedToday = this.attendance?.lastClaimDate === todayKey;
+      if (!attendedToday) {
+        this._openEventModal();
+      } else if (this.currentSpotIndex === 0) {
         this._openDialogue(0, false);
       } else {
-        this.onToast('🏡 우주의 농장에 돌아왔어요! 친구들과 3성 왕관에 도전해 볼까요!');
+        this.onToast('🏡 우주의 농장에 돌아왔어요! 오늘의 일일 미션과 3성 왕관에 도전해요!');
       }
     });
   }
@@ -526,6 +563,22 @@ export class FarmGame3D {
 
     const newDot = this.container?.querySelector('#farmGearNewDot');
     if (newDot) newDot.style.display = this.hasNewBadge ? 'inline-block' : 'none';
+
+    // Update 🎁 출석·미션 pulsing badge dot
+    const todayKey = getLocalDateKey();
+    this.daily = normalizeDailyState(this.daily, todayKey);
+    const attendedToday = this.attendance?.lastClaimDate === todayKey;
+    const dqEval = evaluateDailyQuests(this.daily);
+    const pendingEventGifts = (attendedToday ? 0 : 1) + dqEval.claimableCount;
+    const evDot = this.container?.querySelector('#farmEventBadge');
+    if (evDot) {
+      if (pendingEventGifts > 0) {
+        evDot.style.display = 'inline-block';
+        evDot.textContent = attendedToday ? String(pendingEventGifts) : '선물!';
+      } else {
+        evDot.style.display = 'none';
+      }
+    }
 
     const goalPill = this.container?.querySelector('#farmGoalPill');
     if (goalPill) {
@@ -811,6 +864,157 @@ export class FarmGame3D {
   _closeChestModal() {
     const modal = this.container?.querySelector('#farmChestModal');
     if (modal) modal.style.display = 'none';
+  }
+
+  _openEventModal() {
+    this.daily = normalizeDailyState(this.daily, getLocalDateKey());
+    this._renderEventModal();
+    const modal = this.container?.querySelector('#farmEventModal');
+    if (modal) modal.style.display = 'flex';
+  }
+
+  _closeEventModal() {
+    const modal = this.container?.querySelector('#farmEventModal');
+    if (modal) modal.style.display = 'none';
+    if (this.entered && this.currentSpotIndex === 0 && this.activeDialogueSpot === null) {
+      this._openDialogue(0, false);
+    }
+  }
+
+  _renderEventModal() {
+    const body = this.container?.querySelector('#farmEventBody');
+    if (!body) return;
+    const todayKey = getLocalDateKey();
+    this.daily = normalizeDailyState(this.daily, todayKey);
+    const attendedToday = this.attendance?.lastClaimDate === todayKey;
+    const checkedCount = (this.attendance?.days || []).length;
+    const cycleChecked = checkedCount === 0 ? 0 : (((checkedCount - 1) % ATTENDANCE_REWARDS.length) + 1);
+    const nextDayNum = attendedToday ? cycleChecked : ((checkedCount % ATTENDANCE_REWARDS.length) + 1);
+    const streak = this.attendance?.streak || 0;
+    const dq = evaluateDailyQuests(this.daily);
+
+    body.innerHTML = `
+      <div class="event-section-title">
+        <span>📅 14일 출석체크 선물</span>
+        <span class="streak-pill">🔥 ${streak}일 연속 출석 중!</span>
+      </div>
+      <div class="attend-grid">
+        ${ATTENDANCE_REWARDS.map((r) => {
+          const isChecked = attendedToday ? r.day <= cycleChecked : r.day < nextDayNum;
+          const isTodayNext = !attendedToday && r.day === nextDayNum;
+          return `
+            <div class="attend-cell ${isChecked ? 'checked' : ''} ${isTodayNext ? 'today-next' : ''}">
+              <div class="attend-day">${r.day}일차</div>
+              <div class="attend-ico">${isChecked ? '✅' : r.emoji}</div>
+              <div class="attend-lbl">${r.label}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      <button class="big-btn ${attendedToday ? 'btn-slow' : 'btn-star'}" id="btnClaimAttend" style="width:100%;margin-bottom:16px;" ${attendedToday ? 'disabled' : ''}>
+        ${attendedToday
+          ? '✅ 오늘 출석 선물을 이미 받았어요! 내일 또 만나요!'
+          : `🎁 ${nextDayNum}일차 출석 도장 쾅! (${ATTENDANCE_REWARDS[nextDayNum - 1].label} 받기)`}
+      </button>
+
+      <div class="event-section-title">
+        <span>🎯 오늘의 일일 미션</span>
+        <span class="streak-pill">매일 자정 새 미션!</span>
+      </div>
+      <div class="daily-quest-list">
+        ${dq.quests.map((q) => {
+          const pct = Math.round((q.progress / q.target) * 100);
+          const rowCls = q.claimed ? 'done' : (q.canClaim ? 'ready' : '');
+          const btnCls = q.claimed ? 'claimed' : (q.canClaim ? 'can-claim' : '');
+          const btnTxt = q.claimed ? '✅ 완료' : (q.canClaim ? `🎁 ${q.rewardText}` : `${q.rewardText}`);
+          return `
+            <div class="daily-quest-row ${rowCls}">
+              <div class="dq-ico">${q.emoji}</div>
+              <div class="dq-body">
+                <div class="dq-title">${q.title}</div>
+                <div class="dq-prog-wrap">
+                  <div class="dq-bar"><div class="dq-bar-fill" style="width:${pct}%"></div></div>
+                  <span class="dq-num">${q.progress}/${q.target}</span>
+                </div>
+              </div>
+              <button class="dq-btn ${btnCls}" data-dq-id="${q.id}" ${q.canClaim ? '' : 'disabled'}>${btnTxt}</button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="all-clear-card">
+        <div>
+          <div style="font-size:14px;font-weight:900;color:#78350F;">🌟 오늘 미션 3개 올클리어 대선물!</div>
+          <div style="font-size:12px;font-weight:700;color:#92400E;">⭐ 별 +5 &amp; 황금 희귀 보물상자 1개!</div>
+        </div>
+        <button class="dq-btn ${dq.allClaimed ? 'claimed' : (dq.canClaimAllClear ? 'can-claim' : '')}" id="btnClaimAllClear" ${dq.canClaimAllClear ? '' : 'disabled'}>
+          ${dq.allClaimed ? '🏆 수령 완료' : (dq.canClaimAllClear ? '🎁 대선물 받기!' : '진행 중')}
+        </button>
+      </div>
+    `;
+
+    const attendBtn = body.querySelector('#btnClaimAttend');
+    if (attendBtn && !attendedToday) {
+      attendBtn.onclick = () => {
+        const res = claimDailyAttendance(this.attendance, todayKey);
+        if (res.alreadyClaimed) return;
+        this.attendance = res.nextAttendance;
+        this._saveRpgState();
+        this.onRewardStar(res.reward.stars);
+        this.audio.playFanfareSFX();
+        this.onConfetti(75);
+        this._updateBagBadge();
+        this._renderEventModal();
+        this.onToast(`🎉 ${res.claimedDay}일차 출석 완료! 🔥 ${res.nextAttendance.streak}일 연속! (${res.reward.label})`);
+        if (res.reward.chest) {
+          this._closeEventModal();
+          setTimeout(() => {
+            if (this.mounted) this._openChestModal(`🎁 ${res.claimedDay}일차 출석 특별 보물상자!`, { preferHigherRarity: Boolean(res.reward.highRarity) });
+          }, 260);
+        }
+      };
+    }
+
+    body.querySelectorAll('.dq-btn.can-claim[data-dq-id]').forEach(btn => {
+      btn.onclick = () => {
+        const qId = btn.dataset.dqId;
+        const q = dq.quests.find(x => x.id === qId);
+        if (!q || !q.canClaim) return;
+        this.daily.claimedMissions.push(qId);
+        this._saveRpgState();
+        this.onRewardStar(q.stars);
+        this.audio.playStarSFX();
+        this.onConfetti(55);
+        this._updateBagBadge();
+        this._renderEventModal();
+        this.onToast(`🎯 일일 미션 보상 획득! ${q.rewardText}!`);
+        if (q.chest) {
+          this._closeEventModal();
+          setTimeout(() => {
+            if (this.mounted) this._openChestModal('🎯 일일 미션 보물상자!', { preferHigherRarity: Boolean(q.highRarity) });
+          }, 260);
+        }
+      };
+    });
+
+    const allClearBtn = body.querySelector('#btnClaimAllClear');
+    if (allClearBtn && dq.canClaimAllClear) {
+      allClearBtn.onclick = () => {
+        this.daily.allClearClaimed = true;
+        this._saveRpgState();
+        this.onRewardStar(5);
+        this.audio.playFanfareSFX();
+        this.onConfetti(95);
+        this._updateBagBadge();
+        this._renderEventModal();
+        this._closeEventModal();
+        this.onToast('🌟 오늘의 일일 미션 올클리어!! 황금 대보물상자 도착!!');
+        setTimeout(() => {
+          if (this.mounted) this._openChestModal('🌟 일일 미션 올클리어 황금 보물상자!', { preferHigherRarity: true });
+        }, 260);
+      };
+    }
   }
 
   _closeBagModal() {
@@ -1403,6 +1607,20 @@ export class FarmGame3D {
     this.mastery = result.nextMastery;
     this.speakCount += 1;
     if (isPerfect) this.perfectCount += 1;
+
+    // Track daily mission activity!
+    const prevDqClaimable = evaluateDailyQuests(this.daily).claimableCount;
+    this.daily = recordDailyActivity(this.daily, getLocalDateKey(), {
+      spotId: spot.id,
+      tier: result.nextTier,
+      isPerfect,
+    });
+    const nextDqClaimable = evaluateDailyQuests(this.daily).claimableCount;
+    if (nextDqClaimable > prevDqClaimable) {
+      setTimeout(() => {
+        if (this.mounted) this.onToast('🎯 일일 미션 달성!! 상단 🎁 출석·미션 버튼을 눌러 선물을 받으세요!');
+      }, 1500);
+    }
 
     const prog = computeFarmProgress(this.mastery);
     this.currentSpotIndex = prog.nextSpotIndex;
