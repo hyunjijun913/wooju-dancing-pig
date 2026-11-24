@@ -1161,18 +1161,41 @@ export const ROOM_FURNITURE = [
   { id: 'furn_rocket_tent', name: '우주선 비밀 기지!', emoji: '🛸', rarity: 'legendary', shape: 'tent',    color: '#4F46E5', accent: '#FACC15' },
 ];
 
-// Unified 100-item catalog (40 treasures + 10 wallpapers + 10 floors + 40 furniture = 100!)
+// 4 Collectible My-Home Room Expansion Tickets (dropped as exciting gifts from Treasure Chests!)
+export const ROOM_EXPANSIONS = [
+  { id: 'expand_lv2', name: '2단계 넓은 방 확장권',   emoji: '📐', rarity: 'rare',      tier: 2 },
+  { id: 'expand_lv3', name: '3단계 큰 거실 확장권',   emoji: '🏡', rarity: 'epic',      tier: 3 },
+  { id: 'expand_lv4', name: '4단계 궁전 방 확장권',   emoji: '🏰', rarity: 'epic',      tier: 4 },
+  { id: 'expand_lv5', name: '5단계 우주 대저택 확장권', emoji: '🌌', rarity: 'legendary', tier: 5 },
+];
+
+// Unified 104-item catalog (40 treasures + 10 wallpapers + 10 floors + 40 furniture + 4 room expansions!)
 export const ALL_COLLECTIBLES = [
   ...TREASURE_ITEMS.map(x => ({ ...x, kind: 'treasure' })),
   ...ROOM_WALLPAPERS.map(x => ({ ...x, kind: 'wallpaper' })),
   ...ROOM_FLOORS.map(x => ({ ...x, kind: 'floor' })),
   ...ROOM_FURNITURE.map(x => ({ ...x, kind: 'furniture' })),
+  ...ROOM_EXPANSIONS.map(x => ({ ...x, kind: 'expansion' })),
 ];
 
-export function getHomeLevel(ownedFurnitureCount = 0) {
-  if (ownedFurnitureCount >= 20) return { level: 3, name: '3단계 대왕 우주 왕궁', size: 15 };
-  if (ownedFurnitureCount >= 8)  return { level: 2, name: '2단계 넓은 거실',     size: 12.5 };
-  return { level: 1, name: '1단계 아담한 우주 방', size: 10 };
+const HOME_TIERS = [
+  { level: 1, name: '1단계 아담한 우주 방',   size: 12 },
+  { level: 2, name: '2단계 넓은 우주 방',     size: 15 },
+  { level: 3, name: '3단계 큰 거실',          size: 18 },
+  { level: 4, name: '4단계 궁전 방',          size: 21 },
+  { level: 5, name: '5단계 우주 대저택!!',    size: 24 },
+];
+
+export function getHomeLevel(ownedFurnitureCount = 0, ownedIds = []) {
+  const ownedSet = new Set(ownedIds);
+  const ticketExpansions = ROOM_EXPANSIONS.filter(e => ownedSet.has(e.id)).length;
+  // Furniture milestones (6, 14, 24, 34) OR Room Expansion Gift Tickets both expand the room!
+  const furnLevel = ownedFurnitureCount >= 34 ? 5
+    : ownedFurnitureCount >= 24 ? 4
+    : ownedFurnitureCount >= 14 ? 3
+    : ownedFurnitureCount >= 6 ? 2 : 1;
+  const level = Math.min(5, Math.max(furnLevel, 1 + ticketExpansions));
+  return HOME_TIERS[level - 1];
 }
 
 // v11: Grand Rewards for completing the 3D Central Stage Presentation Show!

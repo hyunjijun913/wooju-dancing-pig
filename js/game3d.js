@@ -9,6 +9,7 @@ import {
   ROOM_WALLPAPERS,
   ROOM_FLOORS,
   ROOM_FURNITURE,
+  ROOM_EXPANSIONS,
   ALL_COLLECTIBLES,
   getHomeLevel,
   STAGE_CLEAR_MONUMENTS,
@@ -151,12 +152,17 @@ export class FarmGame3D {
     this.voiceFilled = false;
     this.pendingSpotTrigger = null;
 
-    // Wooju 3D avatar movement & parade breadcrumb trail
+    // Wooju 3D avatar movement, keyboard arrows, finger-hold steering & parade trail
     this.avatarPos = { x: 0, z: 22.0 };
     this.avatarAngle = Math.PI;
     this.walkTarget = null;
     this.joyVec = { x: 0, z: 0 };
     this.joyActive = false;
+    this.keysDown = new Set();
+    this.pointerSteerActive = false;
+    this.pointerSteerVec = { x: 0, z: 0 };
+    this._pointerDownPos = null;
+    this._pointerDragged = false;
     this.woojuTrail = [];
 
     // 3D refs
@@ -183,6 +189,10 @@ export class FarmGame3D {
 
     this._onResize = null;
     this._onPointerDown = null;
+    this._onPointerMove = null;
+    this._onPointerUp = null;
+    this._onKeyDown = null;
+    this._onKeyUp = null;
     this._typeTimer = null;
     this._wordSweepTimer = null;
     this._autoPerfectTimer = null;
@@ -305,6 +315,11 @@ export class FarmGame3D {
     this.joyVec = { x: 0, z: 0 };
 
     if (this._onResize) window.removeEventListener('resize', this._onResize);
+    if (this._onKeyDown) window.removeEventListener('keydown', this._onKeyDown);
+    if (this._onKeyUp) window.removeEventListener('keyup', this._onKeyUp);
+    this.keysDown.clear();
+    this.pointerSteerActive = false;
+    this.pointerSteerVec = { x: 0, z: 0 };
     if (this.scene) {
       this.scene.traverse((obj) => {
         if (obj.geometry) obj.geometry.dispose();
@@ -318,8 +333,13 @@ export class FarmGame3D {
       });
     }
     if (this.renderer) {
-      if (this._onPointerDown && this.renderer.domElement) {
-        this.renderer.domElement.removeEventListener('pointerdown', this._onPointerDown);
+      if (this.renderer.domElement) {
+        if (this._onPointerDown) this.renderer.domElement.removeEventListener('pointerdown', this._onPointerDown);
+        if (this._onPointerMove) this.renderer.domElement.removeEventListener('pointermove', this._onPointerMove);
+        if (this._onPointerUp) {
+          window.removeEventListener('pointerup', this._onPointerUp);
+          window.removeEventListener('pointercancel', this._onPointerUp);
+        }
       }
       this.renderer.forceContextLoss();
       this.renderer.dispose();
@@ -668,7 +688,12 @@ export class FarmGame3D {
       const kind = this.lastRevealedKind;
       this._closeChestModal();
       if (!id) return;
-      if (kind === 'wallpaper') {
+      if (kind === 'expansion') {
+        this._enterMyHome();
+        this.audio.playFanfareSFX();
+        this.onConfetti(90);
+        this.onToast('📐 우와!! 내 방이 훨씬 더 넓어졌어요!!');
+      } else if (kind === 'wallpaper') {
         this.homeState.wallpaper = id;
         this._saveRpgState();
         this._enterMyHome();
@@ -1311,7 +1336,7 @@ export class FarmGame3D {
     const nameEl = this.container?.querySelector('#chestItemName');
     const placeNowBtn = this.container?.querySelector('#chestPlaceNowBtn');
     const rarityNames = { common: '⭐ 일반', rare: '💙 희귀!', epic: '💜 영웅!!', legendary: '🌈 전설!!!' };
-    const kindNames = { treasure: '농장 보물', wallpaper: '방 벽지', floor: '방 바닥', furniture: '마이홈 가구' };
+    const kindNames = { treasure: '농장 보물', wallpaper: '방 벽지', floor: '방 바닥', furniture: '마이홈 가구', expansion: '방 확장권!!' };
 
     if (boxBtn) boxBtn.style.display = 'none';
     if (subEl) subEl.style.display = 'none';
@@ -1321,7 +1346,8 @@ export class FarmGame3D {
       rarityEl.className = `chest-rarity rarity-${item.rarity}`;
     }
     if (placeNowBtn) {
-      if (this.lastRevealedKind === 'wallpaper') placeNowBtn.textContent = '🎨 내 방 벽지로 바로 꾸미기!';
+      if (this.lastRevealedKind === 'expansion') placeNowBtn.textContent = '📐 넓어진 내 집 보러 가기!';
+      else if (this.lastRevealedKind === 'wallpaper') placeNowBtn.textContent = '🎨 내 방 벽지로 바로 꾸미기!';
       else if (this.lastRevealedKind === 'floor') placeNowBtn.textContent = '🟫 내 방 바닥으로 바로 꾸미기!';
       else if (this.lastRevealedKind === 'furniture') placeNowBtn.textContent = '🛋️ 내 집에 가서 바로 놓기!';
       else placeNowBtn.textContent = '🏡 지금 농장에 바로 장식하기!';
@@ -1447,7 +1473,7 @@ export class FarmGame3D {
     this.audio.playDoorSFX();
 
     const ownedFurnCount = this._getOwnedFurnitureIds().length;
-    const homeLv = getHomeLevel(ownedFurnCount);
+    const homeLv = getHomeLevel(ownedFurnCount, this.treasures);
 
     if (this.outdoorGroup) this.outdoorGroup.visible = false;
     if (this.myHome3D) {
@@ -1475,8 +1501,8 @@ export class FarmGame3D {
     if (goal) goal.style.display = 'none';
     if (hover) hover.style.display = 'none';
     if (lvPill) {
-      const nextHint = homeLv.level === 1 ? ' (가구 8개면 넓어져요!)' : (homeLv.level === 2 ? ' (가구 20개면 왕궁!)' : ' ✨ 최고 단계!');
-      lvPill.textContent = `🏡 ${homeLv.name} · 가구 ${ownedFurnCount}개${nextHint}`;
+      const nextHint = homeLv.level < 5 ? ' (선물·가구로 5단계까지 확장!)' : ' ✨ 최고 대저택!';
+      lvPill.textContent = `🏡 ${homeLv.name} (${homeLv.size}×${homeLv.size}) · 가구 ${ownedFurnCount}개${nextHint}`;
       lvPill.style.display = 'block';
     }
     if (pocketIco) pocketIco.textContent = '🛋️';
@@ -1649,7 +1675,7 @@ export class FarmGame3D {
           const id = btn.dataset.setWall;
           this.homeState.wallpaper = id;
           this._saveRpgState();
-          const lv = getHomeLevel(this._getOwnedFurnitureIds().length);
+          const lv = getHomeLevel(this._getOwnedFurnitureIds().length, this.treasures);
           if (this.myHome3D) this.myHome3D.syncRoomStyle(this.homeState.wallpaper, this.homeState.floor, lv.size);
           this.audio.playChimeSFX();
           this._renderHomeModal();
@@ -1680,7 +1706,7 @@ export class FarmGame3D {
           const id = btn.dataset.setFloor;
           this.homeState.floor = id;
           this._saveRpgState();
-          const lv = getHomeLevel(this._getOwnedFurnitureIds().length);
+          const lv = getHomeLevel(this._getOwnedFurnitureIds().length, this.treasures);
           if (this.myHome3D) this.myHome3D.syncRoomStyle(this.homeState.wallpaper, this.homeState.floor, lv.size);
           this.audio.playChimeSFX();
           this._renderHomeModal();
@@ -2064,7 +2090,7 @@ export class FarmGame3D {
       floors: ROOM_FLOORS,
       furniture: ROOM_FURNITURE,
     });
-    const homeLv = getHomeLevel(this._getOwnedFurnitureIds().length);
+    const homeLv = getHomeLevel(this._getOwnedFurnitureIds().length, this.treasures);
     this.myHome3D.syncRoomStyle(this.homeState.wallpaper, this.homeState.floor, homeLv.size);
     this.myHome3D.syncFurniture(this.homeState.placedFurniture);
 
@@ -2203,6 +2229,9 @@ export class FarmGame3D {
           this.walkTarget = { x: cx, z: cz };
           this.pendingSpotTrigger = null;
           this._spawnTapRing(cx, cz);
+          this._pointerDownPos = { x: e.clientX, y: e.clientY };
+          this._pointerDragged = false;
+          this._updatePointerSteer(e.clientX, e.clientY);
         }
         return;
       }
@@ -2275,9 +2304,75 @@ export class FarmGame3D {
         this.walkTarget = clamped;
         this.pendingSpotTrigger = null;
         this._spawnTapRing(clamped.x, clamped.z);
+        this._pointerDownPos = { x: e.clientX, y: e.clientY };
+        this._pointerDragged = false;
+        this._updatePointerSteer(e.clientX, e.clientY);
       }
     };
+
+    this._updatePointerSteer = (clientX, clientY) => {
+      if (!this.renderer?.domElement || !this.camera) return;
+      const rect = this.renderer.domElement.getBoundingClientRect();
+      // Project Wooju's current 3D position onto screen so steering always points from Wooju toward the finger!
+      const v = new this.THREE.Vector3(this.avatarPos.x, 1.0, this.avatarPos.z).project(this.camera);
+      const wx = rect.left + (v.x * 0.5 + 0.5) * rect.width;
+      const wy = rect.top + (-v.y * 0.5 + 0.5) * rect.height;
+      const dx = clientX - wx;
+      const dy = clientY - wy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 14) {
+        this.pointerSteerVec.x = dx / dist;
+        this.pointerSteerVec.z = dy / dist;
+      } else {
+        this.pointerSteerVec.x = 0;
+        this.pointerSteerVec.z = 0;
+      }
+    };
+
+    this._onPointerMove = (e) => {
+      if (!this._pointerDownPos || !this.entered || this.activeDialogueSpot !== null || this.inLiveStage) return;
+      if (this.placingTreasureId || this.placingFurnitureId || this.joyActive) return;
+      const moveDist = Math.hypot(e.clientX - this._pointerDownPos.x, e.clientY - this._pointerDownPos.y);
+      if (moveDist > 10) {
+        this._pointerDragged = true;
+        this.pointerSteerActive = true;
+        this.walkTarget = null;
+        this.pendingSpotTrigger = null;
+      }
+      if (this.pointerSteerActive) {
+        this._updatePointerSteer(e.clientX, e.clientY);
+      }
+    };
+
+    this._onPointerUp = () => {
+      this._pointerDownPos = null;
+      if (this.pointerSteerActive) {
+        this.pointerSteerActive = false;
+        this.pointerSteerVec.x = 0;
+        this.pointerSteerVec.z = 0;
+      }
+    };
+
+    this._onKeyDown = (e) => {
+      if (!this.mounted || !this.entered || this.activeDialogueSpot !== null || this.inLiveStage) return;
+      const k = e.key;
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(k)) {
+        e.preventDefault();
+        this.keysDown.add(k.toLowerCase());
+        this.walkTarget = null;
+        this.pendingSpotTrigger = null;
+      }
+    };
+    this._onKeyUp = (e) => {
+      this.keysDown.delete((e.key || '').toLowerCase());
+    };
+
     this.renderer.domElement.addEventListener('pointerdown', this._onPointerDown);
+    this.renderer.domElement.addEventListener('pointermove', this._onPointerMove);
+    window.addEventListener('pointerup', this._onPointerUp);
+    window.addEventListener('pointercancel', this._onPointerUp);
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
   }
 
   _spawnTapRing(x, z) {
@@ -2934,13 +3029,30 @@ export class FarmGame3D {
         }
       }
 
-      // 1. Wooju 3D Avatar Movement & Walking Limb Animation
+      // 1. Wooju 3D Avatar Movement: Virtual Joystick OR Keyboard Arrows/WASD OR Finger-Drag Direction OR Tap-to-Walk!
       let moving = false;
-      const speed = this.inHome ? 5.6 : 9.2;
+      const speed = this.inHome ? 6.2 : 9.2;
       if (this.entered && this.activeDialogueSpot === null && !this.inLiveStage) {
+        let dirX = 0;
+        let dirZ = 0;
         if (Math.hypot(this.joyVec.x, this.joyVec.z) > 0.08) {
-          const nx = this.avatarPos.x + this.joyVec.x * speed * dt;
-          const nz = this.avatarPos.z + this.joyVec.z * speed * dt;
+          dirX = this.joyVec.x;
+          dirZ = this.joyVec.z;
+        } else if (this.pointerSteerActive && Math.hypot(this.pointerSteerVec.x, this.pointerSteerVec.z) > 0.08) {
+          dirX = this.pointerSteerVec.x;
+          dirZ = this.pointerSteerVec.z;
+        } else if (this.keysDown.size > 0) {
+          if (this.keysDown.has('arrowleft') || this.keysDown.has('a')) dirX -= 1;
+          if (this.keysDown.has('arrowright') || this.keysDown.has('d')) dirX += 1;
+          if (this.keysDown.has('arrowup') || this.keysDown.has('w')) dirZ -= 1;
+          if (this.keysDown.has('arrowdown') || this.keysDown.has('s')) dirZ += 1;
+          const kl = Math.hypot(dirX, dirZ);
+          if (kl > 0) { dirX /= kl; dirZ /= kl; }
+        }
+
+        if (Math.hypot(dirX, dirZ) > 0.08) {
+          const nx = this.avatarPos.x + dirX * speed * dt;
+          const nz = this.avatarPos.z + dirZ * speed * dt;
           if (this.inHome && this.myHome3D) {
             const half = this.myHome3D.getHalfSize();
             this.avatarPos.x = Math.max(-half, Math.min(half, nx));
@@ -2949,7 +3061,7 @@ export class FarmGame3D {
             this.avatarPos.x = nx;
             this.avatarPos.z = nz;
           }
-          this.avatarAngle = Math.atan2(this.joyVec.x, this.joyVec.z);
+          this.avatarAngle = Math.atan2(dirX, dirZ);
           moving = true;
         } else if (this.walkTarget) {
           const dx = this.walkTarget.x - this.avatarPos.x;
