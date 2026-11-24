@@ -1366,25 +1366,19 @@ export function buildVillageBuildings3D(THREE, scene) {
   return { syncBuildings, update, getFocusPos };
 }
 
-// --- v7: Player-Placed 3D Treasure Decorations in the Farm World! ---
+// --- v7/v8.3: Natural Animal Crossing-Style Grounded 3D Outdoor Decorations (NO clunky pedestals!) ---
 const TREASURE_GLB_MAP = {
-  tr_gold_egg:    'assets/models/food/egg.glb',
-  tr_big_carrot:  'assets/models/food/carrot.glb',
-  tr_apple_pie:   'assets/models/food/apple.glb',
-  tr_galaxy_milk: 'assets/models/food/soda-bottle.glb',
-  tr_dia_corn:    'assets/models/food/corn.glb',
-  tr_star_mush:   'assets/models/nature/mushroom_redGroup.glb',
-  tr_crystal_flw: 'assets/models/nature/flower_purpleA.glb',
-  tr_magic_stew:  'assets/models/food/pot-stew.glb',
-  tr_legend_fish: 'assets/models/food/fish.glb',
-  tr_sunflower:   'assets/models/nature/flower_yellowA.glb',
-};
-
-const RARITY_COLORS = {
-  common:    { base: '#D97706', trim: '#FEF3C7', glow: '#FDE047' },
-  rare:      { base: '#0284C7', trim: '#E0F2FE', glow: '#38BDF8' },
-  epic:      { base: '#7E22CE', trim: '#F3E8FF', glow: '#C084FC' },
-  legendary: { base: '#D97706', trim: '#FEF08A', glow: '#FACC15' },
+  tr_gold_egg:    { url: 'assets/models/food/egg.glb',                 h: 0.72, style: 'picnic' },
+  tr_big_carrot:  { url: 'assets/models/food/carrot.glb',              h: 0.92, style: 'picnic' },
+  tr_apple_pie:   { url: 'assets/models/food/apple.glb',               h: 0.78, style: 'picnic' },
+  tr_galaxy_milk: { url: 'assets/models/food/soda-bottle.glb',         h: 0.92, style: 'picnic' },
+  tr_dia_corn:    { url: 'assets/models/food/corn.glb',                h: 0.92, style: 'picnic' },
+  tr_magic_stew:  { url: 'assets/models/food/pot-stew.glb',            h: 1.05, style: 'picnic' },
+  tr_legend_fish: { url: 'assets/models/food/fish.glb',                h: 0.95, style: 'picnic' },
+  tr_star_mush:   { url: 'assets/models/nature/mushroom_redGroup.glb', h: 1.05, style: 'ground' },
+  tr_crystal_flw: { url: 'assets/models/nature/flower_purpleA.glb',    h: 1.05, style: 'ground' },
+  tr_sunflower:   { url: 'assets/models/nature/flower_yellowA.glb',    h: 1.15, style: 'ground' },
+  tr_tulip_pot:   { url: 'assets/models/nature/flower_redA.glb',       h: 1.05, style: 'pot'    },
 };
 
 function createTreasureMedallionTex(THREE, emoji, bgHex) {
@@ -1408,74 +1402,171 @@ function createTreasureMedallionTex(THREE, emoji, bgHex) {
   return tex;
 }
 
+function buildGroundedTreasure3D(THREE, item) {
+  const g = new THREE.Group();
+  let animTarget = null;
+  let animKind = 'none';
+
+  // 1. Real Artist GLB Models resting naturally on grass, flower pot, or cozy picnic cloth!
+  const glbSpec = TREASURE_GLB_MAP[item.id];
+  if (glbSpec) {
+    let itemY = 0;
+    if (glbSpec.style === 'picnic') {
+      // Cute cozy checkered picnic cloth flat on the grass!
+      const cloth = new THREE.Mesh(
+        new THREE.BoxGeometry(1.55, 0.04, 1.55),
+        new THREE.MeshStandardMaterial({ color: '#FEF3C7', roughness: 0.9 })
+      );
+      cloth.position.y = 0.02;
+      cloth.receiveShadow = true;
+      const border = new THREE.Mesh(
+        new THREE.BoxGeometry(1.3, 0.05, 1.3),
+        new THREE.MeshStandardMaterial({ color: '#FB7185', roughness: 0.9 })
+      );
+      border.position.y = 0.025;
+      g.add(cloth, border);
+      itemY = 0.06;
+    } else if (glbSpec.style === 'pot') {
+      const pot = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.42, 0.3, 0.48, 14),
+        new THREE.MeshStandardMaterial({ color: '#EA580C', roughness: 0.7 })
+      );
+      pot.position.y = 0.24;
+      pot.castShadow = true;
+      g.add(pot);
+      itemY = 0.45;
+    }
+    loadGLTF(glbSpec.url).then((gltf) => {
+      const inst = instantiateGLTF(THREE, gltf, glbSpec.h, itemY);
+      g.add(inst.holder);
+    }).catch(() => {});
+    return { group: g, animTarget, animKind, popProgress: 0.01 };
+  }
+
+  // 2. Hand-crafted Animal Crossing-style 3D outdoor landmarks & garden ornaments!
+  if (item.id === 'tr_sakura_tree') {
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 1.8, 10), new THREE.MeshStandardMaterial({ color: '#78350F', roughness: 0.85 }));
+    trunk.position.y = 0.9;
+    trunk.castShadow = true;
+    const pinkMat = new THREE.MeshStandardMaterial({ color: '#F9A8D4', roughness: 0.75 });
+    [[0, 2.2, 0, 1.15], [-0.7, 1.9, 0.3, 0.75], [0.7, 1.95, -0.2, 0.8]].forEach(([x, y, z, r]) => {
+      const c = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), pinkMat);
+      c.position.set(x, y, z);
+      c.castShadow = true;
+      g.add(c);
+    });
+    g.add(trunk);
+  } else if (item.id === 'tr_fairy_house') {
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.78, 1.1, 14), new THREE.MeshStandardMaterial({ color: '#FEF3C7', roughness: 0.8 }));
+    stem.position.y = 0.55;
+    stem.castShadow = true;
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(1.25, 1.05, 16), new THREE.MeshStandardMaterial({ color: '#EF4444', roughness: 0.55 }));
+    cap.position.y = 1.55;
+    cap.castShadow = true;
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.55, 0.1), new THREE.MeshStandardMaterial({ color: '#92400E' }));
+    door.position.set(0, 0.3, 0.72);
+    g.add(stem, cap, door);
+  } else if (item.id === 'tr_ufo_model' || item.id === 'tr_solar_system' || item.id === 'tr_saturn_ring' || item.id === 'tr_meteor') {
+    const hover = new THREE.Group();
+    const saucer = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.55, 0.32, 18), new THREE.MeshStandardMaterial({ color: '#CBD5E1', metalness: 0.65, roughness: 0.25 }));
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.52, 14, 10), new THREE.MeshStandardMaterial({ color: '#38BDF8', emissive: '#0284C7', emissiveIntensity: 0.45 }));
+    dome.position.y = 0.22;
+    hover.add(saucer, dome);
+    hover.position.y = 1.35;
+    g.add(hover);
+    animTarget = hover;
+    animKind = 'hover';
+  } else if (item.id === 'tr_crystal_castle') {
+    const cMat = new THREE.MeshStandardMaterial({ color: '#BAE6FD', emissive: '#38BDF8', emissiveIntensity: 0.22, roughness: 0.2 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: '#6366F1', roughness: 0.35 });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 1.5), cMat);
+    base.position.y = 0.55;
+    base.castShadow = true;
+    g.add(base);
+    [[-0.65, -0.65], [0.65, -0.65], [-0.65, 0.65], [0.65, 0.65]].forEach(([tx, tz]) => {
+      const tw = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 1.7, 10), cMat);
+      tw.position.set(tx, 0.85, tz);
+      const rf = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.65, 10), roofMat);
+      rf.position.set(tx, 2.0, tz);
+      g.add(tw, rf);
+    });
+  } else if (item.id === 'tr_treasure_map') {
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.72, 0.78), new THREE.MeshStandardMaterial({ color: '#92400E', roughness: 0.65 }));
+    chest.position.y = 0.36;
+    chest.castShadow = true;
+    const band = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.14, 0.82), new THREE.MeshStandardMaterial({ color: '#FACC15', metalness: 0.6, roughness: 0.3 }));
+    band.position.y = 0.52;
+    g.add(chest, band);
+  } else if (item.id === 'tr_carousel' || item.id === 'tr_cotton_candy') {
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.05, 0.25, 16), new THREE.MeshStandardMaterial({ color: '#F472B6', roughness: 0.5 }));
+    base.position.y = 0.125;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.7, 10), new THREE.MeshStandardMaterial({ color: '#FACC15', metalness: 0.5 }));
+    pole.position.y = 1.0;
+    const top = new THREE.Mesh(new THREE.ConeGeometry(1.05, 0.75, 16), new THREE.MeshStandardMaterial({ color: '#FEF08A', roughness: 0.45 }));
+    top.position.y = 2.0;
+    g.add(base, pole, top);
+    animTarget = g;
+    animKind = 'spin';
+  } else if (item.rarity === 'legendary') {
+    // Low natural garden stone + gleaming golden star statue!
+    const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.78, 0.22, 16), new THREE.MeshStandardMaterial({ color: '#E2E8F0', roughness: 0.85 }));
+    stone.position.y = 0.11;
+    stone.receiveShadow = true;
+    const star = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.55),
+      new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#F59E0B', emissiveIntensity: 0.45, metalness: 0.7, roughness: 0.2 })
+    );
+    star.position.y = 0.95;
+    star.castShadow = true;
+    g.add(stone, star);
+    animTarget = star;
+    animKind = 'hover';
+  } else {
+    // Cozy Animal Crossing wooden garden easel / art frame standing right on the grass (NO chunky stump!)
+    const woodMat = new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.75 });
+    const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.25, 8), woodMat);
+    legL.position.set(-0.36, 0.6, 0);
+    legL.rotation.z = -0.14;
+    const legR = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.25, 8), woodMat);
+    legR.position.set(0.36, 0.6, 0);
+    legR.rotation.z = 0.14;
+    const legB = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8), woodMat);
+    legB.position.set(0, 0.56, -0.35);
+    legB.rotation.x = -0.35;
+    const board = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.05, 0.08), new THREE.MeshStandardMaterial({ color: '#FFFDF7', roughness: 0.7 }));
+    board.position.set(0, 0.95, 0.05);
+    board.castShadow = true;
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, item.emoji, '#FEF9C3'), transparent: true })
+    );
+    sprite.scale.set(0.95, 0.95, 1);
+    sprite.position.set(0, 0.95, 0.14);
+    g.add(legL, legR, legB, board, sprite);
+  }
+
+  return { group: g, animTarget, animKind, popProgress: 0.01 };
+}
+
 export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
   const root = new THREE.Group();
   scene.add(root);
   const byId = new Map(treasureCatalog.map(t => [t.id, t]));
-  const placedMeshes = new Map(); // id -> { group, topObj, ring, popProgress }
-
-  const createPedestal = (item) => {
-    const col = RARITY_COLORS[item.rarity] || RARITY_COLORS.common;
-    const g = new THREE.Group();
-
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.62, 0.78, 0.65, 16),
-      new THREE.MeshStandardMaterial({ color: col.base, roughness: 0.4, metalness: item.rarity === 'legendary' ? 0.55 : 0.15 })
-    );
-    base.position.y = 0.325;
-    base.castShadow = true;
-    base.receiveShadow = true;
-
-    const topPlate = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.68, 0.68, 0.1, 16),
-      new THREE.MeshStandardMaterial({ color: col.trim, roughness: 0.35 })
-    );
-    topPlate.position.y = 0.68;
-
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.85, 1.05, 24),
-      new THREE.MeshBasicMaterial({ color: col.glow, side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.05;
-
-    const topObj = new THREE.Group();
-    topObj.position.y = 1.25;
-
-    const glbUrl = TREASURE_GLB_MAP[item.id];
-    if (glbUrl) {
-      loadGLTF(glbUrl).then((gltf) => {
-        const inst = instantiateGLTF(THREE, gltf, 0.95, 0);
-        topObj.add(inst.holder);
-      }).catch(() => {});
-    } else {
-      const sprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, item.emoji, col.trim), transparent: true })
-      );
-      sprite.scale.set(1.25, 1.25, 1);
-      topObj.add(sprite);
-    }
-
-    g.add(base, topPlate, ring, topObj);
-    return { group: g, topObj, ring, popProgress: 0.01 };
-  };
+  const placedMeshes = new Map();
 
   const syncPlaced = (placedList = [], popId = null) => {
     const keepIds = new Set(placedList.map(p => p.id));
-    // Remove unplaced
     for (const [id, entry] of placedMeshes.entries()) {
       if (!keepIds.has(id)) {
         root.remove(entry.group);
         placedMeshes.delete(id);
       }
     }
-    // Add or move placed
     placedList.forEach(({ id, x, z }) => {
       const item = byId.get(id);
       if (!item) return;
       let entry = placedMeshes.get(id);
       if (!entry) {
-        entry = createPedestal(item);
+        entry = buildGroundedTreasure3D(THREE, item);
         root.add(entry.group);
         placedMeshes.set(id, entry);
       }
@@ -1492,15 +1583,17 @@ export function buildPlacedTreasures3D(THREE, scene, treasureCatalog = []) {
     placedMeshes.forEach((entry) => {
       idx += 1;
       if (entry.popProgress < 1) {
-        entry.popProgress = Math.min(1, entry.popProgress + dt * 2.6);
+        entry.popProgress = Math.min(1, entry.popProgress + dt * 2.8);
         const p = entry.popProgress;
-        const s = p < 0.7 ? (p / 0.7) * 1.2 : 1.2 - ((p - 0.7) / 0.3) * 0.2;
+        const s = p < 0.7 ? (p / 0.7) * 1.18 : 1.18 - ((p - 0.7) / 0.3) * 0.18;
         entry.group.scale.setScalar(Math.max(0.01, s));
       }
-      entry.topObj.rotation.y = t * 1.5 + idx;
-      entry.topObj.position.y = 1.22 + Math.sin(t * 3 + idx) * 0.1;
-      const rs = 1 + Math.sin(t * 3.5 + idx) * 0.08;
-      entry.ring.scale.set(rs, rs, 1);
+      if (entry.animTarget && entry.animKind === 'hover') {
+        entry.animTarget.rotation.y = t * 1.2 + idx;
+        entry.animTarget.position.y = 1.15 + Math.sin(t * 2.5 + idx) * 0.1;
+      } else if (entry.animTarget && entry.animKind === 'spin') {
+        entry.animTarget.rotation.y = t * 0.7;
+      }
     });
   };
 
