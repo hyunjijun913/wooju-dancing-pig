@@ -28,7 +28,7 @@ function loadGLTF(url) {
  * Clones a loaded GLTF scene (preserving SkinnedMesh bone bindings via SkeletonUtils),
  * enables shadows, and auto-normalizes its height to `targetHeight` standing on `y = 0`.
  */
-function instantiateGLTF(THREE, gltf, targetHeight = 2.0, yOffset = 0) {
+function instantiateGLTF(THREE, gltf, targetHeight = 2.0, yOffset = 0, { cuteStyle = false } = {}) {
   const cloned = skeletonUtilsMod ? skeletonUtilsMod.clone(gltf.scene) : gltf.scene.clone(true);
   cloned.traverse((obj) => {
     if (obj.isMesh) {
@@ -38,7 +38,11 @@ function instantiateGLTF(THREE, gltf, targetHeight = 2.0, yOffset = 0) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         mats.forEach((m) => {
           if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
-          m.roughness = Math.max(0.45, m.roughness ?? 0.65);
+          m.roughness = cuteStyle ? 0.48 : Math.max(0.45, m.roughness ?? 0.65);
+          if (cuteStyle && m.emissive) {
+            m.emissive.set('#FFF7ED');
+            m.emissiveIntensity = 0.045;
+          }
         });
       }
     }
@@ -69,7 +73,12 @@ function instantiateGLTF(THREE, gltf, targetHeight = 2.0, yOffset = 0) {
   box.getSize(size);
   if (size.y > 0.0001 && targetHeight > 0) {
     const s = targetHeight / size.y;
-    holder.scale.setScalar(s);
+    if (cuteStyle) {
+      // Slightly plumper, softer Animal Crossing toy proportions while preserving full sculpted GLB detail!
+      holder.scale.set(s * 1.14, s * 0.94, s * 1.14);
+    } else {
+      holder.scale.setScalar(s);
+    }
     holder.updateMatrixWorld(true);
     const box2 = new THREE.Box3().setFromObject(holder);
     const center = new THREE.Vector3();
@@ -97,24 +106,24 @@ function findClipKey(actions, patterns) {
  * Creates a smooth skeletal animation state controller for a character/animal.
  * States: 'idle' | 'walk' | 'run' | 'talk' | 'dance'
  */
-function createAnimController(mixersList) {
-  let currentState = null;
+function createAnimController(mixersList, motionTarget = null) {
+  let currentState = 'idle';
+  let phase = Math.random() * Math.PI * 2;
   const activeActions = new Map();
 
   const patternsForState = (state) => {
-    switch (state) {
-      case 'run':   return ['run', 'sprint', 'gallop', 'frog_jump', 'walk'];
-      case 'walk':  return ['walk', 'frog_jump', 'gallop'];
-      case 'dance': return ['dance', 'emote-yes', 'gesture-positive', 'jump', 'gallop_jump', 'frog_jump'];
-      case 'talk':  return ['gesture-positive', 'emote-yes', 'eat', 'eating', 'dance', 'frog_jump', 'idle_2'];
-      case 'idle':
-      default:      return ['idle', 'frog_idle', 'static'];
+    if (state === 'run') return ['run', 'sprint', 'gallop', 'frog_jump', 'walk'];
+    if (state === 'walk') return ['walk', 'frog_jump', 'gallop'];
+    if (state === 'dance' || state === 'act_pig_dance' || state === 'act_frog') {
+      return ['dance', 'emote-yes', 'gesture-positive', 'jump', 'gallop_jump', 'frog_jump'];
     }
+    if (state === 'talk' || (state && state.startsWith('act_'))) {
+      return ['gesture-positive', 'emote-yes', 'eat', 'eating', 'dance', 'frog_jump', 'idle_2'];
+    }
+    return ['idle', 'frog_idle', 'static'];
   };
 
-  const setAnim = (state) => {
-    if (state === currentState) return;
-    currentState = state;
+  const applyMixers = (state) => {
     const pats = patternsForState(state);
     mixersList.forEach(({ mixer, actions }, idx) => {
       if (!mixer) return;
@@ -131,14 +140,97 @@ function createAnimController(mixersList) {
     });
   };
 
+  const setAnim = (state) => {
+    const next = state || 'idle';
+    if (next === currentState) return;
+    currentState = next;
+    applyMixers(next);
+  };
+
   const updateMixer = (dt) => {
     mixersList.forEach(({ mixer }) => {
       if (mixer) mixer.update(dt);
     });
+
+    if (!motionTarget) return;
+    const isAction = currentState.startsWith('act_');
+    const speed = currentState === 'run' ? 13
+      : (currentState === 'dance' || currentState === 'act_pig_dance' ? 9.5
+      : (currentState === 'act_rabbit' || currentState === 'act_cat_mouse' ? 12
+      : (isAction ? 8.2 : (currentState === 'walk' ? 8.5 : 2.6))));
+    phase += dt * speed;
+
+    // Reset dynamic expressive offsets before applying current state
+    motionTarget.position.y = 0;
+    motionTarget.rotation.set(0, 0, 0);
+    motionTarget.scale.set(1, 1, 1);
+
+    if (currentState === 'walk' || currentState === 'run') {
+      const hop = Math.abs(Math.sin(phase));
+      motionTarget.position.y = hop * (currentState === 'run' ? 0.24 : 0.11);
+      motionTarget.rotation.z = Math.sin(phase) * 0.06;
+    } else if (currentState === 'dance' || currentState === 'act_pig_dance') {
+      const hop = Math.abs(Math.sin(phase));
+      motionTarget.position.y = hop * (currentState === 'act_pig_dance' ? 0.55 : 0.34);
+      motionTarget.rotation.z = Math.sin(phase * 0.5) * 0.16;
+      if (currentState === 'act_pig_dance') motionTarget.rotation.y = phase * 0.58;
+      motionTarget.scale.set(1 + (1 - hop) * 0.06, 1 + hop * 0.08, 1 + (1 - hop) * 0.06);
+    } else if (currentState === 'act_frog') {
+      const hop = Math.abs(Math.sin(phase * 0.72));
+      motionTarget.position.y = hop * 0.92;
+      const sq = hop < 0.16 ? 0.84 : 1 + hop * 0.12;
+      motionTarget.scale.set(2 - sq, sq, 2 - sq);
+    } else if (currentState === 'act_owl') {
+      motionTarget.position.y = 0.22 + Math.sin(phase) * 0.24;
+      motionTarget.rotation.z = Math.sin(phase * 0.8) * 0.18;
+    } else if (currentState === 'act_chicken') {
+      const cyc = Math.sin(phase * 0.65);
+      if (cyc < 0) {
+        motionTarget.scale.set(1.16, 0.78, 1.16);
+      } else {
+        motionTarget.position.y = cyc * 0.42;
+        motionTarget.scale.set(0.95, 1.08, 0.95);
+      }
+      motionTarget.rotation.z = Math.sin(phase * 1.6) * 0.1;
+    } else if (currentState === 'act_rabbit') {
+      motionTarget.rotation.x = 0.24 + Math.sin(phase * 1.3) * 0.12;
+      motionTarget.position.y = Math.abs(Math.sin(phase * 0.65)) * 0.22;
+    } else if (currentState === 'act_cow') {
+      motionTarget.rotation.x = Math.sin(phase * 0.9) * 0.16;
+      motionTarget.rotation.z = Math.sin(phase * 0.5) * 0.1;
+      motionTarget.position.y = Math.abs(Math.sin(phase * 0.6)) * 0.08;
+    } else if (currentState === 'act_horse') {
+      const reach = (Math.sin(phase * 0.8) + 1) * 0.5;
+      motionTarget.position.y = reach * 0.34;
+      motionTarget.rotation.x = -0.18 * reach;
+      motionTarget.scale.set(0.96, 1 + reach * 0.12, 0.96);
+    } else if (currentState === 'act_cat_mouse') {
+      motionTarget.position.y = Math.abs(Math.sin(phase * 0.7)) * 0.2;
+      motionTarget.rotation.y = Math.sin(phase * 1.5) * 0.42;
+    } else if (currentState === 'act_duck') {
+      motionTarget.position.y = Math.abs(Math.sin(phase)) * 0.12;
+      motionTarget.rotation.y = Math.sin(phase * 0.8) * 0.3;
+      motionTarget.rotation.z = Math.cos(phase * 0.8) * 0.12;
+    } else if (currentState === 'act_dog_goat') {
+      const sw = Math.sin(phase * 0.9);
+      motionTarget.rotation.y = sw * 0.36;
+      motionTarget.rotation.z = sw * 0.12;
+      motionTarget.position.y = Math.abs(sw) * 0.1;
+    } else if (currentState === 'act_sing') {
+      motionTarget.position.y = Math.abs(Math.sin(phase)) * 0.2;
+      motionTarget.rotation.z = Math.sin(phase * 0.5) * 0.16;
+      motionTarget.rotation.x = -0.1 + Math.sin(phase) * 0.1;
+    } else if (currentState === 'act_farmer' || currentState === 'talk') {
+      motionTarget.position.y = Math.abs(Math.sin(phase)) * 0.22;
+      motionTarget.rotation.z = Math.sin(phase * 0.6) * 0.1;
+    } else {
+      // Gentle cute breathing bob when idle!
+      const b = Math.sin(phase) * 0.025;
+      motionTarget.scale.set(1 - b * 0.5, 1 + b, 1 - b * 0.5);
+    }
   };
 
-  setAnim('idle');
-  return { setAnim, updateMixer };
+  return { setAnim, updateMixer, refresh: () => applyMixers(currentState) };
 }
 
 function makeCanvasTex(THREE, size, drawFn, repeat = 1) {
@@ -521,38 +613,34 @@ function createCuteChibiActor(THREE, {
 }
 
 /**
- * Builds Wooju's Adorable 2-Head-Tall Chibi 3D Explorer Avatar + 15 Unlockable 3D Gear Cosmetics!
+ * Builds Wooju's High-Quality Sculpted GLB Explorer Avatar with Cute Proportions,
+ * Explorer Scarf & 15 Unlockable 3D Gear Cosmetics!
  */
 export function buildWooju3D(THREE) {
   const group = new THREE.Group();
+  const bodyRoot = new THREE.Group();
+  group.add(bodyRoot);
 
-  const chibi = createCuteChibiActor(THREE, {
-    bodyColor: '#3B82F6', // Cozy blue overalls
-    headColor: '#FFDFC4', // Warm peach skin
-    bellyColor: '#60A5FA',
-    scale: 0.98,
-    decorate: ({ headGroup, torso }) => {
-      addCuteFace(THREE, headGroup, { headR: 0.62, y: -0.02, z: 0.56, cheekColor: '#FB7185' });
-      // Fluffy chocolate-brown hair cap + cute bangs!
-      const hairMat = new THREE.MeshStandardMaterial({ color: '#5C3A21', roughness: 0.65 });
-      const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.66, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.56), hairMat);
-      hairCap.position.y = 0.04;
-      headGroup.add(hairCap);
-      [-0.24, 0, 0.24].forEach((bx) => {
-        const bang = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), hairMat);
-        bang.position.set(bx, 0.34, 0.46);
-        headGroup.add(bang);
-      });
-      // Cute yellow rocket star badge on Wooju's shirt!
-      const badge = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.14),
-        new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#F59E0B', emissiveIntensity: 0.35 })
-      );
-      badge.position.set(0, 0.08, 0.52);
-      torso.add(badge);
-    },
-  });
-  group.add(chibi.root);
+  const mixersList = [];
+  const ctrl = createAnimController(mixersList, bodyRoot);
+
+  // Cute yellow explorer neck-scarf accent!
+  const scarf = new THREE.Mesh(
+    new THREE.TorusGeometry(0.32, 0.085, 8, 18),
+    new THREE.MeshStandardMaterial({ color: '#FACC15', roughness: 0.5 })
+  );
+  scarf.rotation.x = Math.PI / 2;
+  scarf.position.set(0, 1.38, 0.02);
+  bodyRoot.add(scarf);
+
+  loadGLTF('assets/models/mini-characters/character-male-b.glb').then((gltf) => {
+    const inst = instantiateGLTF(THREE, gltf, 2.22, 0, { cuteStyle: true });
+    bodyRoot.add(inst.holder);
+    if (inst.mixer) {
+      mixersList.push({ mixer: inst.mixer, actions: inst.actions });
+      ctrl.refresh();
+    }
+  }).catch(() => {});
 
   // --- Unlockable 3D Avatar Cosmetics (15 Items across head / back / aura!) ---
   const gearMeshes = {};
@@ -850,8 +938,8 @@ export function buildWooju3D(THREE) {
 
   return {
     group,
-    setAnim: chibi.setAnim,
-    updateMixer: chibi.update,
+    setAnim: ctrl.setAnim,
+    updateMixer: ctrl.updateMixer,
     setGear,
     updateCosmetics,
   };
@@ -1160,7 +1248,8 @@ function buildChibiSpotActors(THREE, spotId) {
 }
 
 /**
- * Builds Adorable Chibi 3D Story Character(s) + 3D story item prop for each of the 12 spots.
+ * Builds High-Quality Sculpted GLB 3D Story Character(s) with Cute Toy Proportions,
+ * Accessories & All 12 Story-Matched Speaking Actions!
  */
 export function buildSpotCharacter3D(THREE, spotId) {
   const group = new THREE.Group();
@@ -1170,11 +1259,60 @@ export function buildSpotCharacter3D(THREE, spotId) {
   group.add(itemMesh);
 
   const spec = SPOT_SPEC[spotId] || SPOT_SPEC.pig_finale;
-  const actors = buildChibiSpotActors(THREE, spotId);
-  actors.forEach(a => bodyRoot.add(a.root));
+  const mixersList = [];
+  const ctrl = createAnimController(mixersList, bodyRoot);
 
-  const setAnim = (s) => actors.forEach(a => a.setAnim(s));
-  const updateMixer = (dt) => actors.forEach(a => a.update(dt));
+  (spec.chars || []).forEach((ch) => {
+    loadGLTF(ch.url).then((gltf) => {
+      const inst = instantiateGLTF(THREE, gltf, ch.h, ch.y || 0, { cuteStyle: true });
+      inst.holder.position.x += ch.x || 0;
+      inst.holder.position.z += ch.z || 0;
+      bodyRoot.add(inst.holder);
+      if (inst.mixer) {
+        mixersList.push({ mixer: inst.mixer, actions: inst.actions });
+        ctrl.refresh();
+      }
+    }).catch(() => {});
+  });
+
+  // Cute sculpted signature accessories to make the high-quality GLB characters extra adorable!
+  if (spotId === 'farmer') {
+    const hat = new THREE.Group();
+    const brim = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.68, 0.72, 0.07, 18),
+      new THREE.MeshStandardMaterial({ color: '#FDE047', roughness: 0.6 })
+    );
+    const crown = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.36, 0.44, 0.34, 16),
+      new THREE.MeshStandardMaterial({ color: '#FACC15', roughness: 0.6 })
+    );
+    crown.position.y = 0.19;
+    const band = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.45, 0.08, 16),
+      new THREE.MeshStandardMaterial({ color: '#EF4444', roughness: 0.45 })
+    );
+    band.position.y = 0.07;
+    hat.add(brim, crown, band);
+    hat.position.set(0, 2.22, 0);
+    bodyRoot.add(hat);
+  } else if (spotId === 'pig_finale') {
+    // Adorable festive pink bow on the Dancing Pig!
+    const bow = new THREE.Group();
+    const bowMat = new THREE.MeshStandardMaterial({ color: '#EC4899', emissive: '#F472B6', emissiveIntensity: 0.25, roughness: 0.4 });
+    const lLoop = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), bowMat);
+    lLoop.scale.set(1.3, 0.85, 0.65);
+    lLoop.position.x = -0.18;
+    const rLoop = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), bowMat);
+    rLoop.scale.set(1.3, 0.85, 0.65);
+    rLoop.position.x = 0.18;
+    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshStandardMaterial({ color: '#FDE047', roughness: 0.35 }));
+    bow.add(lLoop, rLoop, knot);
+    bow.position.set(0, 2.08, 0.12);
+    bodyRoot.add(bow);
+  }
+
+  const setAnim = ctrl.setAnim;
+  const updateMixer = ctrl.updateMixer;
 
   if (spec.prop) {
     loadGLTF(spec.prop.url).then((gltf) => {
