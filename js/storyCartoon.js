@@ -738,8 +738,10 @@ const SCENE_RENDERERS = {
   pig_finale: renderPigDance,
 };
 
-// Zootopia-style 3D CGI Cinematic Scene Registry (1 scene per sentence: cards 1..25!)
-const GENERATED_SCENE_IDS = new Set([1, 2, 3, 4, 6, 7, 8, 11, 12, 16, 17, 18, 21, 22]);
+// Zootopia-style 3D CGI Cinematic Scene Registry (ALL 25 sentences: 1 dedicated scene per sentence!)
+const GENERATED_SCENE_IDS = new Set([
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+]);
 
 // Per-sentence cinematic camera motion & VFX presets (1..25)
 const CARD_CINEMA_PRESETS = {
@@ -747,27 +749,27 @@ const CARD_CINEMA_PRESETS = {
   2:  { imgId: 2,  motion: 'panR',    fx: 'motes' },
   3:  { imgId: 3,  motion: 'zoomIn',  fx: 'motes' },
   4:  { imgId: 4,  motion: 'zoomIn',  fx: 'sad' },
-  5:  { imgId: 3,  motion: 'panL',    fx: 'think' },
+  5:  { imgId: 5,  motion: 'zoomIn',  fx: 'think' },
   6:  { imgId: 6,  motion: 'eureka',  fx: 'sparkles' },
   7:  { imgId: 7,  motion: 'panR',    fx: 'sparkles' },
   8:  { imgId: 8,  motion: 'bounce',  fx: 'sparkles' },
-  9:  { imgId: null, fallback: 'rabbit' },
-  10: { imgId: null, fallback: 'cow' },
+  9:  { imgId: 9,  motion: 'bounce',  fx: 'sparkles' },
+  10: { imgId: 10, motion: 'zoomIn',  fx: 'sparkles' },
   11: { imgId: 11, motion: 'panL',    fx: 'sparkles' },
   12: { imgId: 12, motion: 'zoomIn',  fx: 'motes' },
-  13: { imgId: 12, motion: 'shake',   fx: 'noBurst' },
-  14: { imgId: 12, motion: 'panR',    fx: 'think' },
-  15: { imgId: null, fallback: 'cat_mouse' },
+  13: { imgId: 13, motion: 'shake',   fx: 'noBurst' },
+  14: { imgId: 14, motion: 'panR',    fx: 'think' },
+  15: { imgId: 15, motion: 'bounce',  fx: 'sparkles' },
   16: { imgId: 16, motion: 'zoomIn',  fx: 'steam' },
   17: { imgId: 17, motion: 'sway',    fx: 'sparkles' },
   18: { imgId: 18, motion: 'sway',    fx: 'notes' },
-  19: { imgId: 21, motion: 'zoomOut', fx: 'sad', tint: 'rgba(30, 58, 138, 0.24)' },
-  20: { imgId: 21, motion: 'panL',    fx: 'think', tint: 'rgba(30, 41, 59, 0.14)' },
+  19: { imgId: 19, motion: 'zoomOut', fx: 'sad' },
+  20: { imgId: 20, motion: 'panL',    fx: 'think' },
   21: { imgId: 21, motion: 'eureka',  fx: 'sparkles' },
   22: { imgId: 22, motion: 'dance',   fx: 'sparkles' },
-  23: { imgId: 1,  motion: 'dance',   fx: 'confetti' },
-  24: { imgId: 22, motion: 'dance',   fx: 'confetti' },
-  25: { imgId: 1,  motion: 'eureka',  fx: 'confetti' },
+  23: { imgId: 23, motion: 'dance',   fx: 'confetti' },
+  24: { imgId: 24, motion: 'dance',   fx: 'confetti' },
+  25: { imgId: 25, motion: 'eureka',  fx: 'confetti' },
 };
 
 const SCENE_IMG_CACHE = new Map();
