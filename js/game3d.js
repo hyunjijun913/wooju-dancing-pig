@@ -3987,14 +3987,14 @@ export class FarmGame3D {
         this.camera.position.z += (tz - this.camera.position.z) * 0.1;
         this.camera.lookAt(this.avatarPos.x * 0.25, 1.1, this.avatarPos.z * 0.25);
       } else if (this.inLiveStage) {
-        // Dramatic 3D Live Stage Presentation Camera looking over cheering audience at Wooju!
+        // Dramatic 3D Live Stage Camera framed so Wooju & cheering audience appear cleanly ABOVE the bottom stage card!
         const tx = 0;
-        const ty = 4.6 * portraitBoost;
-        const tz = 11.8 * portraitBoost;
+        const ty = 4.8 * portraitBoost;
+        const tz = 12.2 * portraitBoost;
         this.camera.position.x += (tx - this.camera.position.x) * 0.08;
         this.camera.position.y += (ty - this.camera.position.y) * 0.08;
         this.camera.position.z += (tz - this.camera.position.z) * 0.08;
-        this.camera.lookAt(0, 1.5, 0);
+        this.camera.lookAt(0, aspect < 1 ? -0.9 : -0.35, 1.2);
       } else {
         let focusX = this.avatarPos.x;
         let focusZ = this.avatarPos.z;
@@ -4014,13 +4014,14 @@ export class FarmGame3D {
             this.cameraFocusOverride = null;
           }
         } else if (this.activeDialogueSpot !== null && this.spotEntries[this.activeDialogueSpot]) {
+          // Frame the speaking 3D character cleanly ABOVE the bottom dialogue card without shrinking the script UI!
           const sp = this.spotEntries[this.activeDialogueSpot];
           focusX = sp.curX;
           focusZ = sp.curZ;
-          camHeight = 3.2 * portraitBoost;
-          camDist = 6.8 * portraitBoost;
-          lookY = 1.25;
-          lookOffsetZ = 0.6;
+          camHeight = 3.1 * portraitBoost;
+          camDist = 6.6 * portraitBoost;
+          lookY = aspect < 1 ? -0.85 : -0.55;
+          lookOffsetZ = 0.35;
         }
         this.camera.position.x += (focusX - this.camera.position.x) * 0.08;
         this.camera.position.y += (camHeight - this.camera.position.y) * 0.08;
