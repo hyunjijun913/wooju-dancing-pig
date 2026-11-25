@@ -738,16 +738,221 @@ const SCENE_RENDERERS = {
   pig_finale: renderPigDance,
 };
 
+// Zootopia-style 3D CGI Cinematic Scene Registry (1 scene per sentence: cards 1..25!)
+const GENERATED_SCENE_IDS = new Set([1, 2, 3, 4, 6, 7, 8, 11, 12, 16, 17, 18, 21, 22]);
+
+// Per-sentence cinematic camera motion & VFX presets (1..25)
+const CARD_CINEMA_PRESETS = {
+  1:  { imgId: 1,  motion: 'dance',   fx: 'confetti' },
+  2:  { imgId: 2,  motion: 'panR',    fx: 'motes' },
+  3:  { imgId: 3,  motion: 'zoomIn',  fx: 'motes' },
+  4:  { imgId: 4,  motion: 'zoomIn',  fx: 'sad' },
+  5:  { imgId: 3,  motion: 'panL',    fx: 'think' },
+  6:  { imgId: 6,  motion: 'eureka',  fx: 'sparkles' },
+  7:  { imgId: 7,  motion: 'panR',    fx: 'sparkles' },
+  8:  { imgId: 8,  motion: 'bounce',  fx: 'sparkles' },
+  9:  { imgId: null, fallback: 'rabbit' },
+  10: { imgId: null, fallback: 'cow' },
+  11: { imgId: 11, motion: 'panL',    fx: 'sparkles' },
+  12: { imgId: 12, motion: 'zoomIn',  fx: 'motes' },
+  13: { imgId: 12, motion: 'shake',   fx: 'noBurst' },
+  14: { imgId: 12, motion: 'panR',    fx: 'think' },
+  15: { imgId: null, fallback: 'cat_mouse' },
+  16: { imgId: 16, motion: 'zoomIn',  fx: 'steam' },
+  17: { imgId: 17, motion: 'sway',    fx: 'sparkles' },
+  18: { imgId: 18, motion: 'sway',    fx: 'notes' },
+  19: { imgId: 21, motion: 'zoomOut', fx: 'sad', tint: 'rgba(30, 58, 138, 0.24)' },
+  20: { imgId: 21, motion: 'panL',    fx: 'think', tint: 'rgba(30, 41, 59, 0.14)' },
+  21: { imgId: 21, motion: 'eureka',  fx: 'sparkles' },
+  22: { imgId: 22, motion: 'dance',   fx: 'sparkles' },
+  23: { imgId: 1,  motion: 'dance',   fx: 'confetti' },
+  24: { imgId: 22, motion: 'dance',   fx: 'confetti' },
+  25: { imgId: 1,  motion: 'eureka',  fx: 'confetti' },
+};
+
+const SCENE_IMG_CACHE = new Map();
+
+function getSceneImage(num) {
+  if (!num || !GENERATED_SCENE_IDS.has(num)) return null;
+  if (SCENE_IMG_CACHE.has(num)) return SCENE_IMG_CACHE.get(num);
+  const img = new Image();
+  const padded = String(num).padStart(2, '0');
+  img.src = `assets/scenes/scene_${padded}.jpg`;
+  SCENE_IMG_CACHE.set(num, img);
+  return img;
+}
+
+function renderCinemaVfx(ctx, W, H, t, fx) {
+  if (fx === 'motes') {
+    for (let i = 0; i < 12; i++) {
+      const x = ((i * 53 + t * 12) % (W + 20)) - 10;
+      const y = ((i * 31 + Math.sin(t * 1.6 + i) * 14) % H + H) % H;
+      ctx.fillStyle = `rgba(254, 240, 138, ${0.35 + Math.sin(t * 3 + i) * 0.25})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.2 + (i % 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (fx === 'sparkles') {
+    const cols = ['#FEF08A', '#FFFFFF', '#FDE047', '#F472B6'];
+    for (let i = 0; i < 7; i++) {
+      const sx = ((i * 61 + 28) % (W - 30)) + 15;
+      const sy = ((i * 29 + 18) % (H - 30)) + 15 + Math.sin(t * 2.5 + i) * 6;
+      const r = 3.5 + Math.abs(Math.sin(t * 4.5 + i * 1.1)) * 4.5;
+      drawSparkle(ctx, sx, sy, r, cols[i % cols.length]);
+    }
+  } else if (fx === 'confetti') {
+    const cols = ['#F43F5E', '#FACC15', '#38BDF8', '#4ADE80', '#C084FC', '#FB923C'];
+    for (let i = 0; i < 16; i++) {
+      const cx = (i * 37 + Math.sin(t * 2.4 + i) * 14 + W) % W;
+      const cy = ((t * (38 + (i % 4) * 10) + i * 23) % (H + 16)) - 8;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(t * 4 + i);
+      ctx.fillStyle = cols[i % cols.length];
+      ctx.fillRect(-3.5, -2.5, 7, 5);
+      ctx.restore();
+    }
+  } else if (fx === 'notes') {
+    const notes = ['🎵', '🎶', '🎵', '🎶', '✨'];
+    ctx.font = 'bold 18px sans-serif';
+    notes.forEach((n, i) => {
+      const p = (t * 0.45 + i * 0.2) % 1;
+      const nx = W * (0.16 + i * 0.17) + Math.sin(t * 3.5 + i) * 10;
+      const ny = H * 0.82 - p * (H * 0.72);
+      ctx.globalAlpha = Math.sin(p * Math.PI);
+      ctx.fillText(n, nx, ny);
+    });
+    ctx.globalAlpha = 1;
+  } else if (fx === 'steam') {
+    for (let i = 0; i < 6; i++) {
+      const p = (t * 0.55 + i * 0.17) % 1;
+      const sx = W * 0.5 + (i - 2.5) * 16 + Math.sin(t * 3 + i) * 8;
+      const sy = H * 0.78 - p * (H * 0.65);
+      ctx.fillStyle = `rgba(255, 255, 255, ${(1 - p) * 0.55})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 6 + p * 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (fx === 'noBurst') {
+    const pulse = 1 + Math.sin(t * 14) * 0.14;
+    ctx.save();
+    ctx.translate(W * 0.78, H * 0.26);
+    ctx.scale(pulse, pulse);
+    ctx.fillStyle = 'rgba(239, 68, 68, 0.92)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 19, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-7, -7); ctx.lineTo(7, 7);
+    ctx.moveTo(7, -7); ctx.lineTo(-7, 7);
+    ctx.stroke();
+    ctx.restore();
+  } else if (fx === 'sad') {
+    for (let i = 0; i < 6; i++) {
+      const p = (t * 0.5 + i * 0.18) % 1;
+      const rx = W * (0.15 + i * 0.14);
+      const ry = p * H;
+      ctx.fillStyle = `rgba(147, 197, 253, ${Math.sin(p * Math.PI) * 0.65})`;
+      ctx.beginPath();
+      ctx.ellipse(rx, ry, 2, 5.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (fx === 'think') {
+    ctx.font = 'bold 18px sans-serif';
+    ['💭', '❓', '✨'].forEach((ch, i) => {
+      const p = (t * 0.4 + i * 0.33) % 1;
+      ctx.globalAlpha = Math.sin(p * Math.PI);
+      ctx.fillText(ch, W * (0.22 + i * 0.28), H * 0.36 - p * 18);
+    });
+    ctx.globalAlpha = 1;
+  }
+}
+
+function renderZootopiaScene(ctx, W, H, t, img, preset) {
+  const iw = img.naturalWidth || 16;
+  const ih = img.naturalHeight || 9;
+  const baseScale = Math.max(W / iw, H / ih);
+
+  let zoom = 1.06;
+  let ox = 0;
+  let oy = 0;
+  let rot = 0;
+  const wave = Math.sin(t * 0.85);
+  const fast = Math.sin(t * 6.5);
+
+  if (preset.motion === 'zoomIn') {
+    zoom = 1.04 + ((t % 6) / 6) * 0.14;
+  } else if (preset.motion === 'zoomOut') {
+    zoom = 1.18 - ((t % 6) / 6) * 0.12;
+  } else if (preset.motion === 'panR') {
+    zoom = 1.14;
+    ox = -wave * (W * 0.055);
+  } else if (preset.motion === 'panL') {
+    zoom = 1.14;
+    ox = wave * (W * 0.055);
+  } else if (preset.motion === 'dance') {
+    zoom = 1.08 + Math.abs(fast) * 0.05;
+    oy = -Math.abs(fast) * 5;
+    rot = Math.sin(t * 3.2) * 0.018;
+  } else if (preset.motion === 'bounce') {
+    zoom = 1.08 + Math.abs(Math.sin(t * 4.2)) * 0.04;
+    oy = -Math.abs(Math.sin(t * 4.2)) * 4;
+  } else if (preset.motion === 'eureka') {
+    zoom = 1.05 + (Math.sin(t * 1.4) + 1) * 0.06;
+  } else if (preset.motion === 'shake') {
+    zoom = 1.16;
+    ox = Math.sin(t * 28) * 5;
+    oy = Math.cos(t * 24) * 2.5;
+  } else if (preset.motion === 'sway') {
+    zoom = 1.1;
+    ox = Math.sin(t * 2.4) * 8;
+    rot = Math.sin(t * 2.4) * 0.015;
+  }
+
+  ctx.save();
+  ctx.translate(W * 0.5 + ox, H * 0.5 + oy);
+  ctx.rotate(rot);
+  const dw = iw * baseScale * zoom;
+  const dh = ih * baseScale * zoom;
+  ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  ctx.restore();
+
+  if (preset.tint) {
+    ctx.fillStyle = preset.tint;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Subtle warm cinema vignette
+  const vig = ctx.createRadialGradient(W * 0.5, H * 0.5, W * 0.25, W * 0.5, H * 0.5, W * 0.65);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(15,23,42,0.22)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+
+  renderCinemaVfx(ctx, W, H, t, preset.fx);
+}
+
 export class StoryCartoonPlayer {
   constructor(canvas) {
     this.canvas = canvas;
     this.spotId = null;
+    this.cardId = null;
     this.rafId = null;
     this.startTs = 0;
   }
 
-  play(spotId) {
+  play(spotId, cardId = null) {
+    const changed = this.spotId !== spotId || this.cardId !== cardId;
     this.spotId = spotId || 'pig_finale';
+    this.cardId = cardId;
+    if (changed) this.startTs = performance.now();
+
+    const preset = cardId ? CARD_CINEMA_PRESETS[cardId] : null;
+    if (preset?.imgId) getSceneImage(preset.imgId);
+
     if (!this.canvas) return;
     if (!this.rafId) {
       this.startTs = performance.now();
@@ -770,8 +975,16 @@ export class StoryCartoonPlayer {
         if (!ctx) return;
         ctx.save();
         ctx.scale(dpr, dpr);
-        const fn = SCENE_RENDERERS[this.spotId] || renderPigDance;
-        fn(ctx, rect.width, rect.height, (now - this.startTs) / 1000);
+        const elapsed = (now - this.startTs) / 1000;
+        const activePreset = this.cardId ? CARD_CINEMA_PRESETS[this.cardId] : null;
+        const img = activePreset?.imgId ? getSceneImage(activePreset.imgId) : null;
+        if (img && img.complete && img.naturalWidth > 0) {
+          renderZootopiaScene(ctx, rect.width, rect.height, elapsed, img, activePreset);
+        } else {
+          const fallbackKey = activePreset?.fallback || this.spotId;
+          const fn = SCENE_RENDERERS[fallbackKey] || renderPigDance;
+          fn(ctx, rect.width, rect.height, elapsed);
+        }
         ctx.restore();
       };
       this.rafId = requestAnimationFrame(tick);

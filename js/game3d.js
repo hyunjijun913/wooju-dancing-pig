@@ -1043,7 +1043,7 @@ export class FarmGame3D {
     const stageCanvas = this.container?.querySelector('#liveStageCartoon');
     if (stageCanvas) {
       if (!this.stageCartoon) this.stageCartoon = new StoryCartoonPlayer(stageCanvas);
-      this.stageCartoon.play(stageSpot.id);
+      this.stageCartoon.play(stageSpot.id, card.id);
     }
     if (gaugeEl) gaugeEl.classList.remove('filled');
     if (fillEl) fillEl.style.width = '0%';
@@ -3277,7 +3277,7 @@ export class FarmGame3D {
     const dlgCanvas = this.container?.querySelector('#farmDlgCartoon');
     if (dlgCanvas) {
       if (!this.dlgCartoon) this.dlgCartoon = new StoryCartoonPlayer(dlgCanvas);
-      this.dlgCartoon.play(spot.id);
+      this.dlgCartoon.play(spot.id, cards[0]?.id || null);
     }
     nameEl.textContent = `${spot.emoji} ${spot.name} (${spotIdx + 1}/12)`;
     starsEl.textContent = currentTier === 3 ? '👑👑👑 혼자 외우기 마스터!' : (currentTier === 2 ? '⭐⭐☆ (다음: 👑 왕관 도전!)' : (currentTier === 1 ? '⭐☆☆ (다음: ⭐⭐ 힌트 도전!)' : '☆☆☆ 첫 만남!'));
@@ -3312,6 +3312,7 @@ export class FarmGame3D {
         this.isListening = true;
         this.audio.playSegmentSequence(cards, {
           onCardStart: (card) => {
+            if (this.dlgCartoon) this.dlgCartoon.play(spot.id, card.id);
             renderIcons(card, false);
             this._startWordSweep(enEl, card);
             koEl.textContent = card.ko || '';
@@ -3376,6 +3377,7 @@ export class FarmGame3D {
       this.isListening = true;
       this.audio.playSegmentSequence(cards, {
         onCardStart: (card) => {
+          if (this.dlgCartoon) this.dlgCartoon.play(spot.id, card.id);
           renderIcons(card, this.dialogueMode === 'memory');
           if (this.dialogueMode !== 'memory') {
             this._startWordSweep(enEl, card);
