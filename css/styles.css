@@ -610,6 +610,23 @@ body.farm-fullscreen .farm-card {
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
 }
 .farm-dlg-head { display: flex; align-items: center; gap: 12px; }
+.story-cartoon-wrap {
+  width: 100%;
+  height: 112px;
+  border-radius: 18px;
+  border: 3px solid #F59E0B;
+  background: #E0F2FE;
+  overflow: hidden;
+  box-shadow: inset 0 2px 8px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(245, 158, 11, 0.16);
+}
+.story-cartoon-wrap.compact {
+  height: 98px;
+}
+.story-cartoon-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 .dlg-anim-stage {
   position: relative;
   width: 82px;

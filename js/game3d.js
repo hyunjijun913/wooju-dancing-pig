@@ -49,6 +49,7 @@ import {
   buildStageMonuments3D,
 } from './models3d.js';
 import { WORD_TIMINGS } from './wordTimings.js';
+import { StoryCartoonPlayer } from './storyCartoon.js';
 
 let THREE_MOD = null;
 async function loadThree() {
@@ -134,6 +135,8 @@ export class FarmGame3D {
     this.placingTreasureId = null;
     this.cameraFocusOverride = null; // { x, z, until }
     this.weatherMode = 'day'; // 'day' | 'sunset' | 'night' | 'blossom'
+    this.dlgCartoon = null;
+    this.stageCartoon = null;
     this.inLiveStage = false;
     this.liveStageIdx = 0;
     this.liveStageUnlocked = false;
@@ -510,12 +513,13 @@ export class FarmGame3D {
             <button class="farm-tier-tab" data-tier-mode="memory">🌙 혼자 외우기 👑</button>
           </div>
 
+          <!-- 🎬 Full-Color Picture-Book Story Cartoon Cinema right inside the dialogue! -->
+          <div class="story-cartoon-wrap">
+            <canvas class="story-cartoon-canvas" id="farmDlgCartoon"></canvas>
+          </div>
+
           <div class="farm-dlg-head">
-            <div class="dlg-anim-stage" id="farmDlgAnimStage">
-              <span class="dlg-anim-fx" id="farmDlgAnimFx">✨</span>
-              <img id="farmDlgPortrait" class="farm-dlg-portrait" alt="" />
-              <span class="dlg-anim-prop" id="farmDlgAnimProp">🌟</span>
-            </div>
+            <img id="farmDlgPortrait" class="farm-dlg-portrait" alt="" />
             <div class="farm-dlg-meta">
               <div class="farm-dlg-stars" id="farmDlgStars">☆☆☆</div>
               <div class="farm-dlg-en" id="farmDlgEn"></div>
@@ -559,14 +563,10 @@ export class FarmGame3D {
               <button class="mini-btn del" id="liveStageExitBtn">✕ 무대 내려오기</button>
             </div>
           </div>
-          <div class="farm-dlg-head" style="justify-content:center;">
-            <div class="dlg-anim-stage compact" id="liveStageAnimStage">
-              <span class="dlg-anim-fx" id="liveStageAnimFx">✨</span>
-              <img id="liveStagePortrait" class="farm-dlg-portrait" alt="" />
-              <span class="dlg-anim-prop" id="liveStageAnimProp">🎤</span>
-            </div>
-            <div class="farm-dlg-icons" id="liveStageIcons" style="flex:1;"></div>
+          <div class="story-cartoon-wrap compact">
+            <canvas class="story-cartoon-canvas" id="liveStageCartoon"></canvas>
           </div>
+          <div class="farm-dlg-icons" id="liveStageIcons"></div>
           <div class="farm-dlg-en" id="liveStageWords"></div>
           <div class="farm-magic-gauge" id="liveStageMagicGauge">
             <span class="magic-label" id="liveStageMagicLabel">🎤 마이크에 대고 영어로 발표해 주세요!</span>
@@ -1040,13 +1040,11 @@ export class FarmGame3D {
       iconsEl.innerHTML = (card.icons || []).map(([em]) => `<span class="farm-icon-chip">${em}</span>`).join('');
     }
     const stageSpot = FARM_SPOTS.find(s => s.cardIds.includes(card.id)) || FARM_SPOTS[FARM_SPOTS.length - 1];
-    this._applyDialogueAnimation(
-      this.container?.querySelector('#liveStageAnimStage'),
-      this.container?.querySelector('#liveStagePortrait'),
-      this.container?.querySelector('#liveStageAnimProp'),
-      this.container?.querySelector('#liveStageAnimFx'),
-      stageSpot
-    );
+    const stageCanvas = this.container?.querySelector('#liveStageCartoon');
+    if (stageCanvas) {
+      if (!this.stageCartoon) this.stageCartoon = new StoryCartoonPlayer(stageCanvas);
+      this.stageCartoon.play(stageSpot.id);
+    }
     if (gaugeEl) gaugeEl.classList.remove('filled');
     if (fillEl) fillEl.style.width = '0%';
     if (pctEl) pctEl.textContent = '0%';
@@ -1243,6 +1241,7 @@ export class FarmGame3D {
   _exitLiveStage() {
     clearTimeout(this._liveStageAutoTimer);
     this._liveStageAutoTimer = null;
+    if (this.stageCartoon) this.stageCartoon.stop();
     this.inLiveStage = false;
     this.liveStageUnlocked = false;
     this.stageCooldownUntil = performance.now() + 2600;
@@ -3274,13 +3273,12 @@ export class FarmGame3D {
     const crownBtn = this.container.querySelector('#farmJudgeCrownBtn');
     const perfectBtn = this.container.querySelector('#farmJudgePerfectBtn');
 
-    this._applyDialogueAnimation(
-      this.container.querySelector('#farmDlgAnimStage'),
-      portrait,
-      this.container.querySelector('#farmDlgAnimProp'),
-      this.container.querySelector('#farmDlgAnimFx'),
-      spot
-    );
+    if (portrait) portrait.src = spot.portrait;
+    const dlgCanvas = this.container?.querySelector('#farmDlgCartoon');
+    if (dlgCanvas) {
+      if (!this.dlgCartoon) this.dlgCartoon = new StoryCartoonPlayer(dlgCanvas);
+      this.dlgCartoon.play(spot.id);
+    }
     nameEl.textContent = `${spot.emoji} ${spot.name} (${spotIdx + 1}/12)`;
     starsEl.textContent = currentTier === 3 ? '👑👑👑 혼자 외우기 마스터!' : (currentTier === 2 ? '⭐⭐☆ (다음: 👑 왕관 도전!)' : (currentTier === 1 ? '⭐☆☆ (다음: ⭐⭐ 힌트 도전!)' : '☆☆☆ 첫 만남!'));
 
@@ -3565,6 +3563,7 @@ export class FarmGame3D {
 
   _hideDialogue() {
     this._clearWordTimers();
+    if (this.dlgCartoon) this.dlgCartoon.stop();
     this.audio.stopBgm();
     this.audio.stopAll();
     this.isListening = false;
