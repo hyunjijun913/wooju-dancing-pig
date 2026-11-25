@@ -610,13 +610,173 @@ body.farm-fullscreen .farm-card {
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
 }
 .farm-dlg-head { display: flex; align-items: center; gap: 12px; }
+.dlg-anim-stage {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  border-radius: 22px;
+  border: 3px solid #F59E0B;
+  background: linear-gradient(180deg, #DBEAFE 0%, #FEF9C3 62%, #BBF7D0 100%);
+  box-shadow: inset 0 -6px 0 rgba(34, 197, 94, 0.25), 0 6px 14px rgba(245, 158, 11, 0.22);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dlg-anim-stage.compact {
+  width: 68px;
+  height: 68px;
+  border-radius: 18px;
+}
 .farm-dlg-portrait {
-  width: 58px; height: 58px;
+  width: 66px;
+  height: 66px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid #FACC15;
+  border: 2.5px solid #FFFFFF;
   background: #FFFBEB;
-  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.16);
+  transform-origin: center bottom;
+}
+.dlg-anim-stage.compact .farm-dlg-portrait {
+  width: 54px;
+  height: 54px;
+}
+.dlg-anim-prop {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  font-size: 22px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.22));
+  pointer-events: none;
+}
+.dlg-anim-fx {
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  font-size: 15px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* 12 Story-Matched Character Dialogue Animations! */
+.dlg-anim-stage.anim-farmer .farm-dlg-portrait { animation: dlgFarmerWave 0.9s ease-in-out infinite; }
+.dlg-anim-stage.anim-farmer .dlg-anim-prop { animation: dlgFloatUp 1.4s ease-in-out infinite; }
+
+.dlg-anim-stage.anim-frog .farm-dlg-portrait { animation: dlgFrogLeap 0.85s cubic-bezier(0.34, 1.56, 0.64, 1) infinite; }
+.dlg-anim-stage.anim-frog .dlg-anim-fx { animation: dlgPopBurst 0.85s ease-out infinite; }
+
+.dlg-anim-stage.anim-owl .farm-dlg-portrait { animation: dlgOwlFlap 1.1s ease-in-out infinite; }
+.dlg-anim-stage.anim-owl .dlg-anim-fx { animation: dlgTwinkle 0.9s ease-in-out infinite; }
+
+.dlg-anim-stage.anim-chicken .farm-dlg-portrait { animation: dlgChickenLay 1.15s ease-in-out infinite; }
+.dlg-anim-stage.anim-chicken .dlg-anim-prop { animation: dlgEggPop 1.15s ease-out infinite; }
+
+.dlg-anim-stage.anim-rabbit .farm-dlg-portrait { animation: dlgRabbitDig 0.55s ease-in-out infinite; }
+.dlg-anim-stage.anim-rabbit .dlg-anim-prop { animation: dlgCarrotPull 1.1s ease-in-out infinite; }
+
+.dlg-anim-stage.anim-cow .farm-dlg-portrait { animation: dlgCowNod 1.2s ease-in-out infinite; }
+.dlg-anim-stage.anim-cow .dlg-anim-prop { animation: dlgTwinkle 1.2s ease-in-out infinite; }
+
+.dlg-anim-stage.anim-horse .farm-dlg-portrait { animation: dlgHorseReach 0.95s ease-in-out infinite; }
+.dlg-anim-stage.anim-horse .dlg-anim-prop { animation: dlgEggPop 0.95s ease-in-out infinite; }
+
+.dlg-anim-stage.anim-cat-mouse .farm-dlg-portrait { animation: dlgNoShake 0.52s ease-in-out infinite; }
+.dlg-anim-stage.anim-cat-mouse .dlg-anim-fx { animation: dlgPopBurst 0.7s ease-in-out infinite; }
+
+.dlg-anim-stage.anim-duck .farm-dlg-portrait { animation: dlgDuckCook 0.9s ease-in-out infinite; }
+.dlg-anim-stage.anim-duck .dlg-anim-fx { animation: dlgFloatUp 1.1s ease-out infinite; }
+
+.dlg-anim-stage.anim-dog-goat .farm-dlg-portrait { animation: dlgSweep 0.75s ease-in-out infinite; }
+.dlg-anim-stage.anim-dog-goat .dlg-anim-prop { animation: dlgBroomSwing 0.75s ease-in-out infinite; }
+
+.dlg-anim-stage.anim-sing .farm-dlg-portrait { animation: dlgSingSway 1.0s ease-in-out infinite; }
+.dlg-anim-stage.anim-sing .dlg-anim-fx { animation: dlgFloatUp 1.1s ease-out infinite; }
+.dlg-anim-stage.anim-sing .dlg-anim-prop { animation: dlgFloatUp 1.35s ease-out infinite 0.35s; }
+
+.dlg-anim-stage.anim-pig-dance .farm-dlg-portrait { animation: dlgPigDance 1.15s ease-in-out infinite; }
+.dlg-anim-stage.anim-pig-dance .dlg-anim-fx { animation: dlgTwinkle 0.6s ease-in-out infinite; }
+.dlg-anim-stage.anim-pig-dance .dlg-anim-prop { animation: dlgPopBurst 0.8s ease-in-out infinite; }
+
+@keyframes dlgFarmerWave {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-7px) rotate(6deg) scale(1.05); }
+}
+@keyframes dlgFrogLeap {
+  0%, 100% { transform: translateY(2px) scaleX(1.12) scaleY(0.84); }
+  45% { transform: translateY(-14px) scaleX(0.92) scaleY(1.12); }
+}
+@keyframes dlgOwlFlap {
+  0%, 100% { transform: translateY(2px) rotate(-7deg); }
+  50% { transform: translateY(-10px) rotate(7deg) scale(1.04); }
+}
+@keyframes dlgChickenLay {
+  0%, 100% { transform: translateY(0) scale(1); }
+  35% { transform: translateY(5px) scaleX(1.18) scaleY(0.78); }
+  65% { transform: translateY(-10px) scaleX(0.95) scaleY(1.08); }
+}
+@keyframes dlgEggPop {
+  0%, 30% { transform: translateY(10px) scale(0.4); opacity: 0.2; }
+  65% { transform: translateY(-5px) scale(1.15); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes dlgRabbitDig {
+  0%, 100% { transform: translateY(0) rotate(-10deg) translateX(-2px); }
+  50% { transform: translateY(4px) rotate(10deg) translateX(2px); }
+}
+@keyframes dlgCarrotPull {
+  0%, 100% { transform: translateY(6px) rotate(-8deg) scale(0.9); }
+  55% { transform: translateY(-8px) rotate(8deg) scale(1.15); }
+}
+@keyframes dlgCowNod {
+  0%, 100% { transform: rotate(-4deg) translateY(0); }
+  50% { transform: rotate(5deg) translateY(3px) scale(1.04); }
+}
+@keyframes dlgHorseReach {
+  0%, 100% { transform: translateY(2px) scaleY(0.95); }
+  50% { transform: translateY(-11px) scaleY(1.12) rotate(-4deg); }
+}
+@keyframes dlgNoShake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  25% { transform: translateX(-6px) rotate(-10deg); }
+  75% { transform: translateX(6px) rotate(10deg); }
+}
+@keyframes dlgDuckCook {
+  0%, 100% { transform: rotate(-8deg) translateY(0); }
+  50% { transform: rotate(8deg) translateY(-5px) scale(1.05); }
+}
+@keyframes dlgSweep {
+  0%, 100% { transform: translateX(-6px) rotate(-8deg); }
+  50% { transform: translateX(6px) rotate(8deg); }
+}
+@keyframes dlgBroomSwing {
+  0%, 100% { transform: translateX(-8px) rotate(18deg); }
+  50% { transform: translateX(4px) rotate(-22deg); }
+}
+@keyframes dlgSingSway {
+  0%, 100% { transform: rotate(-9deg) translateY(0); }
+  50% { transform: rotate(9deg) translateY(-6px) scale(1.06); }
+}
+@keyframes dlgPigDance {
+  0% { transform: translateY(0) rotate(0deg) scale(1); }
+  30% { transform: translateY(-12px) rotate(14deg) scale(1.08); }
+  60% { transform: translateY(-4px) rotate(-14deg) scale(1.06); }
+  100% { transform: translateY(0) rotate(360deg) scale(1); }
+}
+@keyframes dlgFloatUp {
+  0% { transform: translateY(8px) scale(0.8); opacity: 0.3; }
+  55% { transform: translateY(-5px) scale(1.15); opacity: 1; }
+  100% { transform: translateY(-12px) scale(0.9); opacity: 0.2; }
+}
+@keyframes dlgPopBurst {
+  0%, 100% { transform: scale(0.8); opacity: 0.6; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+@keyframes dlgTwinkle {
+  0%, 100% { transform: scale(0.88) rotate(-8deg); opacity: 0.75; }
+  50% { transform: scale(1.2) rotate(8deg); opacity: 1; }
 }
 .farm-dlg-meta { flex: 1; }
 .farm-dlg-en { text-align: left; font-size: 17px; font-weight: 900; color: #1E293B; line-height: 1.35; }

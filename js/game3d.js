@@ -511,7 +511,11 @@ export class FarmGame3D {
           </div>
 
           <div class="farm-dlg-head">
-            <img id="farmDlgPortrait" class="farm-dlg-portrait" alt="" />
+            <div class="dlg-anim-stage" id="farmDlgAnimStage">
+              <span class="dlg-anim-fx" id="farmDlgAnimFx">✨</span>
+              <img id="farmDlgPortrait" class="farm-dlg-portrait" alt="" />
+              <span class="dlg-anim-prop" id="farmDlgAnimProp">🌟</span>
+            </div>
             <div class="farm-dlg-meta">
               <div class="farm-dlg-stars" id="farmDlgStars">☆☆☆</div>
               <div class="farm-dlg-en" id="farmDlgEn"></div>
@@ -555,7 +559,14 @@ export class FarmGame3D {
               <button class="mini-btn del" id="liveStageExitBtn">✕ 무대 내려오기</button>
             </div>
           </div>
-          <div class="farm-dlg-icons" id="liveStageIcons"></div>
+          <div class="farm-dlg-head" style="justify-content:center;">
+            <div class="dlg-anim-stage compact" id="liveStageAnimStage">
+              <span class="dlg-anim-fx" id="liveStageAnimFx">✨</span>
+              <img id="liveStagePortrait" class="farm-dlg-portrait" alt="" />
+              <span class="dlg-anim-prop" id="liveStageAnimProp">🎤</span>
+            </div>
+            <div class="farm-dlg-icons" id="liveStageIcons" style="flex:1;"></div>
+          </div>
           <div class="farm-dlg-en" id="liveStageWords"></div>
           <div class="farm-magic-gauge" id="liveStageMagicGauge">
             <span class="magic-label" id="liveStageMagicLabel">🎤 마이크에 대고 영어로 발표해 주세요!</span>
@@ -1028,6 +1039,14 @@ export class FarmGame3D {
     if (iconsEl) {
       iconsEl.innerHTML = (card.icons || []).map(([em]) => `<span class="farm-icon-chip">${em}</span>`).join('');
     }
+    const stageSpot = FARM_SPOTS.find(s => s.cardIds.includes(card.id)) || FARM_SPOTS[FARM_SPOTS.length - 1];
+    this._applyDialogueAnimation(
+      this.container?.querySelector('#liveStageAnimStage'),
+      this.container?.querySelector('#liveStagePortrait'),
+      this.container?.querySelector('#liveStageAnimProp'),
+      this.container?.querySelector('#liveStageAnimFx'),
+      stageSpot
+    );
     if (gaugeEl) gaugeEl.classList.remove('filled');
     if (fillEl) fillEl.style.width = '0%';
     if (pctEl) pctEl.textContent = '0%';
@@ -3203,6 +3222,31 @@ export class FarmGame3D {
     }
   }
 
+  _applyDialogueAnimation(stageEl, portraitEl, propEl, fxEl, spot) {
+    if (!spot) return;
+    const animSpec = {
+      farmer:       { cls: 'anim-farmer',    prop: '🐷', fx: '💭' },
+      frog:         { cls: 'anim-frog',      prop: '🐸', fx: '💧' },
+      owl:          { cls: 'anim-owl',       prop: '🎉', fx: '⭐' },
+      chicken:      { cls: 'anim-chicken',   prop: '🥚', fx: '✨' },
+      rabbit:       { cls: 'anim-rabbit',    prop: '🥕', fx: '💨' },
+      cow:          { cls: 'anim-cow',       prop: '🥛', fx: '✨' },
+      horse_pony:   { cls: 'anim-horse',     prop: '🌽', fx: '✨' },
+      cat_mouse:    { cls: 'anim-cat-mouse', prop: '🐟', fx: '❌' },
+      duck:         { cls: 'anim-duck',      prop: '🍲', fx: '💨' },
+      dog_goat:     { cls: 'anim-dog-goat',  prop: '🧹', fx: '✨' },
+      donkey_sheep: { cls: 'anim-sing',      prop: '🎶', fx: '🎵' },
+      pig_finale:   { cls: 'anim-pig-dance', prop: '💃', fx: '🌈' },
+    }[spot.id] || { cls: 'anim-farmer', prop: spot.itemEmoji || '✨', fx: '⭐' };
+
+    if (portraitEl) portraitEl.src = spot.portrait;
+    if (propEl) propEl.textContent = animSpec.prop;
+    if (fxEl) fxEl.textContent = animSpec.fx;
+    if (stageEl) {
+      stageEl.className = `dlg-anim-stage${stageEl.classList.contains('compact') ? ' compact' : ''} ${animSpec.cls}`;
+    }
+  }
+
   _openDialogue(spotIdx, isRevisit = false) {
     const spot = FARM_SPOTS[spotIdx];
     const cards = spot.cardIds.map(id => BASE_CARDS.find(c => c.id === id)).filter(Boolean);
@@ -3230,7 +3274,13 @@ export class FarmGame3D {
     const crownBtn = this.container.querySelector('#farmJudgeCrownBtn');
     const perfectBtn = this.container.querySelector('#farmJudgePerfectBtn');
 
-    portrait.src = spot.portrait;
+    this._applyDialogueAnimation(
+      this.container.querySelector('#farmDlgAnimStage'),
+      portrait,
+      this.container.querySelector('#farmDlgAnimProp'),
+      this.container.querySelector('#farmDlgAnimFx'),
+      spot
+    );
     nameEl.textContent = `${spot.emoji} ${spot.name} (${spotIdx + 1}/12)`;
     starsEl.textContent = currentTier === 3 ? '👑👑👑 혼자 외우기 마스터!' : (currentTier === 2 ? '⭐⭐☆ (다음: 👑 왕관 도전!)' : (currentTier === 1 ? '⭐☆☆ (다음: ⭐⭐ 힌트 도전!)' : '☆☆☆ 첫 만남!'));
 
