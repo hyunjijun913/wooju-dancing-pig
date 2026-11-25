@@ -63,6 +63,9 @@ export class AudioEngine {
     this.speechActive = false;
     this._speechResumeOpts = null;
     this._speechResumeTimer = null;
+    this._speechStartTimer = null;
+    this._speechToken = 0;
+    this._lastSpeechStopAt = 0;
 
     // Cozy Animal Crossing-style procedural marimba BGM & auto-ducking (v9)
     this.bgmEnabled = false;
@@ -970,74 +973,111 @@ export class AudioEngine {
     }, 180);
   }
 
-  startSpeechMatch({ onTranscript = () => {}, onUnsupported = () => {}, onError = () => {} } = {}) {
+  startSpeechMatch({
+    onTranscript = () => {},
+    onUnsupported = () => {},
+    onError = () => {},
+    onState = () => {},
+    delayMs = 0,
+  } = {}) {
     this.stopSpeechMatch();
     if (!this.supportsSpeechRecognition()) {
       onUnsupported();
       return false;
     }
-    try {
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const rec = new SR();
-      rec.lang = 'en-US';
-      rec.interimResults = true;
-      rec.continuous = true;
-      rec.maxAlternatives = 3;
 
-      let committed = '';
-      this.speechRec = rec;
-      this.speechActive = true;
-      this._speechResumeOpts = { onTranscript, onUnsupported, onError };
+    const myToken = ++this._speechToken;
+    this.speechActive = true;
+    this._speechResumeOpts = { onTranscript, onUnsupported, onError, onState };
+    let committed = '';
 
-      rec.onresult = (event) => {
-        if (this.speechRec !== rec) return;
-        let interim = '';
-        let altBag = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const res = event.results[i];
-          const primary = res[0]?.transcript || '';
-          for (let a = 0; a < res.length; a++) {
-            altBag += ' ' + (res[a]?.transcript || '');
+    const launchRecognizer = () => {
+      if (!this.speechActive || this._speechToken !== myToken) return;
+      try {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const rec = new SR();
+        rec.lang = 'en-US';
+        rec.interimResults = true;
+        rec.continuous = true;
+        rec.maxAlternatives = 3;
+
+        this.speechRec = rec;
+
+        rec.onstart = () => {
+          if (this.speechRec !== rec || this._speechToken !== myToken) return;
+          onState('listening');
+        };
+
+        rec.onresult = (event) => {
+          if (this.speechRec !== rec || this._speechToken !== myToken) return;
+          let interim = '';
+          let altBag = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const res = event.results[i];
+            const primary = res[0]?.transcript || '';
+            for (let a = 0; a < res.length; a++) {
+              altBag += ' ' + (res[a]?.transcript || '');
+            }
+            if (res.isFinal) committed += ' ' + primary;
+            else interim += ' ' + primary;
           }
-          if (res.isFinal) committed += ' ' + primary;
-          else interim += ' ' + primary;
-        }
-        onTranscript((committed + ' ' + interim + ' ' + altBag).trim());
-      };
+          onTranscript((committed + ' ' + interim + ' ' + altBag).trim());
+        };
 
-      rec.onerror = (e) => {
-        if (this.speechRec !== rec) return;
-        const code = e?.error || 'unknown';
-        if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture') {
+        rec.onerror = (e) => {
+          if (this.speechRec !== rec || this._speechToken !== myToken) return;
+          const code = e?.error || 'unknown';
+          if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture') {
+            this.stopSpeechMatch();
+            onError(code);
+          }
+        };
+
+        rec.onend = () => {
+          // On iOS/iPadOS Safari, never call rec.start() synchronously inside onend;
+          // spawn a fresh recognizer after a clean 280ms cooldown so it never freezes!
+          if (this.speechRec === rec) this.speechRec = null;
+          if (this.speechActive && this._speechToken === myToken) {
+            onState('restarting');
+            clearTimeout(this._speechStartTimer);
+            this._speechStartTimer = setTimeout(launchRecognizer, 280);
+          }
+        };
+
+        rec.start();
+      } catch (_) {
+        if (this.speechActive && this._speechToken === myToken) {
           this.stopSpeechMatch();
-          onError(code);
+          onUnsupported();
         }
-      };
+      }
+    };
 
-      rec.onend = () => {
-        // Auto-restart while dialogue is still waiting for Wooju to finish speaking
-        if (this.speechRec === rec && this.speechActive) {
-          try { rec.start(); } catch (_) {}
-        }
-      };
-
-      rec.start();
-      return true;
-    } catch (_) {
-      this.stopSpeechMatch();
-      onUnsupported();
-      return false;
+    // Enforce a >=320ms cooldown after a previous abort() so iPadOS Safari never drops the new session!
+    const sinceStop = performance.now() - this._lastSpeechStopAt;
+    const waitMs = Math.max(delayMs, sinceStop < 340 ? Math.ceil(340 - sinceStop) : 0);
+    if (waitMs > 0) {
+      onState('starting');
+      this._speechStartTimer = setTimeout(launchRecognizer, waitMs);
+    } else {
+      launchRecognizer();
     }
+    return true;
   }
 
   stopSpeechMatch() {
+    this._speechToken += 1;
     clearTimeout(this._speechResumeTimer);
     this._speechResumeTimer = null;
+    clearTimeout(this._speechStartTimer);
+    this._speechStartTimer = null;
     this._speechResumeOpts = null;
     this.speechActive = false;
     const rec = this.speechRec;
     this.speechRec = null;
     if (rec) {
+      this._lastSpeechStopAt = performance.now();
+      rec.onstart = null;
       rec.onresult = null;
       rec.onerror = null;
       rec.onend = null;

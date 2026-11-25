@@ -559,6 +559,7 @@ export class FarmGame3D {
           <div class="live-stage-head">
             <span class="live-stage-badge" id="liveStageBadge">🎪 3D 무대 발표회 · 1 / 26</span>
             <div style="display:flex;gap:6px;">
+              <button class="mini-btn" id="liveStageMicBtn">🎤 마이크 다시 켜기</button>
               <button class="mini-btn" id="liveStageHintBtn">👂 1초 힌트</button>
               <button class="mini-btn del" id="liveStageExitBtn">✕ 무대 내려오기</button>
             </div>
@@ -1028,6 +1029,7 @@ export class FarmGame3D {
     const fillEl = this.container?.querySelector('#liveStageMagicFill');
     const pctEl = this.container?.querySelector('#liveStageMagicPct');
     const labelEl = this.container?.querySelector('#liveStageMagicLabel');
+    const micBtn = this.container?.querySelector('#liveStageMicBtn');
     const hintBtn = this.container?.querySelector('#liveStageHintBtn');
     const nextBtn = this.container?.querySelector('#liveStageNextBtn');
     const parentBtn = this.container?.querySelector('#liveStageParentUnlockBtn');
@@ -1132,52 +1134,70 @@ export class FarmGame3D {
       });
     };
 
-    const started = this.audio.startSpeechMatch({
-      onTranscript: (transcript) => {
-        if (!this.inLiveStage || autoAdvanced) return;
-        const q = evaluateSpeechQuality(card.en, transcript, matched);
-        matched = q.matchedIndices;
-        this._renderWordChips(wordsEl, card.en, { matchedIndices: matched, hiddenMode: true, timings: cardTimings });
+    const beginStageSpeech = (delayMs = 450) => {
+      const started = this.audio.startSpeechMatch({
+        delayMs,
+        onState: (st) => {
+          if (!this.inLiveStage || autoAdvanced) return;
+          if (st === 'listening' && !this.liveStageUnlocked && labelEl) {
+            labelEl.textContent = '🔴 듣는 중! 마이크에 대고 영어로 말해요!';
+          } else if (st === 'starting' && !this.liveStageUnlocked && labelEl) {
+            labelEl.textContent = '⏳ 마이크 준비 중... 잠시만요!';
+          }
+        },
+        onTranscript: (transcript) => {
+          if (!this.inLiveStage || autoAdvanced) return;
+          const q = evaluateSpeechQuality(card.en, transcript, matched);
+          matched = q.matchedIndices;
+          this._renderWordChips(wordsEl, card.en, { matchedIndices: matched, hiddenMode: true, timings: cardTimings });
 
-        if (fillEl) fillEl.style.width = `${q.accuracyPct}%`;
-        if (pctEl) pctEl.textContent = `${q.matchedCount}/${q.totalCount}`;
-        if (qualEl) {
-          const missedHint = q.missedTokens.length > 0 && q.missedTokens.length <= 4
-            ? `<span class="sq-pill warn">👆 남은 단어: ${q.missedTokens.slice(0, 3).map(t => t.raw).join(', ')}</span>`
-            : '';
-          qualEl.innerHTML = `
-            <span class="sq-pill ${q.accuracyPct >= 75 ? 'good' : 'warn'}">🎯 정확도 ${q.accuracyPct}%</span>
-            <span class="sq-pill ${q.orderPct >= 75 ? 'good' : 'warn'}">🔗 순서 ${q.orderPct}%</span>
-            ${q.isPerfect ? `<span class="sq-pill good">💎 완벽 발표!!</span>` : missedHint}
-          `;
-        }
+          if (fillEl) fillEl.style.width = `${q.accuracyPct}%`;
+          if (pctEl) pctEl.textContent = `${q.matchedCount}/${q.totalCount}`;
+          if (qualEl) {
+            const missedHint = q.missedTokens.length > 0 && q.missedTokens.length <= 4
+              ? `<span class="sq-pill warn">👆 남은 단어: ${q.missedTokens.slice(0, 3).map(t => t.raw).join(', ')}</span>`
+              : '';
+            qualEl.innerHTML = `
+              <span class="sq-pill ${q.accuracyPct >= 75 ? 'good' : 'warn'}">🎯 정확도 ${q.accuracyPct}%</span>
+              <span class="sq-pill ${q.orderPct >= 75 ? 'good' : 'warn'}">🔗 순서 ${q.orderPct}%</span>
+              ${q.isPerfect ? `<span class="sq-pill good">💎 완벽 발표!!</span>` : missedHint}
+            `;
+          }
 
-        const passed = q.accuracyPct >= 60 || (q.totalCount <= 3 && q.matchedCount >= Math.min(2, q.totalCount));
-        if (passed && !this.liveStageUnlocked) {
-          this.audio.playChimeSFX();
-          unlockNext('👏 잘했어요!! 박수 버튼을 누르거나 끝까지 말해요!');
-        }
+          const passed = q.accuracyPct >= 60 || (q.totalCount <= 3 && q.matchedCount >= Math.min(2, q.totalCount));
+          if (passed && !this.liveStageUnlocked) {
+            this.audio.playChimeSFX();
+            unlockNext('👏 잘했어요!! 박수 버튼을 누르거나 끝까지 말해요!');
+          }
 
-        if (q.isPerfect || (q.accuracyPct >= 85 && q.orderPct >= 75)) {
-          autoAdvanced = true;
-          this.audio.stopSpeechMatch();
-          const allIdx = new Set(q.targetTokens.map(t => t.index));
-          this._renderWordChips(wordsEl, card.en, { matchedIndices: allIdx, hiddenMode: false, timings: cardTimings });
-          if (fillEl) fillEl.style.width = '100%';
-          if (pctEl) pctEl.textContent = '💎100%';
-          unlockNext('💎 완벽 발표!! 동물 친구들이 박수치며 환호해요!!');
-          this._liveStageAutoTimer = setTimeout(() => {
-            if (this.inLiveStage) this._advanceLiveStage();
-          }, 950);
-        }
-      },
-      onUnsupported: () => startFallbackGauge(),
-      onError: () => startFallbackGauge(),
-    });
+          if (q.isPerfect || (q.accuracyPct >= 85 && q.orderPct >= 75)) {
+            autoAdvanced = true;
+            this.audio.stopSpeechMatch();
+            const allIdx = new Set(q.targetTokens.map(t => t.index));
+            this._renderWordChips(wordsEl, card.en, { matchedIndices: allIdx, hiddenMode: false, timings: cardTimings });
+            if (fillEl) fillEl.style.width = '100%';
+            if (pctEl) pctEl.textContent = '💎100%';
+            unlockNext('💎 완벽 발표!! 동물 친구들이 박수치며 환호해요!!');
+            this._liveStageAutoTimer = setTimeout(() => {
+              if (this.inLiveStage) this._advanceLiveStage();
+            }, 950);
+          }
+        },
+        onUnsupported: () => startFallbackGauge(),
+        onError: () => startFallbackGauge(),
+      });
+      if (!started) startFallbackGauge();
+    };
 
-    if (!started) {
-      startFallbackGauge();
+    if (micBtn) {
+      micBtn.onclick = () => {
+        this.audio.unlock();
+        beginStageSpeech(0);
+        this.onToast('🎤 마이크를 새로 켰어요! 영어로 말해보세요!');
+      };
     }
+
+    beginStageSpeech(this.liveStageIdx === 0 ? 150 : 520);
   }
 
   _advanceLiveStage() {
