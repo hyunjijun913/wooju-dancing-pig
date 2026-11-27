@@ -5,6 +5,26 @@ import { AudioEngine } from './audio.js';
 import { QuizController } from './quiz.js';
 import { FarmGame3D } from './game3d.js';
 
+// --- Global iPadOS Safari / Mobile Pinch-Zoom & Double-Tap Zoom Blocker ---
+if (typeof document !== 'undefined') {
+  const blockZoom = (e) => e.preventDefault();
+  document.addEventListener('gesturestart', blockZoom, { passive: false });
+  document.addEventListener('gesturechange', blockZoom, { passive: false });
+  document.addEventListener('gestureend', blockZoom, { passive: false });
+  document.addEventListener('dblclick', blockZoom, { passive: false });
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('touchmove', (e) => {
+    if ((e.touches && e.touches.length > 1) || (typeof e.scale === 'number' && e.scale !== 1)) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+  window.addEventListener('wheel', (e) => {
+    if (e.ctrlKey) e.preventDefault();
+  }, { passive: false });
+}
+
 // --- Persistent State ---
 let mode = 0; // Default to Mode 0 (3D Farm) since Wooju just started listening!
 let chapter = 0;
