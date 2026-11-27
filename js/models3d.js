@@ -2830,11 +2830,12 @@ function createRoomPatternTex(THREE, { bg = '#BAE6FD', fg = '#FFFFFF', pattern =
 
 function buildFurnitureMesh3D(THREE, item) {
   const g = new THREE.Group();
-  const mainMat = new THREE.MeshStandardMaterial({ color: item.color || '#60A5FA', roughness: 0.55 });
+  const mainMat = new THREE.MeshStandardMaterial({ color: item.color || '#60A5FA', roughness: 0.52 });
   const accMat = new THREE.MeshStandardMaterial({ color: item.accent || '#FFFFFF', roughness: 0.45 });
-  const woodMat = new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.7 });
+  const woodMat = new THREE.MeshStandardMaterial({ color: '#B45309', roughness: 0.68 });
   let screenMesh = null;
   let glowMesh = null;
+  let badge = null;
   const addBox = (w, h, d, mat, x, y, z) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     m.position.set(x, y, z);
@@ -2844,126 +2845,255 @@ function buildFurnitureMesh3D(THREE, item) {
     return m;
   };
 
-  switch (item.shape) {
-    case 'bed':
-      addBox(2.2, 0.45, 3.0, woodMat, 0, 0.25, 0);
-      addBox(2.0, 0.45, 2.7, mainMat, 0, 0.65, 0.1);
-      addBox(1.5, 0.28, 0.65, accMat, 0, 0.96, -0.95); // pillow
-      addBox(2.25, 1.35, 0.22, woodMat, 0, 0.72, -1.42); // headboard
-      break;
-    case 'sofa':
-      addBox(2.4, 0.65, 1.2, mainMat, 0, 0.35, 0);
-      addBox(2.4, 0.95, 0.32, mainMat, 0, 0.9, -0.45);
-      addBox(0.32, 0.85, 1.2, accMat, -1.08, 0.55, 0);
-      addBox(0.32, 0.85, 1.2, accMat, 1.08, 0.55, 0);
-      break;
-    case 'table':
-      addBox(2.0, 0.16, 1.4, mainMat, 0, 0.95, 0);
-      [[-0.85, -0.55], [0.85, -0.55], [-0.85, 0.55], [0.85, 0.55]].forEach(([lx, lz]) => {
-        addBox(0.14, 0.95, 0.14, woodMat, lx, 0.475, lz);
+  // Exact-match custom 3D furniture & grounded toy standees so EVERY ONE of the 40 items matches its bag icon!
+  if (item.id === 'furn_bed_cozy' || item.id === 'furn_bed_rocket') {
+    addBox(2.2, 0.45, 3.0, woodMat, 0, 0.25, 0);
+    addBox(2.0, 0.45, 2.7, mainMat, 0, 0.65, 0.1);
+    addBox(1.5, 0.28, 0.65, accMat, 0, 0.96, -0.95);
+    addBox(2.25, 1.35, 0.22, item.id === 'furn_bed_rocket' ? mainMat : woodMat, 0, 0.72, -1.42);
+    if (item.id === 'furn_bed_rocket') {
+      // Rocket nose cone & side fins on the Rocket Bed!
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.95, 1.15, 12), accMat);
+      nose.rotation.x = -Math.PI / 2;
+      nose.position.set(0, 0.85, -1.95);
+      g.add(nose);
+      [-1.22, 1.22].forEach(fx => addBox(0.22, 0.75, 0.85, accMat, fx, 0.55, 0.9));
+    }
+  } else if (item.id === 'furn_sofa_mint' || item.id === 'furn_chair_cat' || item.id === 'furn_gold_throne') {
+    const w = item.id === 'furn_sofa_mint' ? 2.4 : 1.55;
+    addBox(w, 0.62, 1.2, mainMat, 0, 0.34, 0);
+    addBox(w, item.id === 'furn_gold_throne' ? 1.55 : 0.95, 0.3, mainMat, 0, item.id === 'furn_gold_throne' ? 1.15 : 0.88, -0.45);
+    addBox(0.28, 0.82, 1.2, accMat, -(w / 2 - 0.14), 0.52, 0);
+    addBox(0.28, 0.82, 1.2, accMat, (w / 2 - 0.14), 0.52, 0);
+    if (item.id === 'furn_chair_cat') {
+      // Cute cat ears on top of the Cat Cushion Chair!
+      [-0.45, 0.45].forEach(ex => {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.45, 4), mainMat);
+        ear.position.set(ex, 1.52, -0.45);
+        g.add(ear);
       });
-      addBox(0.7, 0.35, 0.7, accMat, 0, 1.2, 0);
-      break;
-    case 'shelf':
-      addBox(1.9, 2.4, 0.65, mainMat, 0, 1.2, 0);
-      [0.55, 1.2, 1.85].forEach((sy, i) => {
-        addBox(1.6, 0.35, 0.48, i % 2 === 0 ? accMat : woodMat, 0, sy, 0.12);
-      });
-      break;
-    case 'piano':
-      addBox(2.2, 1.35, 1.0, mainMat, 0, 0.68, 0);
-      addBox(2.0, 0.12, 0.45, accMat, 0, 0.98, 0.48); // keys
-      break;
-    case 'tv':
-      addBox(1.8, 0.55, 0.8, woodMat, 0, 0.28, 0);
-      addBox(1.6, 1.05, 0.25, mainMat, 0, 1.12, 0);
-      screenMesh = addBox(
-        1.38, 0.82, 0.08,
-        new THREE.MeshStandardMaterial({ color: '#1E293B', emissive: '#38BDF8', emissiveIntensity: 0.05, roughness: 0.2 }),
-        0, 1.12, 0.14
-      );
-      break;
-    case 'tank':
-      addBox(1.8, 0.65, 0.9, woodMat, 0, 0.32, 0);
-      const glass = new THREE.Mesh(
-        new THREE.BoxGeometry(1.7, 1.0, 0.82),
-        new THREE.MeshStandardMaterial({ color: '#38BDF8', transparent: true, opacity: 0.52, roughness: 0.1 })
-      );
-      glass.position.set(0, 1.15, 0);
-      g.add(glass);
-      glowMesh = addBox(0.35, 0.22, 0.15, accMat, -0.25, 1.15, 0);
-      addBox(0.28, 0.18, 0.12, accMat, 0.35, 1.28, 0.1);
-      break;
-    case 'arcade':
-      addBox(1.3, 2.2, 1.1, mainMat, 0, 1.1, 0);
-      screenMesh = addBox(
-        1.05, 0.75, 0.1,
-        new THREE.MeshStandardMaterial({ color: '#1E293B', emissive: '#FACC15', emissiveIntensity: 0.08, roughness: 0.2 }),
-        0, 1.55, 0.54
-      );
-      addBox(1.25, 0.18, 0.45, accMat, 0, 1.02, 0.62);
-      break;
-    case 'tent':
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.45, 2.4, 6), mainMat);
-      cone.position.y = 1.2;
-      cone.castShadow = true;
-      g.add(cone);
-      addBox(0.65, 1.0, 0.2, accMat, 0, 0.5, 1.05);
-      break;
-    case 'tree':
-      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.35, 0.6, 12), accMat);
-      pot.position.y = 0.3;
+    } else if (item.id === 'furn_gold_throne') {
+      // Golden royal crown crest on top of the Throne!
+      const crown = createGoldCrownMesh(THREE, 0.85);
+      crown.position.set(0, 2.02, -0.45);
+      g.add(crown);
+    }
+  } else if (item.id === 'furn_tv_retro') {
+    addBox(1.85, 0.55, 0.8, woodMat, 0, 0.28, 0);
+    addBox(1.65, 1.08, 0.28, mainMat, 0, 1.12, 0);
+    screenMesh = addBox(
+      1.38, 0.82, 0.08,
+      new THREE.MeshStandardMaterial({ color: '#1E293B', emissive: '#38BDF8', emissiveIntensity: 0.08, roughness: 0.2 }),
+      0, 1.12, 0.15
+    );
+    // Cute retro TV bunny-ear antennas
+    [-0.3, 0.3].forEach((ax, i) => {
+      const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 6), accMat);
+      ant.position.set(ax, 1.88, 0);
+      ant.rotation.z = i === 0 ? 0.38 : -0.38;
+      g.add(ant);
+    });
+  } else if (item.id === 'furn_arcade') {
+    addBox(1.3, 2.2, 1.1, mainMat, 0, 1.1, 0);
+    screenMesh = addBox(
+      1.05, 0.75, 0.1,
+      new THREE.MeshStandardMaterial({ color: '#1E293B', emissive: '#FACC15', emissiveIntensity: 0.1, roughness: 0.2 }),
+      0, 1.55, 0.54
+    );
+    addBox(1.25, 0.18, 0.45, accMat, 0, 1.02, 0.62);
+    // Arcade red joystick!
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.22, 8), new THREE.MeshStandardMaterial({ color: '#334155' }));
+    stick.position.set(-0.32, 1.18, 0.66);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), new THREE.MeshStandardMaterial({ color: '#EF4444' }));
+    knob.position.set(-0.32, 1.3, 0.66);
+    g.add(stick, knob);
+  } else if (item.id === 'furn_piano_mini' || item.id === 'furn_grand_piano') {
+    const w = item.id === 'furn_grand_piano' ? 2.4 : 1.95;
+    addBox(w, 1.35, 1.0, mainMat, 0, 0.68, 0);
+    addBox(w - 0.16, 0.12, 0.45, accMat, 0, 0.98, 0.48);
+    // Black piano keys!
+    const blkMat = new THREE.MeshStandardMaterial({ color: '#0F172A' });
+    for (let k = -3; k <= 3; k++) {
+      if (k === 0) continue;
+      addBox(0.1, 0.08, 0.24, blkMat, k * 0.24, 1.06, 0.42);
+    }
+  } else if (item.id === 'furn_fish_tank') {
+    addBox(1.8, 0.65, 0.9, woodMat, 0, 0.32, 0);
+    const glass = new THREE.Mesh(
+      new THREE.BoxGeometry(1.7, 1.0, 0.82),
+      new THREE.MeshStandardMaterial({ color: '#38BDF8', transparent: true, opacity: 0.52, roughness: 0.1 })
+    );
+    glass.position.set(0, 1.15, 0);
+    g.add(glass);
+    glowMesh = addBox(0.35, 0.22, 0.15, accMat, -0.25, 1.15, 0);
+    addBox(0.28, 0.18, 0.12, accMat, 0.35, 1.28, 0.1);
+  } else if (item.id === 'furn_slide') {
+    // Real sloped indoor slide + ladder!
+    addBox(0.95, 1.55, 0.75, accMat, 0, 0.78, -0.85);
+    const chute = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.14, 2.35), mainMat);
+    chute.position.set(0, 0.82, 0.42);
+    chute.rotation.x = 0.62;
+    chute.castShadow = true;
+    g.add(chute);
+    [-0.46, 0.46].forEach(rx => {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.26, 2.35), accMat);
+      rail.position.set(rx, 0.94, 0.42);
+      rail.rotation.x = 0.62;
+      g.add(rail);
+    });
+  } else if (item.id === 'furn_soccer') {
+    // Real white soccer goal frame + soccer ball!
+    const postMat = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.4 });
+    addBox(0.12, 1.45, 0.12, postMat, -1.05, 0.72, -0.35);
+    addBox(0.12, 1.45, 0.12, postMat, 1.05, 0.72, -0.35);
+    addBox(2.22, 0.12, 0.12, postMat, 0, 1.45, -0.35);
+    const net = new THREE.Mesh(
+      new THREE.BoxGeometry(2.05, 1.38, 0.68),
+      new THREE.MeshStandardMaterial({ color: '#E2E8F0', transparent: true, opacity: 0.45 })
+    );
+    net.position.set(0, 0.7, -0.7);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), postMat);
+    ball.position.set(0, 0.28, 0.45);
+    g.add(net, ball);
+  } else if (item.id === 'furn_trampoline') {
+    // Real raised blue & yellow trampoline with 4 legs!
+    const mat = new THREE.Mesh(new THREE.CylinderGeometry(1.38, 1.38, 0.14, 24), mainMat);
+    mat.position.y = 0.55;
+    mat.castShadow = true;
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(1.42, 0.12, 10, 28), accMat);
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 0.55;
+    g.add(mat, rim);
+    [[-0.95, -0.95], [0.95, -0.95], [-0.95, 0.95], [0.95, 0.95]].forEach(([lx, lz]) => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.55, 8), new THREE.MeshStandardMaterial({ color: '#334155' }));
+      leg.position.set(lx, 0.275, lz);
+      g.add(leg);
+    });
+  } else if (item.id === 'furn_rug_star') {
+    const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 0.08, 24), mainMat);
+    rug.position.y = 0.05;
+    const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.09, 5), accMat);
+    inner.position.y = 0.06;
+    g.add(rug, inner);
+  } else if (item.id === 'furn_tent_camp' || item.id === 'furn_rocket_tent') {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(1.45, 2.4, 6), mainMat);
+    cone.position.y = 1.2;
+    cone.castShadow = true;
+    g.add(cone);
+    addBox(0.65, 1.0, 0.2, accMat, 0, 0.5, 1.05);
+  } else if (item.id === 'furn_xmas_tree' || item.id === 'furn_plant_pot') {
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.35, 0.6, 12), accMat);
+    pot.position.y = 0.3;
+    g.add(pot);
+    if (item.id === 'furn_xmas_tree') {
       const foliage = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.0, 10), mainMat);
       foliage.position.y = 1.55;
       foliage.castShadow = true;
       glowMesh = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.26),
-        new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#F59E0B', emissiveIntensity: 0.25 })
+        new THREE.OctahedronGeometry(0.28),
+        new THREE.MeshStandardMaterial({ color: '#FACC15', emissive: '#F59E0B', emissiveIntensity: 0.3 })
       );
       glowMesh.position.y = 2.65;
-      g.add(pot, foliage, glowMesh);
-      break;
-    case 'lamp':
-      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.32, 1.75, 12), woodMat);
-      stand.position.y = 0.88;
-      glowMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.42, 14, 12),
-        new THREE.MeshStandardMaterial({ color: item.color, emissive: item.accent, emissiveIntensity: 0.25 })
+      g.add(foliage, glowMesh);
+    } else {
+      // Lush round leafy potted plant
+      [[-0.35, 1.15, 0.2], [0.35, 1.25, -0.15], [0, 1.45, 0], [0.1, 1.0, 0.38]].forEach(([lx, ly, lz]) => {
+        const lf = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), mainMat);
+        lf.scale.set(1.2, 0.6, 1.2);
+        lf.position.set(lx, ly, lz);
+        lf.castShadow = true;
+        g.add(lf);
+      });
+    }
+  } else if (item.id === 'furn_star_lamp' || item.id === 'furn_ufo_lamp' || item.id === 'furn_planet_mob') {
+    const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.32, 1.65, 12), woodMat);
+    stand.position.y = 0.82;
+    g.add(stand);
+    if (item.id === 'furn_ufo_lamp') {
+      const ufo = new THREE.Group();
+      const saucer = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.5, 0.25, 18), mainMat);
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(0.44, 14, 10),
+        new THREE.MeshStandardMaterial({ color: item.accent, emissive: item.accent, emissiveIntensity: 0.35 })
       );
-      glowMesh.position.y = 1.95;
-      g.add(stand, glowMesh);
-      break;
-    case 'rug':
-      const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 0.08, 24), mainMat);
-      rug.position.y = 0.05;
-      const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 0.09, 24), accMat);
-      inner.position.y = 0.06;
-      g.add(rug, inner);
-      break;
-    case 'cabinet':
-      addBox(1.4, 2.0, 1.0, mainMat, 0, 1.0, 0);
-      addBox(1.15, 0.75, 0.12, accMat, 0, 1.4, 0.49);
-      addBox(1.15, 0.75, 0.12, accMat, 0, 0.52, 0.49);
-      break;
-    case 'plush':
-    default:
-      const cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.85, 0.35, 16), mainMat);
-      cushion.position.y = 0.18;
-      cushion.castShadow = true;
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 12), accMat);
-      body.position.y = 0.82;
-      body.castShadow = true;
-      g.add(cushion, body);
-      break;
+      dome.position.y = 0.16;
+      ufo.add(saucer, dome);
+      ufo.position.y = 1.85;
+      g.add(ufo);
+      glowMesh = dome;
+    } else if (item.id === 'furn_planet_mob') {
+      const planet = new THREE.Mesh(
+        new THREE.SphereGeometry(0.42, 14, 12),
+        new THREE.MeshStandardMaterial({ color: item.color, emissive: item.accent, emissiveIntensity: 0.3 })
+      );
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.76, 0.08, 8, 24), accMat);
+      ring.rotation.x = Math.PI * 0.4;
+      planet.add(ring);
+      planet.position.y = 1.9;
+      g.add(planet);
+      glowMesh = planet;
+    } else {
+      glowMesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.46),
+        new THREE.MeshStandardMaterial({ color: item.color, emissive: item.accent, emissiveIntensity: 0.35 })
+      );
+      glowMesh.position.y = 1.9;
+      g.add(glowMesh);
+    }
+  } else if (item.id === 'furn_desk_wood' || item.id === 'furn_bookshelf' || item.id === 'furn_mini_fridge' || item.id === 'furn_kitchen') {
+    if (item.id === 'furn_desk_wood') {
+      addBox(2.0, 0.16, 1.3, mainMat, 0, 0.95, 0);
+      [[-0.85, -0.5], [0.85, -0.5], [-0.85, 0.5], [0.85, 0.5]].forEach(([lx, lz]) => addBox(0.14, 0.95, 0.14, woodMat, lx, 0.475, lz));
+      addBox(0.65, 0.12, 0.48, accMat, 0, 1.08, 0);
+    } else if (item.id === 'furn_bookshelf') {
+      addBox(1.9, 2.35, 0.62, mainMat, 0, 1.18, 0);
+      const bCols = ['#EF4444', '#3B82F6', '#FACC15', '#22C55E', '#A855F7'];
+      [0.55, 1.2, 1.85].forEach((sy, r) => {
+        for (let b = 0; b < 5; b++) {
+          addBox(0.24, 0.38, 0.42, new THREE.MeshStandardMaterial({ color: bCols[(b + r) % bCols.length] }), -0.64 + b * 0.32, sy, 0.12);
+        }
+      });
+    } else if (item.id === 'furn_mini_fridge') {
+      addBox(1.3, 1.9, 0.95, mainMat, 0, 0.95, 0);
+      addBox(1.18, 0.62, 0.08, accMat, 0, 1.48, 0.48);
+      addBox(1.18, 1.02, 0.08, accMat, 0, 0.6, 0.48);
+      addBox(0.08, 0.35, 0.12, new THREE.MeshStandardMaterial({ color: '#94A3B8', metalness: 0.6 }), 0.45, 0.78, 0.54);
+    } else {
+      // Toy kitchen with stove burners & cute counter!
+      addBox(1.9, 1.05, 0.95, mainMat, 0, 0.52, 0);
+      addBox(1.95, 0.1, 1.0, accMat, 0, 1.08, 0);
+      addBox(1.9, 0.95, 0.18, mainMat, 0, 1.55, -0.4);
+      [-0.45, 0.45].forEach(bx => {
+        const burner = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 14), new THREE.MeshStandardMaterial({ color: '#1E293B' }));
+        burner.position.set(bx, 1.15, 0.05);
+        g.add(burner);
+      });
+    }
+  } else {
+    // Exact Bag-Match Grounded 3D Toy Display Standee for plushies, drum set, robot, globe, cake, train, icecream, telescope, clock, lego, cat tower, trophy, crystal ball!
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.82, 0.92, 0.16, 22),
+      new THREE.MeshStandardMaterial({ color: item.color || '#FDE68A', roughness: 0.6 })
+    );
+    base.position.y = 0.08;
+    base.receiveShadow = true;
+    const sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: createDieCutStickerTex(THREE, item.emoji), transparent: true })
+    );
+    const sz = item.rarity === 'legendary' ? 2.15 : (item.rarity === 'epic' ? 1.95 : 1.75);
+    sprite.scale.set(sz, sz, 1);
+    sprite.position.set(0, sz * 0.48 + 0.14, 0);
+    g.add(base, sprite);
+    if (item.shape === 'lamp' || item.id === 'furn_crystal_ball') {
+      glowMesh = new THREE.Mesh(
+        new THREE.RingGeometry(0.75, 0.95, 24),
+        new THREE.MeshStandardMaterial({ color: item.accent, emissive: item.accent, emissiveIntensity: 0.3, side: THREE.DoubleSide })
+      );
+      glowMesh.rotation.x = -Math.PI / 2;
+      glowMesh.position.y = 0.17;
+      g.add(glowMesh);
+    }
   }
-
-  // Cute crisp emoji badge floating gently above so 6yo recognizes every furniture/toy instantly!
-  const badge = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: createTreasureMedallionTex(THREE, item.emoji, '#FFFDF7'), transparent: true })
-  );
-  badge.scale.set(0.95, 0.95, 1);
-  badge.position.set(0, item.shape === 'rug' ? 0.85 : 2.35, 0);
-  g.add(badge);
 
   return { group: g, badge, screenMesh, glowMesh, poweredOn: false, popProgress: 0.01 };
 }
