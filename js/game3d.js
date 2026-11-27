@@ -1730,7 +1730,7 @@ export class FarmGame3D {
         return;
       }
 
-      // 3. Trampoline / Rug / Slide -> Bounce repeatedly!
+      // 3. Trampoline / Rug / Slide -> Bounce on trampoline/rug or slide down the real slide chute!
       if (item.shape === 'rug' || id === 'furn_slide') {
         if (this.avatarPose?.id === id) {
           this.avatarPose = null;
@@ -1738,12 +1738,21 @@ export class FarmGame3D {
           this.audio.playChimeSFX();
           this.onToast(`✨ 신나게 놀고 내려왔어요!`);
         } else {
-          this.avatarPose = { mode: 'bounce', id, x: placed.x, y: 0.12, z: placed.z, rotY: rot };
+          const isSlide = id === 'furn_slide';
+          const baseY = id === 'furn_trampoline' ? 0.62 : 0.12;
+          this.avatarPose = {
+            mode: isSlide ? 'slide' : 'bounce',
+            id,
+            x: placed.x,
+            y: baseY,
+            z: placed.z,
+            rotY: rot,
+          };
           this.avatarPos = { x: placed.x, z: placed.z };
           this.avatarAngle = rot;
           this.audio.playInteractSFX('boing');
           this.onConfetti(22);
-          this.onToast(id === 'furn_slide'
+          this.onToast(isSlide
             ? `🛝 슈우웅~ 실내 미끄럼틀을 신나게 타요!!`
             : `🤸 통통통! ${item.name} 위에서 높이 방방 뛰어요!!`);
         }
@@ -3783,12 +3792,25 @@ export class FarmGame3D {
       if (this.wooju) {
         if (!this.inLiveStage && this.avatarPose) {
           const p = this.avatarPose;
-          const bounceY = p.mode === 'bounce' ? Math.abs(Math.sin(t * 7.5)) * 1.35 : 0;
-          this.wooju.group.position.set(p.x, p.y + bounceY, p.z);
-          this.wooju.group.rotation.x = p.mode === 'sleep' ? -Math.PI / 2 : 0;
-          this.wooju.group.rotation.y = p.rotY ?? this.avatarAngle;
+          if (p.mode === 'slide') {
+            const sp = (t * 0.85) % 1;
+            const fwd = -0.65 + sp * 1.9;
+            const rotY = p.rotY || 0;
+            this.wooju.group.position.set(
+              p.x + Math.sin(rotY) * fwd,
+              1.48 * (1 - sp) + 0.12,
+              p.z + Math.cos(rotY) * fwd
+            );
+            this.wooju.group.rotation.x = 0.22;
+            this.wooju.group.rotation.y = rotY;
+          } else {
+            const bounceY = p.mode === 'bounce' ? Math.abs(Math.sin(t * 7.5)) * 1.35 : 0;
+            this.wooju.group.position.set(p.x, p.y + bounceY, p.z);
+            this.wooju.group.rotation.x = p.mode === 'sleep' ? -Math.PI / 2 : 0;
+            this.wooju.group.rotation.y = p.rotY ?? this.avatarAngle;
+          }
           if (this.wooju.setAnim) {
-            this.wooju.setAnim((p.mode === 'bounce' || p.mode === 'dance') ? 'dance' : 'idle');
+            this.wooju.setAnim((p.mode === 'bounce' || p.mode === 'dance' || p.mode === 'slide') ? 'dance' : 'idle');
           }
         } else {
           const onStageDeck = !this.inHome && this.centralStage && Math.hypot(this.avatarPos.x, this.avatarPos.z) < this.centralStage.radius;
